@@ -1,0 +1,26 @@
+wololo-evals — Proprietary Licence
+
+Copyright (c) 2026 Steven Gonsalvez. All rights reserved.
+
+This software and associated documentation files (the "Software") are
+proprietary and confidential. No licence, express or implied, is granted to
+any party to use, copy, modify, merge, publish, distribute, sublicense or
+sell copies of the Software except under a separately executed commercial
+agreement with the copyright holder.
+
+Use of the Software in production requires a valid Wololo entitlement token
+issued by the wololo-deploy licensing service; the Software verifies the
+token at startup and per request and refuses service without it.
+
+EXCEPTIONS: the contents of `specs/eval-candidate/` and `specs/eval-result/`
+are licensed under the Apache License, Version 2.0, as stated by the LICENSE
+file inside each of those directories. Those directories are the published,
+open half of this component (eval spec and JSON schemas); this proprietary
+notice does not apply to them.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
