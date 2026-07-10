@@ -1,0 +1,26 @@
+# regression-replay rubric (SPEC S5.6). sha256 of this file IS rubric_version.
+# Single-arm judge suite: the corpus of past human corrections is replayed and
+# the candidate is scored on whether it would AVOID needing the same correction
+# again. The judge is told the exact failure to check for (signal_class +
+# matched_signals from the original raw correction row) as TRUSTED reference in
+# the system message; only the candidate content is nonce-fenced (SPEC S8).
+suite: regression-replay
+judge:
+  k: 5
+  temperature: 0
+dimensions:
+  regression_avoidance:
+    weight: 0.60
+    scorer: judge
+    criterion: >
+      Given the human correction being replayed, would following this candidate
+      have avoided the mistake that triggered it? Score 1.0 when the candidate's
+      guidance clearly prevents the corrected failure, 0.0 when it would still
+      make it.
+  signal_coverage:
+    weight: 0.40
+    scorer: judge
+    criterion: >
+      Does the candidate explicitly address the failure's signal_class and the
+      specific matched_signals named in the reference, rather than only
+      generically-good advice that never names the failure mode?

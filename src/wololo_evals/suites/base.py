@@ -12,6 +12,8 @@ SUITES_ROOT = pathlib.Path(__file__).resolve().parent
 SUITE_DIRS = {
     "skill-review": SUITES_ROOT / "skill_review",
     "task-uplift": SUITES_ROOT / "task_uplift",
+    "repo-eval": SUITES_ROOT / "repo_eval",
+    "regression-replay": SUITES_ROOT / "regression_replay",
 }
 
 
