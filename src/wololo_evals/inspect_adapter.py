@@ -26,6 +26,7 @@ from . import judge as judge_mod
 from .harness_solver import (
     HarnessTrialConfig,
     TrialErrored,
+    materialize_oracle_files,
     run_acceptance_test,
     run_harness_trial,
 )
@@ -386,8 +387,17 @@ def run_repo_eval(
     def _repo_scorer():
         async def score(state: TaskState, target: Target) -> Score:
             result = state.metadata["trial_result"]
+            # Correctness is the fix-commit's OWN oracle: pull the commit's test
+            # files onto the parent checkout before running acceptance, so a
+            # genuinely-correct fix is not failed by a test that was added/
+            # changed in the same commit (SPEC S5.3: "the repo's real seeded
+            # test suite RUN in-sandbox").
+            exec_fn = make_exec()
+            await materialize_oracle_files(
+                exec_fn, fixture.commit_ref, list(fixture.oracle_files)
+            )
             correct = await run_acceptance_test(
-                make_exec(), list(fixture.acceptance_command)
+                exec_fn, list(fixture.acceptance_command)
             )
             candidate_lines = repo_eval_task.diff_lines_changed(result.diff)
             churn = repo_eval_task.churn_penalty_score(

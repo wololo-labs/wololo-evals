@@ -106,6 +106,11 @@ def build_fixture(
     subject = _git(repo_path, "show", "-s", "--format=%s%n%n%b", sha).strip()
     files = changed_files(repo_path, sha)
     cmd = tuple(acceptance_command) if acceptance_command else _infer_acceptance_command(files)
+    # the commit's own test paths are the correctness oracle; the scorer
+    # materializes exactly these from commit_ref onto the parent checkout before
+    # running acceptance (the source files stay redacted so the harness still
+    # has to re-derive the fix).
+    oracle_files = tuple(f for f in files if _looks_like_test(f))
     return RepoEvalFixture(
         fixture_id=f"repo-eval-{sha[:12]}",
         repo=repo_clone_source or repo_path,
@@ -114,6 +119,7 @@ def build_fixture(
         task_prompt=subject,
         acceptance_command=cmd,
         historical_lines_changed=historical_lines_changed(repo_path, sha),
+        oracle_files=oracle_files,
         max_turns=max_turns,
         wall_clock_cap_s=wall_clock_cap_s,
     )

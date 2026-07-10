@@ -31,6 +31,11 @@ class RepoEvalFixture:
     task_prompt: str               # the commit's own message, the only instruction
     acceptance_command: tuple[str, ...]   # exit-0 = correct, run in-sandbox
     historical_lines_changed: int  # added+removed lines in the historical diff
+    # the commit's own test paths — materialized from commit_ref onto the
+    # workspace BEFORE acceptance so correctness is scored against the fix's own
+    # oracle, never whatever test happened to exist at the redacted parent (a
+    # new test file is absent there; a modified one holds stale pre-fix content)
+    oracle_files: tuple[str, ...] = ()
     max_turns: int = 20
     wall_clock_cap_s: int = 900
 

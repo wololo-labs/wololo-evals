@@ -454,6 +454,7 @@ async def _run_repo_eval(conn, run, cipher, call_model, k, exec_factory) -> dict
             task_prompt=fx["task_prompt"],
             acceptance_command=tuple(fx["acceptance_command"]),
             historical_lines_changed=int(fx["historical_lines_changed"]),
+            oracle_files=tuple(fx.get("oracle_files", ())),
             max_turns=int(fx.get("max_turns", 20)),
             wall_clock_cap_s=int(fx.get("wall_clock_cap_s", 900)),
         )

@@ -156,6 +156,27 @@ async def run_harness_trial(
     )
 
 
+async def materialize_oracle_files(
+    exec_fn: SandboxExec, commit_ref: str, paths: "list[str] | tuple[str, ...]"
+) -> None:
+    """Overwrite the given workspace paths with their content AT ``commit_ref``,
+    so the correctness dimension is measured against the fix-commit's own oracle
+    test rather than whatever existed at the redacted parent checkout: a
+    newly-added test file is absent at the parent (pytest would exit non-zero on
+    a genuinely-correct fix), and a modified test file holds stale pre-fix
+    content. Run AFTER the harness diff/transcript are captured and BEFORE
+    acceptance; this also defeats a harness that edited the oracle test to cheat.
+    ``git checkout <ref> -- <paths>`` creates absent files and needs no clean
+    tree. No-op when the fixture has no oracle paths."""
+    if not paths:
+        return
+    await _check(
+        exec_fn,
+        ["git", "-C", WORKSPACE, "checkout", commit_ref, "--", *paths],
+        timeout=120,
+    )
+
+
 async def run_acceptance_test(
     exec_fn: SandboxExec, command: list[str], timeout: int = 600
 ) -> bool:

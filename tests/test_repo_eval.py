@@ -14,11 +14,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import pathlib
 import subprocess
+import sys
 import uuid
 
 import pytest
 from sqlalchemy import text
+
+from wololo_evals.harness_solver import PROFILE, TRANSCRIPT, WORKSPACE
 
 from wololo_evals import versioning
 from wololo_evals.db import tenant_txn
@@ -134,6 +138,9 @@ def test_generate_picks_qualifying_commit(tmp_path):
     assert fx.historical_lines_changed == 6
     assert fx.acceptance_command[:3] == ("python", "-m", "pytest")
     assert "test_app.py" in fx.acceptance_command
+    # the commit's own test is the correctness oracle (materialized from
+    # commit_ref before acceptance); source files are not in oracle_files.
+    assert fx.oracle_files == ("test_app.py",)
 
 
 def test_generate_skips_when_no_qualifying_commit(tmp_path):
@@ -173,6 +180,127 @@ async def test_run_repo_eval_adapter_three_dimensions():
     assert dv["abstraction_adherence"] == 0.8
     # 0.5*1 + 0.25*1 + 0.25*0.8
     assert tr["composite"] == pytest.approx(0.95, abs=1e-6)
+
+
+# --- layer 2b: REAL generate->run over an added-test commit -----------------
+# The prior fake proves nothing about correctness: FakeRepoSandbox returns
+# acceptance-pass unconditionally. This exercises the whole path for real git +
+# real pytest, substituting only the harness CLI (which can't run here). It is
+# the regression guard for the "correctness scored against the WRONG test" bug:
+# the fix commit ADDS its oracle test, so at the redacted parent that file does
+# not exist, and without materialising it from commit_ref a genuinely-correct
+# fix scores correctness=0.
+class LocalExec:
+    """Runs every command for real via subprocess, remapping the container
+    paths (/workspace,/profile,/transcript) under a host temp root. The harness
+    CLI is the one substituted step: it writes the fix to the workspace SOURCE
+    (never the oracle test) plus a fleet-hooks transcript, exactly as a real
+    harness would; clone, checkout, oracle materialise, and pytest are real."""
+
+    def __init__(self, root: pathlib.Path, fix_rel: str, fix_content: str):
+        self.root = str(root)
+        self.fix_rel = fix_rel
+        self.fix_content = fix_content
+        self.harness_runs = 0
+
+    def _remap(self, s: str) -> str:
+        return (
+            s.replace(WORKSPACE, f"{self.root}/workspace")
+            .replace(PROFILE, f"{self.root}/profile")
+            .replace(TRANSCRIPT, f"{self.root}/transcript")
+        )
+
+    async def exec(self, cmd, env=None, timeout=0):
+        cmd = [self._remap(str(c)) for c in cmd]
+        if cmd[0] == "sh" and len(cmd) >= 5 and 'exec "$@"' in cmd[2]:
+            rest = cmd[4:]
+            if rest and rest[0] in ("claude", "hermes"):
+                self.harness_runs += 1
+                ws = pathlib.Path(f"{self.root}/workspace")
+                (ws / self.fix_rel).write_text(self.fix_content)
+                ev = pathlib.Path(f"{self.root}/transcript/events.jsonl")
+                ev.parent.mkdir(parents=True, exist_ok=True)
+                ev.write_text(_events(3))
+                return (0, json.dumps({"result": "applied fix"}), "")
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout or None
+        )
+        return (proc.returncode, proc.stdout, proc.stderr)
+
+
+def _init_added_test_repo(path) -> str:
+    """Buggy source, then a fix commit that fixes source AND adds a brand-new
+    oracle test file (absent at the parent)."""
+    def git(*a):
+        subprocess.run(["git", "-C", str(path), *a], check=True,
+                       capture_output=True, text=True)
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    git("config", "user.email", "t@t")
+    git("config", "user.name", "t")
+    (path / "app.py").write_text("def process(amount):\n    return amount * 2\n")
+    git("add", "app.py")
+    git("commit", "-q", "-m", "chore: scaffold onboarding")
+    (path / "app.py").write_text(
+        "def process(amount):\n"
+        "    if amount is None:\n"
+        "        raise ValueError('amount required')\n"
+        "    return amount * 2\n"
+    )
+    (path / "test_app.py").write_text(
+        "import pytest\n"
+        "from app import process\n\n"
+        "def test_rejects_none():\n"
+        "    with pytest.raises(ValueError):\n"
+        "        process(None)\n\n"
+        "def test_doubles():\n"
+        "    assert process(3) == 6\n"
+    )
+    git("add", "app.py", "test_app.py")
+    git("commit", "-q", "-m", "fix: reject None amount in process")
+    return subprocess.run(["git", "-C", str(path), "rev-parse", "HEAD"],
+                          check=True, capture_output=True, text=True).stdout.strip()
+
+
+# the correct fix the "harness" applies (source only; the oracle test must come
+# from commit_ref via materialisation, not from the harness)
+_CORRECT_FIX = (
+    "def process(amount):\n"
+    "    if amount is None:\n"
+    "        raise ValueError('amount required')\n"
+    "    return amount * 2\n"
+)
+
+
+async def test_repo_eval_real_added_test_commit_scores_correct(tmp_path):
+    repo = tmp_path / "repo"
+    _init_added_test_repo(repo)
+    # explicit interpreter so pytest resolves inside this venv, not host python
+    fx = repo_gen.generate(
+        str(repo),
+        acceptance_command=[sys.executable, "-m", "pytest", "-q", "test_app.py"],
+    )
+    assert fx.oracle_files == ("test_app.py",)
+    runner = resolve_runner("claude-code")
+
+    # WITH the oracle materialised: a correct fix scores correctness 1.0
+    exe = LocalExec(tmp_path / "sbx-ok", "app.py", _CORRECT_FIX)
+    outcome = await asyncio.to_thread(
+        run_repo_eval, fx, runner, 1, _judge, k=5, exec_factory=lambda: exe.exec,
+    )
+    assert outcome.status == "completed", outcome.error
+    assert exe.harness_runs == 1
+    assert outcome.trials[0]["dimension_values"]["correctness"] == 1.0
+
+    # WITHOUT the oracle (the bug): the added test is absent at the parent, so
+    # the same correct fix runs pytest against nothing and scores correctness 0.
+    import dataclasses
+    fx_no_oracle = dataclasses.replace(fx, oracle_files=())
+    exe2 = LocalExec(tmp_path / "sbx-bug", "app.py", _CORRECT_FIX)
+    outcome2 = await asyncio.to_thread(
+        run_repo_eval, fx_no_oracle, runner, 1, _judge, k=5,
+        exec_factory=lambda: exe2.exec,
+    )
+    assert outcome2.trials[0]["dimension_values"]["correctness"] == 0.0
 
 
 # --- layer 3: worker on real Postgres ---------------------------------------
