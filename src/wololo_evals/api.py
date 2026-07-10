@@ -9,8 +9,10 @@ named integration debt for 06a/06c.
 """
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
+import subprocess
 import uuid
 from dataclasses import dataclass
 
@@ -35,8 +37,12 @@ from .db import tenant_txn
 from .jobs import queue
 from .otel import record_metering, tracer
 from .suites import base as suites_base
+from .suites.repo_eval import generate as repo_gen
 
-EVAL_SUITES = ("skill-review", "task-uplift")
+# All four suites are operator-reachable. repo-eval additionally generates its
+# fixture from real commit history at run creation (see create_run); regression-
+# replay reads its corpus from the candidate payload the operator submits.
+EVAL_SUITES = ("skill-review", "task-uplift", "repo-eval", "regression-replay")
 N_TRIALS_FLOOR = 5
 
 
@@ -181,6 +187,31 @@ def create_app(deps: AppDeps) -> FastAPI:
                 content={"detail": f"unknown eval_suite {eval_suite!r}"},
             )
         smoke = bool(body.get("smoke", False))
+        # repo-eval generates its fixture from real commit history HERE, on the
+        # host, at run creation (git plumbing must never run in the trial
+        # sandbox). The redacted fixture rides the job payload to the worker.
+        repo_eval_fixture = None
+        if eval_suite == "repo-eval":
+            src = body.get("repo_eval_source") or {}
+            repo_path = src.get("repo_path")
+            if not repo_path:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "repo-eval requires repo_eval_source.repo_path"},
+                )
+            try:
+                fixture = repo_gen.generate(
+                    repo_path,
+                    ref=src.get("ref", "HEAD"),
+                    repo_clone_source=src.get("repo_clone_source"),
+                    acceptance_command=src.get("acceptance_command"),
+                )
+            except (ValueError, OSError, subprocess.SubprocessError) as exc:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": f"repo-eval fixture generation failed: {exc}"},
+                )
+            repo_eval_fixture = dataclasses.asdict(fixture)
         async with tenant_txn(deps.engine, principal.tenant_id) as conn:
             cand = (
                 await conn.execute(
@@ -235,7 +266,12 @@ def create_app(deps: AppDeps) -> FastAPI:
             )
             await queue.enqueue(
                 conn, principal.tenant_id, "eval-run",
-                {"run_id": run_id, "task_fixture_ref": body.get("task_fixture_ref")},
+                {
+                    "run_id": run_id,
+                    "task_fixture_ref": body.get("task_fixture_ref"),
+                    # generated at run creation; None for the other suites
+                    "repo_eval_fixture": repo_eval_fixture,
+                },
                 f"eval-run:{run_id}",
             )
             record_metering(principal.tenant_id, "run-enqueued", 1)

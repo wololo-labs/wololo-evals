@@ -220,3 +220,112 @@ async def test_quota_429_with_audit_row(client, app_engine, owner_engine):
             )
         ).scalar_one()
     assert rejected == 1
+
+
+# --- all four suites are operator-reachable through create_run --------------
+async def _drain_job(worker_engine, run_id: str) -> None:
+    """Retire the queued eval-run job this test left behind so another test's
+    ``run_once`` does not grab it (the queue is round-robin oldest-first over
+    the session-scoped database). The worker role has the global jobs view and
+    the update grant used by real dequeue/complete."""
+    async with worker_engine.begin() as conn:
+        await conn.execute(
+            text("update wololo_evals.jobs set status = 'done' where idempotency_key = :k"),
+            {"k": f"eval-run:{run_id}"},
+        )
+
+
+async def test_repo_eval_run_operator_reachable_end_to_end(
+    client, deps, app_engine, worker_engine, tmp_path
+):
+    """repo-eval is triggerable through the running service, not just a test-
+    helper DB insert: submit a harness-config candidate, create a repo-eval run
+    whose fixture the API generates from a real git repo, then drain the job and
+    execute it to a verdict. Proves generate() runs on a real request path."""
+    from wololo_evals.db import tenant_txn
+    from wololo_evals.jobs.worker import execute_run
+
+    from test_repo_eval import FakeRepoSandbox, _init_repo, _judge
+
+    repo = tmp_path / "atlas-onboarding"
+    _init_repo(repo)
+
+    token = mint_token("meridian", SUBMIT)
+    async with client:
+        cand = await client.post(
+            "/api/v1/candidates",
+            json={
+                "candidate_type": "harness-config",
+                "candidate_ref": "claude-code@repo-eval",
+                "baseline_ref": "claude-code@baseline",
+                "payload": {"harness": "claude-code", "model": "claude-sonnet-4"},
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert cand.status_code == 201, cand.text
+        cid = cand.json()["id"]
+        run = await client.post(
+            f"/api/v1/candidates/{cid}/runs",
+            json={
+                "eval_suite": "repo-eval",
+                "n_trials": 5,
+                "repo_eval_source": {"repo_path": str(repo)},
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert run.status_code == 201, run.text
+    run_id = run.json()["id"]
+
+    # the fixture the API generated is on the enqueued job, with the oracle test
+    async with tenant_txn(app_engine, "meridian") as conn:
+        payload = (
+            await conn.execute(
+                text(
+                    "select payload from wololo_evals.jobs "
+                    "where idempotency_key = :k"
+                ),
+                {"k": f"eval-run:{run_id}"},
+            )
+        ).scalar_one()
+    fx = payload["repo_eval_fixture"]
+    assert fx is not None
+    assert fx["oracle_files"] == ["test_app.py"]
+
+    # drain the job through the worker exactly as run_once would (fake exec seam
+    # so no docker daemon is needed), passing the job payload it carries
+    fake = FakeRepoSandbox()
+    async with tenant_txn(app_engine, "meridian") as conn:
+        out = await execute_run(
+            conn, run_id, cipher=deps.cipher, call_model=_judge, k=5,
+            exec_factory=lambda: fake.exec, job_payload=payload,
+        )
+    assert out["status"] == "passed", out
+    assert out["verdict_stats"]["n"] == 5
+    await _drain_job(worker_engine, run_id)
+
+
+async def test_regression_replay_run_is_accepted(client, app_engine, worker_engine):
+    """regression-replay is no longer rejected at create_run (it was a 400
+    before the suite was wired); the corpus rides the candidate payload."""
+    token = mint_token("meridian", SUBMIT)
+    async with client:
+        cand = await client.post(
+            "/api/v1/candidates",
+            json={
+                "candidate_type": "prompt",
+                "candidate_ref": "reflect-prompt@2",
+                "baseline_ref": "reflect-prompt@1",
+                "payload": {"prompt": "always cite the correction reference"},
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert cand.status_code == 201, cand.text
+        cid = cand.json()["id"]
+        run = await client.post(
+            f"/api/v1/candidates/{cid}/runs",
+            json={"eval_suite": "regression-replay", "n_trials": 5},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert run.status_code == 201, run.text
+    assert run.json()["eval_suite"] == "regression-replay"
+    await _drain_job(worker_engine, run.json()["id"])

@@ -65,6 +65,19 @@ reference build environment and are OPERATOR preconditions, not skipped work:
   (`tests/test_compose_integration.py`, marked `compose`) and runs once a daemon
   + key exist. Until then this reads as "orchestration proven via exec seam;
   real sandbox execution is an operator precondition", never "proven end to end".
+- **Run-creation reachability (all four suites):** `POST /api/v1/candidates/:id/runs`
+  accepts all four `eval_suite` values. repo-eval generates its fixture at run
+  creation by calling `suites.repo_eval.generate` on the host against
+  `repo_eval_source.repo_path` (git plumbing must never run in the trial
+  sandbox); the redacted fixture rides the enqueued job to the worker
+  (`tests/test_api.py::test_repo_eval_run_operator_reachable_end_to_end`). The
+  operator precondition is that the seeded source repo (the Atlas history) is
+  checked out somewhere the API process can read at run-creation time; until 09
+  lands, autoresearch-submitted candidates may instead carry a pre-built
+  `repo_eval_fixture` in the candidate payload (the worker's fallback).
+  regression-replay reads its `regression_corpus` from the candidate payload the
+  operator submits today; once ainb-reflect-memory (02) ships the reflect
+  corrections corpus, that becomes the real source.
 - **Live judge model call:** no `ANTHROPIC_API_KEY` in the build environment.
   The claude CLI bridge (`judge.cli_call_model`) and the HTTP backend
   (`judge.http_call_model`) are committed; the skill-review pipeline is proven
