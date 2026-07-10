@@ -63,7 +63,7 @@ def _check(proofs: list[dict]) -> bool:
     ok = ok and c2
 
     p3 = by_id.get("3-canary-regression-rollback", {})
-    c3 = (p3.get("gate_status_transitions") == ["watching", "watching", "rolled-back"]
+    c3 = (p3.get("gate_status_transitions") == ["watching", "watching", "regressed", "rolled-back"]
           and p3.get("rollback_calls") == 1
           and p3.get("audit_actions") == ["canary-opened", "canary-regression-detected",
                                           "canary-rollback-fired"])

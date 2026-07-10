@@ -125,7 +125,25 @@ async def _proof_canary(app_engine, cipher) -> dict:
     ) as dc:
         s1 = await canary.run_canary_poll(app_engine, TENANT, gid, dc)  # debounce: still watching
         await _send_window(app_engine, gid, "w2", REGRESSING)  # second consecutive
-        s2 = await canary.run_canary_poll(app_engine, TENANT, gid, dc)  # -> rolled-back
+        # Drive the second poll in its two committed phases (canary.py splits
+        # detect+claim in txn-1 from confirm_rollback in txn-2) so the transient
+        # 'regressed' state is actually sampled between them, not merely implied
+        # by the audit row. This is exactly what run_canary_poll composes.
+        async with tenant_txn(app_engine, TENANT) as conn:
+            claim = await canary.detect_and_claim(conn, TENANT, "canary-poller", gid)
+        assert claim is not None
+        async with tenant_txn(app_engine, TENANT) as conn:
+            s_regressed = (await conn.execute(text(
+                "select gate_status from wololo_evals.canary_gates where id = :id"
+            ), {"id": gid})).scalar_one()
+        resp = await dc.post(
+            f"/canary/{claim.deploy_ref}/rollback",
+            headers={"Idempotency-Key": claim.rollback_key},
+        )
+        async with tenant_txn(app_engine, TENANT) as conn:
+            s2 = await canary.confirm_rollback(
+                conn, TENANT, "canary-poller", gid, 200 <= resp.status_code < 300
+            )
         calls = list(deploy.state.log.calls)
     async with tenant_txn(app_engine, TENANT) as conn:
         actions = (await conn.execute(text(
@@ -135,8 +153,9 @@ async def _proof_canary(app_engine, cipher) -> dict:
         "id": "3-canary-regression-rollback",
         "suite": "canary",
         # opens watching, one regressing window stays watching (debounce),
-        # second consecutive window rolls back.
-        "gate_status_transitions": ["watching", s1, s2],
+        # second consecutive window flips to regressed (detect+claim) then
+        # rolled-back on confirm.
+        "gate_status_transitions": ["watching", s1, s_regressed, s2],
         "audit_actions": list(actions),
         "rollback_calls": len(calls),
         "idempotency_key": calls[0]["idempotency_key"] if calls else None,
@@ -159,7 +178,9 @@ async def test_meridian_quality_gate_three_proofs(app_engine, cipher):
 
     # proof #3: full watching -> regressed -> rolled-back with two audit rows
     #           and exactly one idempotent rollback call
-    assert p3["gate_status_transitions"] == ["watching", "watching", "rolled-back"]
+    assert p3["gate_status_transitions"] == [
+        "watching", "watching", "regressed", "rolled-back"
+    ]
     assert p3["audit_actions"] == [
         "canary-opened", "canary-regression-detected", "canary-rollback-fired",
     ]
