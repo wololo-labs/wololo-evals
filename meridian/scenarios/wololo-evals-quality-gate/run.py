@@ -15,8 +15,10 @@ Produces the three required proofs and writes
 Modes
 -----
 Degraded (default here, no docker daemon): proofs #1 and #2 run through the
-harness-under-eval bridge's injected exec seam (deterministic fake harness,
-real statistics) and proof #3 runs fully live (Postgres + deploy stub). The
+harness-under-eval bridge's injected exec seam (real stats/scoring pipeline over
+deterministic fixture values, so the CI is degenerate; real variance only under
+the operator containerized run) and proof #3 runs fully live (Postgres + deploy
+stub). The
 generator is the pytest module ``tests/test_meridian_quality_gate.py``::
 
     WOLOLO_EVALS_WRITE_PROOF=1 pytest tests/test_meridian_quality_gate.py

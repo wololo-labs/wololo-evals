@@ -209,8 +209,10 @@ def _write_proof(proofs: list[dict]) -> None:
         "scenario": "wololo-evals-quality-gate",
         "tenant": TENANT,
         "generated_at": ts,
-        "mode": "degraded: proofs 1+2 via injected exec seam (real statistics), "
-                "proof 3 fully live; real-Atlas containerized run is the operator "
+        "mode": "degraded: proofs 1+2 exercise the real stats/scoring pipeline "
+                "over deterministic fixture values (degenerate CI, zero variance; "
+                "real variance only under the operator containerized run), proof 3 "
+                "fully live; real-Atlas containerized run is the operator "
                 "precondition (see run.py)",
         "proofs": proofs,
     }
