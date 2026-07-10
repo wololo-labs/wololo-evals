@@ -34,3 +34,6 @@ where = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
+markers = [
+    "compose: real containerized integration trial; needs a docker daemon + a model API key, skipped loudly otherwise (SPEC S14 rung 2)",
+]

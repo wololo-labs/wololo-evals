@@ -29,6 +29,14 @@ binding).
 - Task-uplift evals: paired baseline-vs-treatment trials, N>=5 per arm (DDL-enforced
   floor), 95% Student-t confidence interval over paired differences, wins rule,
   `low_confidence` flag.
+- Repo-eval evals: `generate.py` walks a repo's real seeded history, picks an
+  isolable `fix:`/`feat:` commit and scores a single-arm harness run on
+  `correctness` (acceptance test in-sandbox), `churn_penalty` (rule-based off diff
+  line counts vs the historical fix) and `abstraction_adherence` (hardened judge).
+- Regression-replay evals: replays the corrections corpus, scoring whether a
+  candidate would avoid needing the same human correction again; each correction's
+  trusted `signal_class`/`matched_signals` reference is woven into the system
+  rubric while the candidate stays nonce-fenced.
 - Injection-hardened LLM judge: rubric-only system message, per-call 128-bit nonce
   fence around candidate content, schema-scored structured output, fail-closed
   parsing, `injection_suspected` tripwire -> run `errored` + audit + human review.
@@ -74,7 +82,8 @@ src/wololo_evals/
   judge.py                injection-hardened judge call shape
   inspect_adapter.py      the sole inspect_ai import boundary
   harness_solver.py       harness-under-eval subprocess solver (SPEC S6)
-  suites/                 skill_review, task_uplift (task.py + rubric.yaml each)
+  suites/                 skill_review, task_uplift, repo_eval (+generate.py),
+                          regression_replay (task.py + rubric.yaml each)
   jobs/                   durable queue + worker
   api/                    FastAPI surface (entitlement auth, RBAC, quota, audit)
   stubs/                  deploy_stub, candidate_fixture_gen (named neighbours)

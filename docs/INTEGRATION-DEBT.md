@@ -47,20 +47,24 @@ reference build environment and are OPERATOR preconditions, not skipped work:
 - **Rung 2 (component compose):** `docker compose up -d --wait` then the
   integration suite. No Docker daemon here. Compose, Dockerfile, and OTEL
   collector config are committed and runnable where a daemon exists.
-- **Live harness-under-eval (task-uplift, SPEC S6):** needs the per-harness
-  docker sandbox images + a model API key for a *containerized* trial. The
-  execution model (`harness_solver.py`, `inspect_adapter.py`), the adapter
-  manifests, and the worker wiring are committed and PROVEN end to end via an
-  injected exec seam: `worker.execute_run` drives task-uplift through
-  `inspect_adapter.run_task_uplift` (clone -> profile-scoped skill install ->
-  harness loop -> transcript turns -> diff capture -> acceptance test -> judge
-  -> paired uplift stats -> frozen composite + leaderboard row), tested on both
-  Claude Code and Hermes in `tests/test_harness_uplift.py`. The docker sandbox
-  is the only remaining operator precondition: production leaves `exec_factory`
-  None and the real `sandbox().exec` drives a pinned per-harness container.
-  Command to run a live containerized trial is the compose integration suite
-  above. repo-eval and regression-replay suites are still unimplemented and
-  raise `HarnessExecutionRequired`.
+- **Live harness-under-eval (task-uplift + repo-eval, SPEC S6):** needs the
+  per-harness docker sandbox images + a model API key for a *containerized*
+  trial. What is proven vs what is an operator precondition, stated precisely:
+  the orchestration is proven via an injected exec seam, and the real
+  sandbox execution is an operator precondition. `worker.execute_run` drives
+  task-uplift through `inspect_adapter.run_task_uplift` (clone -> profile-scoped
+  skill install -> harness loop -> transcript turns -> diff capture ->
+  acceptance test -> judge -> paired uplift stats -> frozen composite +
+  leaderboard row) and repo-eval through `run_repo_eval`, tested on both Claude
+  Code and Hermes in `tests/test_harness_uplift.py` and `tests/test_repo_eval.py`.
+  That seam proves the wiring and arm sequencing; it does NOT execute the
+  production path (`exec_factory=None -> _sandbox_exec -> sandbox().exec`
+  running the real `claude`/`hermes` CLI in a network-disabled per-trial
+  container), which no CI here runs because there is no docker daemon. A real
+  containerized trial per harness is gated behind the compose integration suite
+  (`tests/test_compose_integration.py`, marked `compose`) and runs once a daemon
+  + key exist. Until then this reads as "orchestration proven via exec seam;
+  real sandbox execution is an operator precondition", never "proven end to end".
 - **Live judge model call:** no `ANTHROPIC_API_KEY` in the build environment.
   The claude CLI bridge (`judge.cli_call_model`) and the HTTP backend
   (`judge.http_call_model`) are committed; the skill-review pipeline is proven
