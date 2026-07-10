@@ -61,6 +61,16 @@ class Settings:
     judge_backend: str = field(
         default_factory=lambda: _env("WOLOLO_EVALS_JUDGE_BACKEND", "http")
     )
+    # Static scoped key until wololo-broker (03) issues short-TTL per-run
+    # credentials (named integration debt).
+    judge_base_url: str = field(
+        default_factory=lambda: _env(
+            "WOLOLO_EVALS_JUDGE_BASE_URL", "https://api.anthropic.com"
+        )
+    )
+    judge_api_key: str = field(
+        default_factory=lambda: _env("WOLOLO_EVALS_JUDGE_API_KEY", "")
+    )
 
 
 _settings: Settings | None = None
