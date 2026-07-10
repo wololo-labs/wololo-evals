@@ -47,10 +47,14 @@ binding).
 - Entitlement verification against the imported `identity` contract family
   (fixture JWKS until wololo-deploy 06a, the sole real issuer, ships).
 
-The canary gate to `wololo-deploy` is a **documented stub** in this wave
+The canary gate lifecycle is **live** — open/telemetry/verdict routes plus the
+`canary-poll` worker with a two-consecutive-window regression debounce and an
+exactly-once, crash-safe idempotent rollback (`src/wololo_evals/canary.py`,
+`tests/test_canary.py`). It drives `wololo-deploy` through a **documented stub**
 (`src/wololo_evals/stubs/deploy_stub.py` + the "For wololo-deploy" section of
-`specs/eval-result/README.md`); the full gate lifecycle is 06a/06c integration
-debt, tracked in `docs/INTEGRATION-DEBT.md`.
+`specs/eval-result/README.md`); swapping the stub for the real Flagger
+confirm-rollout integration is 06c integration debt, tracked in
+`docs/INTEGRATION-DEBT.md`.
 
 ## Layout
 

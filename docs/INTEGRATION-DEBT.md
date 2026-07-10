@@ -48,11 +48,19 @@ reference build environment and are OPERATOR preconditions, not skipped work:
   integration suite. No Docker daemon here. Compose, Dockerfile, and OTEL
   collector config are committed and runnable where a daemon exists.
 - **Live harness-under-eval (task-uplift, SPEC S6):** needs the per-harness
-  docker sandbox images + a model API key. The execution model
-  (`harness_solver.py`, `inspect_adapter.py`) and the adapter manifests are
-  committed; `worker.execute_run` raises `HarnessExecutionRequired` rather than
-  fabricating a task-uplift verdict. Command to run once a daemon + key exist is
-  the compose integration suite above.
+  docker sandbox images + a model API key for a *containerized* trial. The
+  execution model (`harness_solver.py`, `inspect_adapter.py`), the adapter
+  manifests, and the worker wiring are committed and PROVEN end to end via an
+  injected exec seam: `worker.execute_run` drives task-uplift through
+  `inspect_adapter.run_task_uplift` (clone -> profile-scoped skill install ->
+  harness loop -> transcript turns -> diff capture -> acceptance test -> judge
+  -> paired uplift stats -> frozen composite + leaderboard row), tested on both
+  Claude Code and Hermes in `tests/test_harness_uplift.py`. The docker sandbox
+  is the only remaining operator precondition: production leaves `exec_factory`
+  None and the real `sandbox().exec` drives a pinned per-harness container.
+  Command to run a live containerized trial is the compose integration suite
+  above. repo-eval and regression-replay suites are still unimplemented and
+  raise `HarnessExecutionRequired`.
 - **Live judge model call:** no `ANTHROPIC_API_KEY` in the build environment.
   The claude CLI bridge (`judge.cli_call_model`) and the HTTP backend
   (`judge.http_call_model`) are committed; the skill-review pipeline is proven

@@ -78,8 +78,13 @@ T1–T15 complete; full suite **103 passed** on a real local Postgres 16 binary
 the build env — skill-review pipeline proven end to end with a deterministic
 injected judge (`tests/test_worker.py`); the live claude CLI / HTTP judge
 backends are committed and a live run is a recorded OPERATOR precondition
-(`docs/INTEGRATION-DEBT.md`). T13 worker runs skill-review live; task-uplift
-raises `HarnessExecutionRequired` (needs docker sandbox + model key, precondition)
-rather than fabricating a verdict. Contract families are open in fleet-lambda via
-branch `f/eval-contracts` + PR #57 (merge phase owns it). Canary gate is a
-documented stub this wave (`stubs/deploy_stub.py`, owner 06c).
+(`docs/INTEGRATION-DEBT.md`). T13 worker runs skill-review live; task-uplift is
+wired through `inspect_adapter.run_task_uplift` and proven end to end on Claude
+Code and Hermes via an injected exec seam (`tests/test_harness_uplift.py`) — the
+docker sandbox is the only remaining operator precondition. repo-eval and
+regression-replay still raise `HarnessExecutionRequired`. Contract families are
+open in fleet-lambda via branch `f/eval-contracts` + PR #57 (merge phase owns
+it). The canary gate lifecycle (open/telemetry/verdict routes + canary-poll
+worker with two-window debounce and exactly-once idempotent rollback) is live
+against the `deploy_stub` (`tests/test_canary.py`); the stub is replaced by the
+real Flagger confirm-rollout integration when 06c lands (owner 06c).
