@@ -291,6 +291,7 @@ async def _run_task_uplift(conn, run, cipher, call_model, k, exec_factory) -> di
             ref=fx["ref"],
             task_prompt=fx["task_prompt"],
             acceptance_command=tuple(fx["acceptance_command"]),
+            oracle_files=tuple(fx.get("oracle_files", ())),
             max_turns=int(fx.get("max_turns", 20)),
             wall_clock_cap_s=int(fx.get("wall_clock_cap_s", 900)),
         )

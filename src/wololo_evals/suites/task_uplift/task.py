@@ -21,9 +21,15 @@ class TaskFixture:
 
     fixture_id: str
     repo: str                      # clone source visible inside the sandbox
-    ref: str                       # pinned ref
+    ref: str                       # pinned ref (also the trusted correctness oracle)
     task_prompt: str
     acceptance_command: tuple[str, ...]   # exit-0 = correct, run in-sandbox
+    # the acceptance/test paths that define correctness — re-materialized from
+    # ``ref`` (the trusted pinned checkout) onto the workspace AFTER the harness
+    # loop and BEFORE acceptance, so a candidate skill that instructs the harness
+    # to weaken or stub the acceptance test cannot inflate correctness (the same
+    # defense repo-eval applies via oracle_files). Empty = no re-materialization.
+    oracle_files: tuple[str, ...] = ()
     max_turns: int = 20
     wall_clock_cap_s: int = 900
 

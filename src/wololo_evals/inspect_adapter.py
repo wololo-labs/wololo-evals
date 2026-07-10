@@ -233,8 +233,18 @@ def run_task_uplift(
     def _uplift_scorer():
         async def score(state: TaskState, target: Target) -> Score:
             result = state.metadata["trial_result"]
+            # Restore the correctness oracle from the trusted pinned ref before
+            # running acceptance: the treatment arm installs an attacker-
+            # controllable skill and the harness can write anywhere in /workspace
+            # (including the acceptance test). Materializing the oracle paths from
+            # fixture.ref defeats a harness that weakened/stubbed the test to fake
+            # correctness (same defense as repo-eval's oracle_files).
+            exec_fn = make_exec()
+            await materialize_oracle_files(
+                exec_fn, fixture.ref, list(fixture.oracle_files)
+            )
             correct = await run_acceptance_test(
-                make_exec(), list(fixture.acceptance_command)
+                exec_fn, list(fixture.acceptance_command)
             )
             turns_score = base.turns_efficiency_score(
                 result.turns or fixture.max_turns, fixture.max_turns
