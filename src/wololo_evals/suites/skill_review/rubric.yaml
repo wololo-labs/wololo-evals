@@ -1,0 +1,33 @@
+# skill-review rubric (SPEC S5.1). This file's sha256 IS rubric_version:
+# any edit here is a deliberate segmentation event for every comparison.
+suite: skill-review
+judge:
+  k: 5
+  temperature: 0
+dimensions:
+  validation_gate:
+    weight: 0.30
+    criterion: >
+      Does the skill declare a runnable self-check (a demo()/__main__ block,
+      a test_*.py, or an explicit manual verification step) for any
+      non-trivial logic it teaches? A skill that only prose-describes a
+      workflow with zero verification surface scores 0 on this dimension.
+  implementation:
+    weight: 0.30
+    criterion: >
+      Is the skill's guidance technically correct and complete: does it name
+      real files/commands/APIs that exist in the target repo shape, not
+      invented ones; does it handle the stated edge cases?
+  activation:
+    weight: 0.20
+    criterion: >
+      Is the skill's trigger/description precise enough that an agent picks
+      it up for the right task and does not fire on unrelated ones? Judge the
+      stated trigger phrases against the skill's actual scope: score low when
+      triggers are vague, overbroad, or missing.
+  review:
+    weight: 0.20
+    criterion: >
+      Does the skill read as reviewed, deliberate work: no placeholder
+      sections, no unresolved TODOs, a clear "when NOT to use this" boundary
+      where relevant?
