@@ -4,8 +4,21 @@ The gate watches a candidate that already scored ``passed`` in a real eval run
 while ``wololo-deploy`` shifts live traffic to it. ``wololo-deploy`` posts RAW
 metric windows; wololo-evals computes the live composite ITSELF from the same
 pinned rubric's ``canary_weights`` (a self-reported composite is never
-accepted). A regression is the live composite dropping more than the tenant's
-``regression_threshold_pct`` below the frozen baseline for TWO consecutive
+accepted).
+
+The baseline is the FIRST telemetry window's live composite, frozen once (the
+stable / pre-shift cohort wololo-deploy posts before ramping the candidate). It
+is deliberately NOT the run's eval-dimension ``composite_score``: that lives in
+a disjoint metric space (correctness/turns/approach, ~0.89) from the
+operational ``canary_weights`` space (task_success_rate/error_rate/tokens,
+~0.54), so copying it would trip a false regression on perfectly healthy
+traffic. Baseline and every live window it is compared against are now computed
+by the SAME :func:`live_composite`, guaranteeing one metric space (SPEC
+resolution: the old "copies runs.composite_score" line was internally
+inconsistent with the canary_weights live rule and is superseded here).
+
+A regression is the live composite dropping more than the tenant's
+``regression_threshold_pct`` below that frozen baseline for TWO consecutive
 windows (never one noisy sample). On regression the gate fires
 ``wololo-deploy``'s rollback EXACTLY ONCE across worker restarts:
 
@@ -73,6 +86,10 @@ async def open_gate(
     Rejects with :class:`GateError` (409) if the run is not ``passed`` or its
     verdict is ``low_confidence`` — a candidate that never passed its own eval
     is never silently watched.
+
+    ``baseline_composite`` is left NULL here and frozen from the first telemetry
+    window (see :func:`ingest_telemetry`): the eval ``composite_score`` is a
+    legality signal that the run completed scoring, never the canary baseline.
     """
     run = (
         await conn.execute(
@@ -102,15 +119,14 @@ async def open_gate(
             text(
                 "insert into wololo_evals.canary_gates "
                 "(tenant_id, candidate_id, run_id, deploy_ref, gate_status, "
-                " baseline_composite, rubric_version) "
-                "values (:t, :c, :r, :d, 'watching', :bc, :rv) returning id"
+                " rubric_version) "
+                "values (:t, :c, :r, :d, 'watching', :rv) returning id"
             ),
             {
                 "t": tenant_id,
                 "c": candidate_id,
                 "r": run_id,
                 "d": deploy_ref,
-                "bc": run.composite_score,
                 "rv": run.rubric_version,
             },
         )
@@ -121,7 +137,7 @@ async def open_gate(
     return {
         "id": str(gate_id),
         "gate_status": "watching",
-        "baseline_composite": run.composite_score,
+        "baseline_composite": None,  # frozen from the first telemetry window
         "rubric_version": run.rubric_version,
     }
 
@@ -156,7 +172,14 @@ async def ingest_telemetry(
     observed_at: str,
 ) -> dict:
     """Store one RAW telemetry window and its wololo-evals-computed live
-    composite. Deduped by ``(gate_id, window_id)``."""
+    composite. Deduped by ``(gate_id, window_id)``.
+
+    The first window a gate ever receives freezes ``baseline_composite`` (the
+    stable / pre-shift cohort): baseline and every later window then share one
+    metric space because both come from :func:`live_composite`. First-writer
+    wins via the ``baseline_composite is null`` guard, so a redelivered first
+    window never re-baselines.
+    """
     gate = (
         await conn.execute(
             text(
@@ -172,6 +195,13 @@ async def ingest_telemetry(
     live = live_composite(rubric, metrics)
     import json
 
+    await conn.execute(
+        text(
+            "update wololo_evals.canary_gates set baseline_composite = :lc "
+            "where id = :id and baseline_composite is null"
+        ),
+        {"lc": live, "id": gate_id},
+    )
     await conn.execute(
         text(
             "insert into wololo_evals.canary_telemetry "
@@ -228,6 +258,8 @@ async def detect_and_claim(
         return _RollbackClaim(gate.rollback_key, gate.deploy_ref)
     if gate.gate_status != "watching":
         return None
+    if gate.baseline_composite is None:
+        return None  # no baseline window yet: nothing to regress against
 
     windows = (
         await conn.execute(

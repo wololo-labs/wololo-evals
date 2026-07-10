@@ -24,12 +24,18 @@ from wololo_evals.stubs.deploy_stub import create_deploy_stub
 from wololo_evals.suites import base as suites_base
 
 TENANT = "meridian"
+# The run's frozen eval-dimension composite (correctness/turns/approach). This
+# is the ~0.89-scale number a real passed task-uplift run produces; it is NOT
+# the canary baseline (a disjoint operational-metric space), and the gate must
+# never copy it into baseline_composite (that was the false-regression bug).
+RUN_COMPOSITE = 0.89
 # task-uplift canary_weights: task_success_rate 0.6, error_rate -0.25,
-# tokens_per_task -0.15. baseline is chosen on the same (canary-weighted)
-# scale as the live composite (operator calibration, SPEC S5.5).
-BASELINE = 0.55
+# tokens_per_task -0.15. The baseline is frozen from the FIRST telemetry window
+# (the stable/pre-shift cohort) so it shares this operational space with every
+# live window it is compared against.
 HEALTHY = {"task_success_rate": 0.95, "error_rate": 0.05, "tokens_per_task": 0.10}
 REGRESSING = {"task_success_rate": 0.50, "error_rate": 0.30, "tokens_per_task": 0.40}
+HEALTHY_COMPOSITE = 0.6 * 0.95 - 0.25 * 0.05 - 0.15 * 0.10  # == 0.5425
 
 
 @pytest.fixture()
@@ -74,7 +80,7 @@ async def _passed_run(engine, cipher, *, status="passed", low_confidence=False) 
                 "values (:id,:t,:c,'task-uplift',:st,:sv,:rv,5,:cs,cast(:vs as jsonb))"
             ),
             {"id": rid, "t": TENANT, "c": cid, "st": status, "sv": sv, "rv": rv,
-             "cs": BASELINE, "vs": json.dumps(vstats)},
+             "cs": RUN_COMPOSITE, "vs": json.dumps(vstats)},
         )
     return cid, rid
 
@@ -86,9 +92,14 @@ async def _open_gate(engine, cid, rid, deploy_ref) -> str:
 
 
 async def _send_window(engine, gate_id, window_id, metrics):
+    # observed_at ascends with the digits in window_id (w0 -> :00, w1 -> :01,
+    # ...) so "last two windows by observed_at" is deterministic even though all
+    # windows share a session second — the baseline window (w0) stays oldest.
+    secs = int("".join(ch for ch in window_id if ch.isdigit()) or "0")
+    observed_at = f"2026-07-10T00:00:{secs:02d}Z"
     async with tenant_txn(engine, TENANT) as conn:
         return await canary.ingest_telemetry(
-            conn, TENANT, gate_id, window_id, metrics, 100, "2026-07-10T00:00:00Z"
+            conn, TENANT, gate_id, window_id, metrics, 100, observed_at
         )
 
 
@@ -120,7 +131,21 @@ async def test_open_on_passed_run_watches(app_engine, cipher):
     gid = await _open_gate(app_engine, cid, rid, "dep-ok")
     row = await _gate_row(app_engine, gid)
     assert row.gate_status == "watching"
-    assert row.baseline_composite == pytest.approx(BASELINE)
+    # No baseline is copied from the run's eval composite; it stays NULL until
+    # the first telemetry window freezes it in the operational metric space.
+    assert row.baseline_composite is None
+
+
+async def test_first_window_freezes_baseline(app_engine, cipher):
+    cid, rid = await _passed_run(app_engine, cipher)
+    gid = await _open_gate(app_engine, cid, rid, "dep-baseline")
+    await _send_window(app_engine, gid, "w0", HEALTHY)
+    row = await _gate_row(app_engine, gid)
+    assert row.baseline_composite == pytest.approx(HEALTHY_COMPOSITE)
+    # A second, different window never re-baselines (first-writer wins).
+    await _send_window(app_engine, gid, "w1", REGRESSING)
+    row = await _gate_row(app_engine, gid)
+    assert row.baseline_composite == pytest.approx(HEALTHY_COMPOSITE)
 
 
 # --- live composite from RAW metrics ----------------------------------------
@@ -142,6 +167,7 @@ async def test_telemetry_missing_metric_raises(app_engine, cipher):
 async def test_one_regressing_window_stays_watching(app_engine, cipher, deploy_client):
     cid, rid = await _passed_run(app_engine, cipher)
     gid = await _open_gate(app_engine, cid, rid, "dep-1win")
+    await _send_window(app_engine, gid, "w0", HEALTHY)  # baseline (pre-shift)
     await _send_window(app_engine, gid, "w1", REGRESSING)
     status = await canary.run_canary_poll(app_engine, TENANT, gid, deploy_client)
     assert status == "watching"
@@ -152,10 +178,11 @@ async def test_two_regressing_windows_roll_back_once(app_engine, cipher, deploy_
     cid, rid = await _passed_run(app_engine, cipher)
     gid = await _open_gate(app_engine, cid, rid, "dep-2win")
 
-    # window 1: regressing but alone -> still watching
+    await _send_window(app_engine, gid, "w0", HEALTHY)  # baseline (pre-shift)
+    # window 1: regressing but alone (paired with baseline) -> still watching
     await _send_window(app_engine, gid, "w1", REGRESSING)
     assert await canary.run_canary_poll(app_engine, TENANT, gid, deploy_client) == "watching"
-    # a healthy window resets nothing but proves "consecutive" is the last two
+    # window 2: two consecutive regressing windows -> rollback fires
     await _send_window(app_engine, gid, "w2", REGRESSING)
     status = await canary.run_canary_poll(app_engine, TENANT, gid, deploy_client)
     assert status == "rolled-back"
@@ -189,6 +216,7 @@ async def test_rollback_idempotent_across_worker_crash(app_engine, cipher, deplo
     deploy stub records exactly one rollback."""
     cid, rid = await _passed_run(app_engine, cipher)
     gid = await _open_gate(app_engine, cid, rid, "dep-crash")
+    await _send_window(app_engine, gid, "w0", HEALTHY)  # baseline (pre-shift)
     await _send_window(app_engine, gid, "w1", REGRESSING)
     await _send_window(app_engine, gid, "w2", REGRESSING)
 
@@ -214,6 +242,7 @@ async def test_worker_services_canary_poll_job(
 ):
     cid, rid = await _passed_run(app_engine, cipher)
     gid = await _open_gate(app_engine, cid, rid, "dep-queue")
+    await _send_window(app_engine, gid, "w0", HEALTHY)  # baseline (pre-shift)
     await _send_window(app_engine, gid, "w1", REGRESSING)
     await _send_window(app_engine, gid, "w2", REGRESSING)
     from wololo_evals.jobs import queue
@@ -310,14 +339,59 @@ async def test_http_open_watch_and_verdict(http_client, app_engine, cipher):
             headers={"Authorization": f"Bearer {token}"},
         )
         assert tele.status_code == 202, tele.text
-        assert tele.json()["live_composite"] == pytest.approx(
-            0.6 * 0.95 - 0.25 * 0.05 - 0.15 * 0.10
-        )
+        assert tele.json()["live_composite"] == pytest.approx(HEALTHY_COMPOSITE)
         verdict = await c.get(
             f"/api/v1/canary-gates/{gid}/verdict",
             headers={"Authorization": f"Bearer {token}"},
         )
     body = verdict.json()
     assert body["gate_status"] == "watching"
-    assert body["baseline_composite"] == pytest.approx(BASELINE)
+    # baseline is the first window's live composite, in the same space as live.
+    assert body["baseline_composite"] == pytest.approx(HEALTHY_COMPOSITE)
+    assert body["live_composite"] == pytest.approx(HEALTHY_COMPOSITE)
     assert body["windows_observed"] == 1
+
+
+# --- the false-regression regression: eval composite != canary baseline ------
+async def test_real_run_composite_never_poisons_canary_baseline(
+    app_engine, cipher, deploy_client
+):
+    """A gate opened on a REAL passed task-uplift run (composite_score ~0.89,
+    frozen by the worker, NOT hand-seeded to a canary-scale value) must stay
+    'watching' under healthy live traffic. Copying the eval composite into
+    baseline_composite (the old bug) would make is_regression(0.54, 0.89, 10%)
+    fire and roll back a perfectly healthy canary after two windows."""
+    from wololo_evals.jobs.worker import execute_run
+
+    from test_harness_uplift import FakeSandbox, _judge, _make_uplift_run
+
+    rid = await _make_uplift_run(app_engine, cipher, "claude-code")
+    fake = FakeSandbox()
+    async with tenant_txn(app_engine, TENANT) as conn:
+        out = await execute_run(
+            conn, rid, cipher=cipher, call_model=_judge, k=5,
+            exec_factory=lambda: fake.exec,
+        )
+    assert out["status"] == "passed"
+    # eval-dimension composite, a disjoint space from canary_weights:
+    assert out["composite_score"] == pytest.approx(0.89, abs=1e-6)
+
+    async with tenant_txn(app_engine, TENANT) as conn:
+        cid = (
+            await conn.execute(
+                text("select candidate_id from wololo_evals.runs where id = :r"),
+                {"r": rid},
+            )
+        ).scalar_one()
+    gid = await _open_gate(app_engine, str(cid), rid, "dep-real")
+    row = await _gate_row(app_engine, gid)
+    assert row.baseline_composite is None  # never the 0.89 eval composite
+
+    # Healthy traffic: first window freezes a ~0.54 baseline, second confirms it
+    # stays watching — no rollback despite the run's 0.89 eval composite.
+    await _send_window(app_engine, gid, "w0", HEALTHY)
+    await _send_window(app_engine, gid, "w1", HEALTHY)
+    assert await canary.run_canary_poll(app_engine, TENANT, gid, deploy_client) == "watching"
+    row = await _gate_row(app_engine, gid)
+    assert row.baseline_composite == pytest.approx(HEALTHY_COMPOSITE)
+    assert deploy_client._stub_app.state.log.calls == []  # NO false rollback
