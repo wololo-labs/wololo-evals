@@ -73,7 +73,10 @@ Flagger/Argo confirm-rollout integration when 06c lands:
    BEFORE the HTTP call. wololo-deploy MUST make rollback idempotent by that
    key: a replayed key returns the original response and does not execute a
    second rollback. wololo-evals marks the gate `rolled-back` only on a
-   confirmed 2xx, never optimistically.
+   confirmed 2xx, never optimistically. A non-2xx (e.g. a transient deploy-side
+   5xx) leaves the gate `regressed` with its intent + key persisted and fails
+   the durable canary-poll job, which backoff-retries and re-sends the SAME
+   key until a 2xx confirms — exactly-once, never at-most-once.
 
 ## Test vectors
 

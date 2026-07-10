@@ -51,6 +51,15 @@ class GateError(Exception):
     passed, or its verdict is low-confidence (SPEC S7)."""
 
 
+class RollbackNotConfirmed(Exception):
+    """The rollback POST returned a non-2xx (e.g. a transient deploy-side 5xx).
+    The gate stays 'regressed' with its rollback intent + key persisted; raising
+    lets the durable queue fail-and-backoff-retry the SAME canary-poll job, which
+    re-sends the SAME Idempotency-Key until wololo-deploy confirms. Never
+    swallowed: a swallowed non-2xx strands the gate and leaves the bad candidate
+    serving traffic (SPEC S5.5 exactly-once, not at-most-once)."""
+
+
 def live_composite(rubric: dict, metrics: dict) -> float:
     """Weighted sum of the raw metric window under the rubric's canary weights.
 
@@ -315,8 +324,8 @@ async def confirm_rollback(
     conn, tenant_id: str, actor: str, gate_id: str, response_ok: bool
 ) -> str:
     """txn-2 phase: flip to 'rolled-back' ONLY on a confirmed 2xx, never
-    optimistically. A non-2xx leaves the gate 'regressed' with intent intact
-    for a retry job to re-send the same key."""
+    optimistically. A non-2xx leaves the gate 'regressed' with intent intact so
+    :func:`run_canary_poll` can raise and have the same key re-sent on retry."""
     if not response_ok:
         return "regressed"
     updated = (
@@ -363,4 +372,12 @@ async def run_canary_poll(
     )
     ok = 200 <= resp.status_code < 300
     async with tenant_txn(engine, tenant_id) as conn:
-        return await confirm_rollback(conn, tenant_id, actor, gate_id, ok)
+        status = await confirm_rollback(conn, tenant_id, actor, gate_id, ok)
+    if not ok:
+        # Intent + key stay persisted; a redelivered poll re-fires the SAME key.
+        # Raise so the durable queue fail/backoff re-runs this canary-poll job.
+        raise RollbackNotConfirmed(
+            f"rollback POST for gate {gate_id} returned {resp.status_code}; "
+            "gate stays 'regressed', will retry with the same Idempotency-Key"
+        )
+    return status

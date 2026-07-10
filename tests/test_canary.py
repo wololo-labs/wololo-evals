@@ -395,3 +395,47 @@ async def test_real_run_composite_never_poisons_canary_baseline(
     row = await _gate_row(app_engine, gid)
     assert row.baseline_composite == pytest.approx(HEALTHY_COMPOSITE)
     assert deploy_client._stub_app.state.log.calls == []  # NO false rollback
+
+
+# --- transient non-2xx rollback must retry with the same key (adversarial) ---
+async def test_rollback_retries_on_transient_5xx(app_engine, cipher):
+    """A transient 5xx on the rollback POST must not strand the gate at
+    'regressed': the poll raises so the durable queue retries, and the retry
+    re-sends the SAME Idempotency-Key until wololo-deploy confirms (SPEC S5.5
+    exactly-once, not at-most-once)."""
+    cid, rid = await _passed_run(app_engine, cipher)
+    gid = await _open_gate(app_engine, cid, rid, "dep-503")
+    await _send_window(app_engine, gid, "w0", HEALTHY)  # baseline (pre-shift)
+    await _send_window(app_engine, gid, "w1", REGRESSING)
+    await _send_window(app_engine, gid, "w2", REGRESSING)
+
+    seen_keys: list = []
+    state = {"n": 0}
+
+    def handler(request):
+        seen_keys.append(request.headers.get("Idempotency-Key"))
+        state["n"] += 1
+        if state["n"] == 1:
+            return httpx.Response(503, json={"error": "transient"})
+        return httpx.Response(200, json={"rolled_back": True})
+
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://deploy"
+    )
+    async with client:
+        with pytest.raises(canary.RollbackNotConfirmed):
+            await canary.run_canary_poll(app_engine, TENANT, gid, client)
+        row = await _gate_row(app_engine, gid)
+        assert row.gate_status == "regressed"
+        assert row.rollback_intent_at is not None
+        assert row.rollback_confirmed_at is None  # never confirmed on the 503
+
+        # retry: deploy now healthy -> rolled-back with the SAME key
+        assert await canary.run_canary_poll(app_engine, TENANT, gid, client) == "rolled-back"
+
+    assert state["n"] == 2
+    assert len(set(seen_keys)) == 1  # same Idempotency-Key across both attempts
+    assert seen_keys[0] == f"dep-503:{rid}"
+    row = await _gate_row(app_engine, gid)
+    assert row.gate_status == "rolled-back"
+    assert row.rollback_confirmed_at is not None
