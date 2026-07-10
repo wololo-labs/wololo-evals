@@ -71,5 +71,17 @@ reference build environment and are OPERATOR preconditions, not skipped work:
   end to end with a deterministic injected judge (`tests/test_worker.py`). A
   live judge run swaps the injected `call_model` for either backend, no other
   change.
-- **Rung 3 (Meridian gate):** needs the standing Meridian fixture (Atlas seeded
-  repos) stood up. Later wave; scenario authoring tracked in the epic.
+- **Rung 3 (Meridian gate):** the `wololo-evals-quality-gate` scenario is
+  authored (`meridian/scenarios/wololo-evals-quality-gate/`: scenario.yaml,
+  run.py, the KYC acceptance test + skill-under-test fixtures) and produces the
+  three-proof JSON. In the current environment it runs in degraded mode: proofs
+  #1 (KYC uplift, 5 paired trials/arm) and #2 (repo-eval, three non-trivial
+  dimensions) go through the injected exec seam (real statistics, deterministic
+  fake harness) and proof #3 (canary watching -> regressed -> rolled-back, two
+  audit rows, one idempotent rollback) runs fully live. A committed sample proof
+  is `meridian/proof/wololo-evals-quality-gate-<ts>.json`; the generator is
+  `tests/test_meridian_quality_gate.py`. Standing up the real Atlas seeded repos
+  + per-harness docker images + a model API key is the operator precondition
+  that turns proofs #1/#2 into real harness executions; the exact command is in
+  the scenario's run.py. This scenario package vendors into the kernel
+  `meridian/` tree when the estate is assembled.
