@@ -1,15 +1,20 @@
 """Eval-run worker: turns a leased ``eval-run`` job into trials, scores, a
 frozen composite, verdict stats, and a leaderboard row.
 
-The skill-review path is fully live here: it decrypts the candidate, runs the
-injection-hardened judge (k samples, median-per-dimension), stores every raw
-sample as a per-trial score row, freezes the composite ONCE at completion, and
-upserts the leaderboard. The task-uplift path needs the harness-under-eval
-sandbox (``harness_solver`` + a docker daemon + a model API key); in an
-environment without those it raises :class:`HarnessExecutionRequired` rather
-than fabricating a verdict — an honest guard, not a placeholder (the execution
-model is in ``harness_solver.py``; a live run is a documented OPERATOR
-precondition for this wave).
+The skill-review path decrypts the candidate, runs the injection-hardened
+judge (k samples, median-per-dimension), stores every raw sample as a per-trial
+score row, freezes the composite ONCE at completion, and upserts the
+leaderboard. The task-uplift path drives the harness-under-eval bridge through
+``inspect_adapter.run_task_uplift``: N paired baseline-vs-skill trials, paired
+uplift statistics, a frozen composite, and a model+harness leaderboard row. In
+production the trial runs in a per-harness docker sandbox; the exec seam is
+injectable (``exec_factory``) so the whole moat is exercisable with a fake
+executor where no daemon exists. The repo-eval path is single-arm
+harness-under-eval over a generated real-history fixture (correctness +
+rule-based churn_penalty + hardened judge); the regression-replay path is a
+single-arm hardened judge over the corrections corpus. All four suites resolve
+to a real worker path; only a suite outside the DDL check set raises
+:class:`HarnessExecutionRequired`.
 
 ``call_model`` is injected (``(system, user) -> str``) so the whole
 orchestration is testable deterministically without a network judge.
@@ -44,8 +49,20 @@ async def execute_run(
     cipher,
     call_model: Callable[[str, str], str],
     k: int = 5,
+    exec_factory=None,
+    job_payload: Optional[dict] = None,
 ) -> dict:
-    """Execute one run inside the caller's tenant-scoped transaction."""
+    """Execute one run inside the caller's tenant-scoped transaction.
+
+    ``exec_factory`` injects the harness sandbox exec seam for task-uplift (see
+    :func:`wololo_evals.inspect_adapter.run_task_uplift`). Production leaves it
+    None and the real per-harness docker sandbox drives the trial; tests inject
+    a fake executor so the harness-under-eval bridge runs without a daemon.
+
+    ``job_payload`` is the enqueued eval-run job body. For repo-eval it carries
+    the ``repo_eval_fixture`` the API generated from real commit history at run
+    creation; the worker prefers it over any fixture in the candidate payload.
+    """
     run = (
         await conn.execute(
             text(
@@ -68,8 +85,25 @@ async def execute_run(
         {"id": run_id},
     )
 
-    if run.eval_suite != "skill-review":
-        # Verdict-bearing task-uplift requires the harness sandbox; do not fake.
+    with tracer().start_as_current_span("eval-run") as span:
+        span.set_attribute("tenant_id", tenant_id)
+        span.set_attribute("run_id", str(run_id))
+        span.set_attribute("eval_suite", run.eval_suite)
+        if run.eval_suite == "skill-review":
+            return await _run_skill_review(conn, run, cipher, call_model, k)
+        if run.eval_suite == "task-uplift":
+            return await _run_task_uplift(
+                conn, run, cipher, call_model, k, exec_factory
+            )
+        if run.eval_suite == "repo-eval":
+            return await _run_repo_eval(
+                conn, run, cipher, call_model, k, exec_factory, job_payload
+            )
+        if run.eval_suite == "regression-replay":
+            return await _run_regression_replay(conn, run, cipher, call_model, k)
+        # No suite matched the DDL check-constrained set: refuse loudly rather
+        # than fabricate a verdict (a status regression here would corrupt the
+        # canary gate's "did this resolve" read).
         await conn.execute(
             text(
                 "update wololo_evals.runs set status = 'errored', completed_at = now() "
@@ -78,14 +112,8 @@ async def execute_run(
             {"id": run_id},
         )
         raise HarnessExecutionRequired(
-            f"suite {run.eval_suite!r} needs the docker harness sandbox + model key"
+            f"suite {run.eval_suite!r} has no worker path"
         )
-
-    with tracer().start_as_current_span("eval-run") as span:
-        span.set_attribute("tenant_id", tenant_id)
-        span.set_attribute("run_id", str(run_id))
-        span.set_attribute("eval_suite", run.eval_suite)
-        return await _run_skill_review(conn, run, cipher, call_model, k)
 
 
 async def _run_skill_review(conn, run, cipher, call_model, k) -> dict:
@@ -200,6 +228,428 @@ async def _run_skill_review(conn, run, cipher, call_model, k) -> dict:
     }
 
 
+class TaskUpliftConfigError(Exception):
+    """A task-uplift candidate payload is missing the harness/fixture/skill
+    fields the run needs; the run errors rather than fabricating a trial."""
+
+
+async def _run_task_uplift(conn, run, cipher, call_model, k, exec_factory) -> dict:
+    """Harness-under-eval task-uplift (SPEC S5.2/S6): N paired baseline-vs-skill
+    trials through the harness subprocess bridge, paired uplift statistics,
+    frozen composite, leaderboard row.
+
+    The candidate payload carries the run plan: ``harness``, ``skill_slug``,
+    ``skill_files`` (materialized into the treatment profile only) and
+    ``task_fixture`` (repo/ref/prompt/acceptance_command). ``inspect_adapter``
+    drives the real harness CLI per trial through the sandbox exec seam.
+    """
+    import asyncio
+    import statistics
+
+    from .. import stats as stats_mod
+    from ..harnesses import resolve_runner
+    from ..inspect_adapter import run_task_uplift
+    from ..suites.task_uplift.task import ARMS, TaskFixture
+
+    run_id = str(run.id)
+    tenant_id = run.tenant_id
+    cand = (
+        await conn.execute(
+            text(
+                "select candidate_ref, payload_ciphertext, payload_sha256 "
+                "from wololo_evals.candidates where id = :id"
+            ),
+            {"id": run.candidate_id},
+        )
+    ).first()
+    payload = cipher.decrypt_payload(
+        tenant_id, cand.payload_ciphertext, cand.payload_sha256
+    )
+
+    async def _error_run(reason: str, *, audit: str | None = None) -> dict:
+        await conn.execute(
+            text(
+                "update wololo_evals.runs set status = 'errored', completed_at = now() "
+                "where id = :id"
+            ),
+            {"id": run_id},
+        )
+        if audit:
+            await append_audit_event(
+                conn, tenant_id, "worker", audit, run_id, decision="denied"
+            )
+        return {"status": "errored", "reason": reason, "run_id": run_id}
+
+    try:
+        harness = payload["harness"]
+        skill_slug = payload["skill_slug"]
+        skill_files = payload["skill_files"]
+        fx = payload["task_fixture"]
+        fixture = TaskFixture(
+            fixture_id=fx["fixture_id"],
+            repo=fx["repo"],
+            ref=fx["ref"],
+            task_prompt=fx["task_prompt"],
+            acceptance_command=tuple(fx["acceptance_command"]),
+            oracle_files=tuple(fx.get("oracle_files", ())),
+            max_turns=int(fx.get("max_turns", 20)),
+            wall_clock_cap_s=int(fx.get("wall_clock_cap_s", 900)),
+        )
+    except (KeyError, TypeError) as exc:
+        raise TaskUpliftConfigError(
+            f"task-uplift candidate payload incomplete: {exc}"
+        ) from exc
+
+    runner = resolve_runner(harness, smoke=run.smoke)
+    n_trials = run.n_trials
+
+    outcome = await asyncio.to_thread(
+        run_task_uplift,
+        fixture, runner, n_trials, skill_slug, skill_files, call_model,
+        k=k, arms=ARMS, exec_factory=exec_factory,
+    )
+    record_metering(tenant_id, "judge-samples", k * n_trials)
+
+    if outcome.status == "errored":
+        if outcome.error == "judge-integrity":
+            return await _error_run("judge-integrity", audit="judge-integrity-flagged")
+        return await _error_run(outcome.error or "harness execution errored")
+
+    by_arm: dict[str, list[dict]] = {arm: [] for arm in ARMS}
+    for tr in outcome.trials:
+        by_arm.setdefault(tr["arm"], []).append(tr)
+    for arm in ARMS:
+        if len(by_arm[arm]) < n_trials:
+            # An arm short of n_trials completed trials is 'errored', never a
+            # 'failed' verdict computed over a partial arm (SPEC S6.8).
+            return await _error_run(
+                f"arm {arm!r} produced {len(by_arm[arm])}/{n_trials} completed trials"
+            )
+
+    model = payload.get("model", "harness-default")
+    baseline = [t["composite"] for t in sorted(by_arm["baseline"], key=lambda t: t["trial_index"])]
+    treatment = [t["composite"] for t in sorted(by_arm["treatment"], key=lambda t: t["trial_index"])]
+
+    # Per-trial rows (arm-distinguished) so an n=1 verdict is impossible to hide.
+    for arm in ARMS:
+        for tr in by_arm[arm]:
+            await conn.execute(
+                text(
+                    "insert into wololo_evals.trials "
+                    "(tenant_id, run_id, trial_index, arm, status, model, harness, "
+                    " composite, started_at, completed_at) "
+                    "values (:t,:r,:ti,:a,'completed',:m,:h,:c, now(), now())"
+                ),
+                {"t": tenant_id, "r": run_id, "ti": tr["trial_index"], "a": arm,
+                 "m": model, "h": runner.harness, "c": tr["composite"]},
+            )
+
+    diffs = stats_mod.paired_uplift_pcts(baseline, treatment)
+    vstats = stats_mod.verdict_stats(diffs)
+    vstats["uplift_pct"] = vstats["mean"]
+
+    tenant_row = (
+        await conn.execute(
+            text("select min_effect_pct from wololo_evals.tenants where tenant_id = :t"),
+            {"t": tenant_id},
+        )
+    ).first()
+    passed = stats_mod.task_uplift_passed(vstats, tenant_row.min_effect_pct)
+
+    # Aggregate per-dimension score rows = median across the treatment arm (the
+    # candidate under evaluation), pinned to the run's suite/rubric versions.
+    dims = list(outcome.trials[0]["dimension_values"])
+    rubric = suites_base.load_rubric("task-uplift")
+    for dim in dims:
+        median = statistics.median(t["dimension_values"][dim] for t in by_arm["treatment"])
+        weight = rubric["dimensions"][dim]["weight"]
+        await _score(conn, tenant_id, run_id, dim, median, run,
+                     trial_index=None, weight=weight, judge="injected-judge")
+
+    treatment_mean = statistics.fmean(treatment)
+    status = "passed" if passed else "failed"
+    await conn.execute(
+        text(
+            "update wololo_evals.runs set status = :s, composite_score = :c, "
+            "verdict_stats = cast(:v as jsonb), completed_at = now() where id = :id"
+        ),
+        {"s": status, "c": treatment_mean, "v": json.dumps(vstats), "id": run_id},
+    )
+
+    await conn.execute(
+        text(
+            "insert into wololo_evals.leaderboard "
+            "(tenant_id, model, harness, skill_ref, composite_score, n_trials, "
+            " score_stddev, ci_low, ci_high, suite_version, rubric_version, run_id) "
+            "values (:t, :m, :h, :sk, :cs, :n, :sd, :cl, :ch, :sv, :rv, :r) "
+            "on conflict (tenant_id, model, harness, skill_ref, rubric_version, run_id) "
+            "do nothing"
+        ),
+        {
+            "t": tenant_id, "m": model, "h": runner.harness, "sk": cand.candidate_ref,
+            "cs": treatment_mean, "n": n_trials, "sd": vstats["stddev"],
+            "cl": vstats["ci_low"], "ch": vstats["ci_high"],
+            "sv": run.suite_version, "rv": run.rubric_version, "r": run_id,
+        },
+    )
+
+    await append_audit_event(conn, tenant_id, "worker", "run-completed", run_id)
+    record_metering(tenant_id, "run", 1, **{"metering.composite": treatment_mean,
+                                            "metering.uplift_pct": vstats["mean"]})
+    return {
+        "status": status,
+        "composite_score": treatment_mean,
+        "verdict_stats": vstats,
+        "run_id": run_id,
+    }
+
+
+async def _run_repo_eval(conn, run, cipher, call_model, k, exec_factory,
+                         job_payload=None) -> dict:
+    """Single-arm harness-under-eval over a generated real-history fixture
+    (SPEC S5.3). The candidate payload carries the run plan: ``harness`` and an
+    optional ``model``. The ``repo_eval_fixture`` is produced by
+    ``suites.repo_eval.generate`` at run-creation time (git history is walked on
+    the host, never in the trial sandbox) and arrives on the ``job_payload``;
+    a fixture in the candidate payload (autoresearch-submitted) is the fallback.
+    Trials run through
+    ``inspect_adapter.run_repo_eval``; the exec seam is injectable identically
+    to task-uplift so the whole path runs with a fake executor where no docker
+    daemon exists.
+    """
+    import asyncio
+
+    from ..harnesses import resolve_runner
+    from ..inspect_adapter import run_repo_eval
+    from ..suites.repo_eval.task import RepoEvalFixture
+
+    run_id = str(run.id)
+    tenant_id = run.tenant_id
+    cand = (
+        await conn.execute(
+            text(
+                "select candidate_ref, payload_ciphertext, payload_sha256 "
+                "from wololo_evals.candidates where id = :id"
+            ),
+            {"id": run.candidate_id},
+        )
+    ).first()
+    payload = cipher.decrypt_payload(
+        tenant_id, cand.payload_ciphertext, cand.payload_sha256
+    )
+
+    async def _error_run(reason: str, *, audit: str | None = None) -> dict:
+        await conn.execute(
+            text(
+                "update wololo_evals.runs set status = 'errored', completed_at = now() "
+                "where id = :id"
+            ),
+            {"id": run_id},
+        )
+        if audit:
+            await append_audit_event(
+                conn, tenant_id, "worker", audit, run_id, decision="denied"
+            )
+        return {"status": "errored", "reason": reason, "run_id": run_id}
+
+    try:
+        harness = payload["harness"]
+        # fixture generated by the API at run creation rides the job payload;
+        # an autoresearch-submitted fixture in the candidate payload is fallback
+        fx = (job_payload or {}).get("repo_eval_fixture") or payload["repo_eval_fixture"]
+        fixture = RepoEvalFixture(
+            fixture_id=fx["fixture_id"],
+            repo=fx["repo"],
+            parent_ref=fx["parent_ref"],
+            commit_ref=fx["commit_ref"],
+            task_prompt=fx["task_prompt"],
+            acceptance_command=tuple(fx["acceptance_command"]),
+            historical_lines_changed=int(fx["historical_lines_changed"]),
+            oracle_files=tuple(fx.get("oracle_files", ())),
+            max_turns=int(fx.get("max_turns", 20)),
+            wall_clock_cap_s=int(fx.get("wall_clock_cap_s", 900)),
+        )
+    except (KeyError, TypeError) as exc:
+        return await _error_run(f"repo-eval candidate payload incomplete: {exc}")
+
+    runner = resolve_runner(harness, smoke=run.smoke)
+    n_trials = run.n_trials
+    outcome = await asyncio.to_thread(
+        run_repo_eval, fixture, runner, n_trials, call_model,
+        k=k, exec_factory=exec_factory,
+    )
+    record_metering(tenant_id, "judge-samples", k * n_trials)
+    if outcome.status == "errored":
+        if outcome.error == "judge-integrity":
+            return await _error_run("judge-integrity", audit="judge-integrity-flagged")
+        return await _error_run(outcome.error or "harness execution errored")
+
+    model = payload.get("model", "harness-default")
+    return await _finalize_single_arm(
+        conn, run, outcome, "repo-eval",
+        model=model, harness=runner.harness, skill_ref=cand.candidate_ref,
+    )
+
+
+async def _run_regression_replay(conn, run, cipher, call_model, k) -> dict:
+    """Single-arm hardened judge over the replayed corrections corpus
+    (SPEC S5.6). The candidate payload carries the skill/prompt content and the
+    ``regression_corpus`` (raw ``correction_raw`` rows, produced by
+    ainb-reflect-memory once it lands — a documented integration-debt source).
+    Statistical n is the corpus size, so ``run.n_trials`` must equal it and the
+    DDL floor of 5 applies.
+    """
+    import asyncio
+
+    from ..inspect_adapter import run_regression_replay
+    from ..suites.regression_replay.task import corpus_from_rows
+
+    run_id = str(run.id)
+    tenant_id = run.tenant_id
+    cand = (
+        await conn.execute(
+            text(
+                "select candidate_ref, payload_ciphertext, payload_sha256 "
+                "from wololo_evals.candidates where id = :id"
+            ),
+            {"id": run.candidate_id},
+        )
+    ).first()
+    payload = cipher.decrypt_payload(
+        tenant_id, cand.payload_ciphertext, cand.payload_sha256
+    )
+
+    async def _error_run(reason: str, *, audit: str | None = None) -> dict:
+        await conn.execute(
+            text(
+                "update wololo_evals.runs set status = 'errored', completed_at = now() "
+                "where id = :id"
+            ),
+            {"id": run_id},
+        )
+        if audit:
+            await append_audit_event(
+                conn, tenant_id, "worker", audit, run_id, decision="denied"
+            )
+        return {"status": "errored", "reason": reason, "run_id": run_id}
+
+    content = payload.get("skill_md") or payload.get("prompt")
+    if not content:
+        content = next((v for v in payload.values() if isinstance(v, str)), "")
+    try:
+        corpus = corpus_from_rows(list(payload["regression_corpus"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        return await _error_run(f"regression-replay corpus invalid: {exc}")
+
+    outcome = await asyncio.to_thread(
+        run_regression_replay, content, corpus, call_model, k=k
+    )
+    record_metering(tenant_id, "judge-samples", k * len(corpus))
+    if outcome.status == "errored":
+        if outcome.error == "judge-integrity":
+            return await _error_run("judge-integrity", audit="judge-integrity-flagged")
+        return await _error_run(outcome.error or "regression-replay errored")
+
+    # Regression-replay scores a skill/prompt statically (no executing harness).
+    return await _finalize_single_arm(
+        conn, run, outcome, "regression-replay",
+        model="static", harness="static", skill_ref=cand.candidate_ref,
+    )
+
+
+async def _finalize_single_arm(
+    conn, run, outcome, suite, *, model, harness, skill_ref
+) -> dict:
+    """Shared tail for single-arm multi-trial suites (repo-eval,
+    regression-replay): per-trial rows, median-per-dimension aggregate score
+    rows, a composite frozen ONCE from those aggregates, single_arm_stats
+    verdict, and a leaderboard row. An arm short of ``n_trials`` completed
+    trials errors the run rather than shipping an n<floor verdict (SPEC S7)."""
+    import statistics
+
+    run_id = str(run.id)
+    tenant_id = run.tenant_id
+    trials = outcome.trials
+    if len(trials) < run.n_trials:
+        await conn.execute(
+            text(
+                "update wololo_evals.runs set status = 'errored', completed_at = now() "
+                "where id = :id"
+            ),
+            {"id": run_id},
+        )
+        return {
+            "status": "errored",
+            "reason": f"only {len(trials)}/{run.n_trials} trials completed",
+            "run_id": run_id,
+        }
+
+    rubric = suites_base.load_rubric(suite)
+    dims = list(trials[0]["dimension_values"])
+
+    for tr in trials:
+        await conn.execute(
+            text(
+                "insert into wololo_evals.trials "
+                "(tenant_id, run_id, trial_index, arm, status, model, harness, "
+                " composite, started_at, completed_at) "
+                "values (:t, :r, :ti, 'single', 'completed', :m, :h, :c, now(), now())"
+            ),
+            {"t": tenant_id, "r": run_id, "ti": tr["trial_index"],
+             "m": model, "h": harness, "c": tr["composite"]},
+        )
+
+    medians = {
+        dim: statistics.median(tr["dimension_values"][dim] for tr in trials)
+        for dim in dims
+    }
+    for dim, val in medians.items():
+        await _score(conn, tenant_id, run_id, dim, val, run,
+                     trial_index=None, weight=rubric["dimensions"][dim]["weight"],
+                     judge="injected-judge")
+
+    agg_composite = suites_base.composite(rubric, medians)
+    pass_bar = (
+        await conn.execute(
+            text("select pass_bar from wololo_evals.tenants where tenant_id = :t"),
+            {"t": tenant_id},
+        )
+    ).first().pass_bar
+    vstats = single_arm_stats([tr["composite"] for tr in trials], pass_bar)
+    status = "passed" if agg_composite >= pass_bar else "failed"
+    await conn.execute(
+        text(
+            "update wololo_evals.runs set status = :s, composite_score = :c, "
+            "verdict_stats = cast(:v as jsonb), completed_at = now() where id = :id"
+        ),
+        {"s": status, "c": agg_composite, "v": json.dumps(vstats), "id": run_id},
+    )
+    await conn.execute(
+        text(
+            "insert into wololo_evals.leaderboard "
+            "(tenant_id, model, harness, skill_ref, composite_score, n_trials, "
+            " score_stddev, ci_low, ci_high, suite_version, rubric_version, run_id) "
+            "values (:t, :m, :h, :sk, :cs, :n, :sd, :cl, :ch, :sv, :rv, :r) "
+            "on conflict (tenant_id, model, harness, skill_ref, rubric_version, run_id) "
+            "do nothing"
+        ),
+        {
+            "t": tenant_id, "m": model, "h": harness, "sk": skill_ref,
+            "cs": agg_composite, "n": run.n_trials, "sd": vstats["stddev"],
+            "cl": vstats["ci_low"], "ch": vstats["ci_high"],
+            "sv": run.suite_version, "rv": run.rubric_version, "r": run_id,
+        },
+    )
+    await append_audit_event(conn, tenant_id, "worker", "run-completed", run_id)
+    record_metering(tenant_id, "run", 1, **{"metering.composite": agg_composite})
+    return {
+        "status": status,
+        "composite_score": agg_composite,
+        "verdict_stats": vstats,
+        "run_id": run_id,
+    }
+
+
 async def _score(conn, tenant_id, run_id, dimension, value, run, *,
                  trial_index=None, weight=1.0, judge=None) -> None:
     await conn.execute(
@@ -223,9 +673,14 @@ async def run_once(
     cipher,
     call_model: Callable[[str, str], str],
     worker_id: str = "worker-1",
+    deploy_client=None,
 ) -> Optional[dict]:
     """Lease one job (worker role's global view), execute it under the job
-    tenant's RLS scope, then mark it done/failed. Returns the job or None."""
+    tenant's RLS scope, then mark it done/failed. Returns the job or None.
+
+    ``deploy_client`` is the httpx-shaped client to the wololo-deploy rollback
+    endpoint; required only to service ``canary-poll`` jobs.
+    """
     async with worker_engine.begin() as conn:
         job = await queue.dequeue(conn, worker_id)
     if job is None:
@@ -234,7 +689,20 @@ async def run_once(
         if job["kind"] == "eval-run":
             run_id = job["payload"]["run_id"]
             async with tenant_txn(worker_engine, job["tenant_id"]) as wconn:
-                await execute_run(wconn, run_id, cipher=cipher, call_model=call_model)
+                await execute_run(
+                    wconn, run_id, cipher=cipher, call_model=call_model,
+                    job_payload=job["payload"],
+                )
+        elif job["kind"] == "canary-poll":
+            if deploy_client is None:
+                raise RuntimeError("canary-poll job dequeued without a deploy_client")
+            from ..canary import run_canary_poll
+
+            # run_canary_poll manages its own tenant transactions: the rollback
+            # intent must commit BEFORE the HTTP call (exactly-once, SPEC S5.5).
+            await run_canary_poll(
+                worker_engine, job["tenant_id"], job["payload"]["gate_id"], deploy_client,
+            )
         async with worker_engine.begin() as conn:
             await queue.complete(conn, job["id"])
     except Exception:
@@ -261,6 +729,8 @@ def _call_model_from_settings():
 async def _main() -> None:
     import asyncio
 
+    import httpx
+
     from ..crypto import EnvelopeCipher
     from ..db import make_engine
     from ..otel import init_tracing
@@ -272,10 +742,15 @@ async def _main() -> None:
     cipher = EnvelopeCipher(cfg.master_key_hex, cfg.master_key_id, cfg.keyring_path)
     call_model = _call_model_from_settings()
     idle_backoff = 1.0
-    while True:
-        job = await run_once(engine, cipher=cipher, call_model=call_model)
-        if job is None:
-            await asyncio.sleep(idle_backoff)
+    # Deploy seam: the wololo-deploy rollback endpoint (the stub today, a real
+    # Flagger confirm-rollout webhook once 06c lands — named integration debt).
+    async with httpx.AsyncClient(base_url=cfg.deploy_base_url, timeout=30) as deploy_client:
+        while True:
+            job = await run_once(
+                engine, cipher=cipher, call_model=call_model, deploy_client=deploy_client
+            )
+            if job is None:
+                await asyncio.sleep(idle_backoff)
 
 
 if __name__ == "__main__":

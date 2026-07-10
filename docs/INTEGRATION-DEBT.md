@@ -47,17 +47,54 @@ reference build environment and are OPERATOR preconditions, not skipped work:
 - **Rung 2 (component compose):** `docker compose up -d --wait` then the
   integration suite. No Docker daemon here. Compose, Dockerfile, and OTEL
   collector config are committed and runnable where a daemon exists.
-- **Live harness-under-eval (task-uplift, SPEC S6):** needs the per-harness
-  docker sandbox images + a model API key. The execution model
-  (`harness_solver.py`, `inspect_adapter.py`) and the adapter manifests are
-  committed; `worker.execute_run` raises `HarnessExecutionRequired` rather than
-  fabricating a task-uplift verdict. Command to run once a daemon + key exist is
-  the compose integration suite above.
+- **Live harness-under-eval (task-uplift + repo-eval, SPEC S6):** needs the
+  per-harness docker sandbox images + a model API key for a *containerized*
+  trial. What is proven vs what is an operator precondition, stated precisely:
+  the orchestration is proven via an injected exec seam, and the real
+  sandbox execution is an operator precondition. `worker.execute_run` drives
+  task-uplift through `inspect_adapter.run_task_uplift` (clone -> profile-scoped
+  skill install -> harness loop -> transcript turns -> diff capture ->
+  acceptance test -> judge -> paired uplift stats -> frozen composite +
+  leaderboard row) and repo-eval through `run_repo_eval`, tested on both Claude
+  Code and Hermes in `tests/test_harness_uplift.py` and `tests/test_repo_eval.py`.
+  That seam proves the wiring and arm sequencing; it does NOT execute the
+  production path (`exec_factory=None -> _sandbox_exec -> sandbox().exec`
+  running the real `claude`/`hermes` CLI in a network-disabled per-trial
+  container), which no CI here runs because there is no docker daemon. A real
+  containerized trial per harness is gated behind the compose integration suite
+  (`tests/test_compose_integration.py`, marked `compose`) and runs once a daemon
+  + key exist. Until then this reads as "orchestration proven via exec seam;
+  real sandbox execution is an operator precondition", never "proven end to end".
+- **Run-creation reachability (all four suites):** `POST /api/v1/candidates/:id/runs`
+  accepts all four `eval_suite` values. repo-eval generates its fixture at run
+  creation by calling `suites.repo_eval.generate` on the host against
+  `repo_eval_source.repo_path` (git plumbing must never run in the trial
+  sandbox); the redacted fixture rides the enqueued job to the worker
+  (`tests/test_api.py::test_repo_eval_run_operator_reachable_end_to_end`). The
+  operator precondition is that the seeded source repo (the Atlas history) is
+  checked out somewhere the API process can read at run-creation time; until 09
+  lands, autoresearch-submitted candidates may instead carry a pre-built
+  `repo_eval_fixture` in the candidate payload (the worker's fallback).
+  regression-replay reads its `regression_corpus` from the candidate payload the
+  operator submits today; once ainb-reflect-memory (02) ships the reflect
+  corrections corpus, that becomes the real source.
 - **Live judge model call:** no `ANTHROPIC_API_KEY` in the build environment.
   The claude CLI bridge (`judge.cli_call_model`) and the HTTP backend
   (`judge.http_call_model`) are committed; the skill-review pipeline is proven
   end to end with a deterministic injected judge (`tests/test_worker.py`). A
   live judge run swaps the injected `call_model` for either backend, no other
   change.
-- **Rung 3 (Meridian gate):** needs the standing Meridian fixture (Atlas seeded
-  repos) stood up. Later wave; scenario authoring tracked in the epic.
+- **Rung 3 (Meridian gate):** the `wololo-evals-quality-gate` scenario is
+  authored (`meridian/scenarios/wololo-evals-quality-gate/`: scenario.yaml,
+  run.py, the KYC acceptance test + skill-under-test fixtures) and produces the
+  three-proof JSON. In the current environment it runs in degraded mode: proofs
+  #1 (KYC uplift, 5 paired trials/arm) and #2 (repo-eval, three non-trivial
+  dimensions) go through the injected exec seam (real statistics, deterministic
+  fake harness) and proof #3 (canary watching -> regressed -> rolled-back, two
+  audit rows, one idempotent rollback) runs fully live. A committed sample proof
+  is `meridian/proof/wololo-evals-quality-gate-<ts>.json`; the generator is
+  `tests/test_meridian_quality_gate.py`. Standing up the real Atlas seeded repos
+  + per-harness docker images + a model API key is the operator precondition
+  that turns proofs #1/#2 into real harness executions; the exact command is in
+  the scenario's run.py. This scenario package vendors into the kernel
+  `meridian/` tree when the estate is assembled.

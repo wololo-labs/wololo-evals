@@ -153,7 +153,13 @@ create table wololo_evals.canary_gates (
   run_id                 uuid not null references wololo_evals.runs,
   deploy_ref             text not null,
   gate_status            text not null check (gate_status in ('watching','passed','regressed','rolled-back')),
-  baseline_composite     real not null,   -- copied from runs.composite_score at open, never re-derived
+  -- Frozen ONCE from the first telemetry window's live composite (the stable /
+  -- pre-shift cohort wololo-deploy posts before ramping the candidate), so it
+  -- lives in the SAME canary_weights metric space as every live window it is
+  -- later compared against. NULL until that first window lands. It is NOT the
+  -- run's eval-dimension composite_score (a disjoint space that would trip a
+  -- false regression on healthy traffic).
+  baseline_composite     real,
   rubric_version         text not null,
   regression_reason      text,
   -- exactly-once rollback across worker restarts (SPEC S11):

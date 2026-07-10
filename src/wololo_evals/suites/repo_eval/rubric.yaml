@@ -1,0 +1,31 @@
+# repo-eval rubric (SPEC S5.3). sha256 of this file IS rubric_version.
+# Round-1 minor fix baked in: scoring anchors on correctness-passing
+# minimality, never on imitating the historical diff (humans ship bloated
+# diffs; a genuinely cleaner, smaller fix must not be penalised for deviating).
+suite: repo-eval
+judge:
+  k: 5
+  temperature: 0
+dimensions:
+  correctness:
+    weight: 0.50
+    scorer: acceptance-test   # pass/fail by RUNNING the repo's real seeded test suite in-sandbox, never LLM opinion
+    criterion: >
+      The candidate's diff makes the repo's real seeded test suite pass inside
+      the same sandbox the harness ran in.
+  churn_penalty:
+    weight: 0.25
+    scorer: churn             # rule-based off diff line counts; the historical diff is a scale reference, never a target
+    criterion: >
+      Among correct solutions, excess churn is penalised: score
+      min(1.0, historical_lines_changed / candidate_lines_changed), so a diff
+      smaller than or equal to the historical fix scores full marks and only a
+      larger-than-historical diff is penalised proportionally.
+  abstraction_adherence:
+    weight: 0.25
+    scorer: judge
+    criterion: >
+      Judged against the surrounding code itself, not against the historical
+      diff: does the change reuse the repo's existing helpers and patterns
+      rather than introducing unneeded new abstractions? Reuse over reinvention,
+      the same house style /code-review and /simplify favour.

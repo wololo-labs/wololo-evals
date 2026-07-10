@@ -41,14 +41,28 @@ Flagger/Argo confirm-rollout integration when 06c lands:
 1. **Gate open** — `POST /api/v1/canary-gates` with
    `{candidate_id, run_id, deploy_ref}` when a candidate goes live for a
    canary cohort. Rejected 409 unless the referenced run is `passed` and not
-   `low_confidence`. At open, the gate copies the run's frozen composite as
-   `baseline_composite` and pins its `rubric_version`.
+   `low_confidence`. At open, the gate pins the run's `rubric_version` and
+   leaves `baseline_composite` **NULL**; the baseline is frozen from the first
+   telemetry window (see below), not from the run's eval composite.
+
+   > **Resolved inconsistency.** An earlier draft said the gate "copies the
+   > run's frozen composite as `baseline_composite`". That is a category
+   > error: the run's `composite_score` is an eval-dimension composite
+   > (correctness/turns/approach, ~0.89) while the live composite is a
+   > `canary_weights` sum over operational metrics
+   > (task_success_rate/error_rate/tokens, ~0.54). Comparing across the two
+   > spaces trips a false regression on healthy traffic. The baseline must be
+   > computed by the SAME rule as the live windows, so it is the first
+   > telemetry window's live composite.
 2. **Raw telemetry, never a composite** —
    `POST /api/v1/canary-gates/:id/telemetry` with
    `{window_id, metrics: {task_success_rate, error_rate, tokens_per_task, ...},
    sample_count, observed_at}`. wololo-evals computes the live composite
    ITSELF from the pinned rubric's canary weights; a body containing a
-   `composite` field is a 422. Windows dedupe on `(gate_id, window_id)`.
+   `composite` field is a 422. Windows dedupe on `(gate_id, window_id)`. The
+   FIRST window a gate receives is the stable / pre-shift cohort: its live
+   composite is frozen once as `baseline_composite` (first-writer wins), so
+   baseline and every later window share one metric space.
 3. **Verdict read (Flagger confirm-rollout shape, DOCTRINE 15.5)** —
    `GET /api/v1/canary-gates/:id/verdict` returns
    `{gate_status, live_composite, baseline_composite, windows_observed}`.
@@ -59,7 +73,10 @@ Flagger/Argo confirm-rollout integration when 06c lands:
    BEFORE the HTTP call. wololo-deploy MUST make rollback idempotent by that
    key: a replayed key returns the original response and does not execute a
    second rollback. wololo-evals marks the gate `rolled-back` only on a
-   confirmed 2xx, never optimistically.
+   confirmed 2xx, never optimistically. A non-2xx (e.g. a transient deploy-side
+   5xx) leaves the gate `regressed` with its intent + key persisted and fails
+   the durable canary-poll job, which backoff-retries and re-sends the SAME
+   key until a 2xx confirms — exactly-once, never at-most-once.
 
 ## Test vectors
 

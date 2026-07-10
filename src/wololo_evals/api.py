@@ -3,14 +3,16 @@
 Tenant identity comes from the entitlement token on every route; a
 ``tenant_id`` in a body or query NEVER overrides it. Auth precedes every
 database touch (the row-count-unchanged invariant tests prove the ordering).
-Canary-gate routes are wave-2: the deploy seam ships as a documented stub
-(``stubs/deploy_stub.py`` + specs/eval-result/README.md), named integration
-debt for 06a/06c.
+The canary-gate routes drive the ``wololo-deploy`` seam, which ships today as
+a documented stub (``stubs/deploy_stub.py`` + specs/eval-result/README.md),
+named integration debt for 06a/06c.
 """
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
+import subprocess
 import uuid
 from dataclasses import dataclass
 
@@ -19,16 +21,28 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from . import versioning
+from . import canary, versioning
 from .audit import append_audit_event
-from .auth import ROLE_ADMIN, ROLE_SUBMIT, AuthError, Principal, Verifier, bearer_token
+from .auth import (
+    ROLE_ADMIN,
+    ROLE_GATEKEEPER,
+    ROLE_SUBMIT,
+    AuthError,
+    Principal,
+    Verifier,
+    bearer_token,
+)
 from .contracts.eval_candidate import build_eval_candidate
 from .db import tenant_txn
 from .jobs import queue
 from .otel import record_metering, tracer
 from .suites import base as suites_base
+from .suites.repo_eval import generate as repo_gen
 
-EVAL_SUITES = ("skill-review", "task-uplift")
+# All four suites are operator-reachable. repo-eval additionally generates its
+# fixture from real commit history at run creation (see create_run); regression-
+# replay reads its corpus from the candidate payload the operator submits.
+EVAL_SUITES = ("skill-review", "task-uplift", "repo-eval", "regression-replay")
 N_TRIALS_FLOOR = 5
 
 
@@ -173,6 +187,31 @@ def create_app(deps: AppDeps) -> FastAPI:
                 content={"detail": f"unknown eval_suite {eval_suite!r}"},
             )
         smoke = bool(body.get("smoke", False))
+        # repo-eval generates its fixture from real commit history HERE, on the
+        # host, at run creation (git plumbing must never run in the trial
+        # sandbox). The redacted fixture rides the job payload to the worker.
+        repo_eval_fixture = None
+        if eval_suite == "repo-eval":
+            src = body.get("repo_eval_source") or {}
+            repo_path = src.get("repo_path")
+            if not repo_path:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "repo-eval requires repo_eval_source.repo_path"},
+                )
+            try:
+                fixture = repo_gen.generate(
+                    repo_path,
+                    ref=src.get("ref", "HEAD"),
+                    repo_clone_source=src.get("repo_clone_source"),
+                    acceptance_command=src.get("acceptance_command"),
+                )
+            except (ValueError, OSError, subprocess.SubprocessError) as exc:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": f"repo-eval fixture generation failed: {exc}"},
+                )
+            repo_eval_fixture = dataclasses.asdict(fixture)
         async with tenant_txn(deps.engine, principal.tenant_id) as conn:
             cand = (
                 await conn.execute(
@@ -227,7 +266,12 @@ def create_app(deps: AppDeps) -> FastAPI:
             )
             await queue.enqueue(
                 conn, principal.tenant_id, "eval-run",
-                {"run_id": run_id, "task_fixture_ref": body.get("task_fixture_ref")},
+                {
+                    "run_id": run_id,
+                    "task_fixture_ref": body.get("task_fixture_ref"),
+                    # generated at run creation; None for the other suites
+                    "repo_eval_fixture": repo_eval_fixture,
+                },
                 f"eval-run:{run_id}",
             )
             record_metering(principal.tenant_id, "run-enqueued", 1)
@@ -392,5 +436,105 @@ def create_app(deps: AppDeps) -> FastAPI:
                 "leaderboard-rebuilt", f"rows:{inserted.rowcount}",
             )
         return {"rebuilt": inserted.rowcount}
+
+    # -- canary gates (the wololo-deploy seam, SPEC S5.5) ------------------
+    @app.post("/api/v1/canary-gates", status_code=201)
+    async def open_canary_gate(
+        body: dict, request: Request, principal: Principal = Depends(principal_dep)
+    ):
+        principal.require(ROLE_GATEKEEPER)
+        request.state.tenant_id = principal.tenant_id
+        candidate_id = body.get("candidate_id", "")
+        run_id = body.get("run_id", "")
+        deploy_ref = body.get("deploy_ref", "")
+        if not (candidate_id and run_id and deploy_ref):
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "candidate_id, run_id and deploy_ref are required"},
+            )
+        async with tenant_txn(deps.engine, principal.tenant_id) as conn:
+            try:
+                gate = await canary.open_gate(
+                    conn, principal.tenant_id, principal.actor,
+                    candidate_id, run_id, deploy_ref,
+                )
+            except canary.GateError as exc:
+                return JSONResponse(status_code=409, content={"detail": str(exc)})
+        return gate
+
+    @app.post("/api/v1/canary-gates/{gate_id}/telemetry", status_code=202)
+    async def post_canary_telemetry(
+        gate_id: str,
+        body: dict,
+        request: Request,
+        principal: Principal = Depends(principal_dep),
+    ):
+        principal.require(ROLE_GATEKEEPER)
+        request.state.tenant_id = principal.tenant_id
+        metrics = body.get("metrics") or {}
+        # A self-reported composite is never accepted; the gate computes it.
+        if "composite" in body or "composite" in metrics:
+            return JSONResponse(
+                status_code=422,
+                content={"detail": "telemetry carries raw metrics only, not a composite"},
+            )
+        for field in ("window_id", "sample_count", "observed_at"):
+            if body.get(field) in (None, ""):
+                return JSONResponse(
+                    status_code=400, content={"detail": f"{field} is required"}
+                )
+        async with tenant_txn(deps.engine, principal.tenant_id) as conn:
+            try:
+                result = await canary.ingest_telemetry(
+                    conn, principal.tenant_id, gate_id,
+                    body["window_id"], metrics, int(body["sample_count"]),
+                    body["observed_at"],
+                )
+            except canary.GateError as exc:
+                return JSONResponse(status_code=404, content={"detail": str(exc)})
+            except ValueError as exc:
+                return JSONResponse(status_code=422, content={"detail": str(exc)})
+            # Regression evaluation runs as a durable canary-poll job, never an
+            # in-process timer (SPEC S5.5): one poll per window, on the queue.
+            await queue.enqueue(
+                conn, principal.tenant_id, "canary-poll",
+                {"gate_id": gate_id, "window_id": body["window_id"]},
+                f"canary-poll:{gate_id}:{body['window_id']}",
+            )
+        return result
+
+    @app.get("/api/v1/canary-gates/{gate_id}/verdict")
+    async def get_canary_verdict(
+        gate_id: str, request: Request, principal: Principal = Depends(principal_dep)
+    ):
+        request.state.tenant_id = principal.tenant_id
+        async with tenant_txn(deps.engine, principal.tenant_id) as conn:
+            gate = (
+                await conn.execute(
+                    text(
+                        "select gate_status, baseline_composite "
+                        "from wololo_evals.canary_gates where id = :id"
+                    ),
+                    {"id": gate_id},
+                )
+            ).first()
+            if gate is None:
+                return JSONResponse(status_code=404, content={"detail": "no such gate"})
+            latest = (
+                await conn.execute(
+                    text(
+                        "select live_composite, count(*) over () as observed "
+                        "from wololo_evals.canary_telemetry where gate_id = :id "
+                        "order by observed_at desc limit 1"
+                    ),
+                    {"id": gate_id},
+                )
+            ).first()
+        return {
+            "gate_status": gate.gate_status,
+            "live_composite": latest.live_composite if latest else None,
+            "baseline_composite": gate.baseline_composite,
+            "windows_observed": latest.observed if latest else 0,
+        }
 
     return app

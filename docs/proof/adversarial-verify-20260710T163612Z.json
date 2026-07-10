@@ -1,0 +1,47 @@
+{
+  "generated_at": "20260710T163612Z",
+  "attacks": [
+    {
+      "attack": "a",
+      "name": "missing baseline_ref rejected",
+      "expected": 400,
+      "observed": 400,
+      "pass": true
+    },
+    {
+      "attack": "b",
+      "name": "gate on queued run refused",
+      "expected": "409/GateError",
+      "observed": "GateError (409)",
+      "pass": true
+    },
+    {
+      "attack": "c",
+      "name": "one regressing window stays watching",
+      "expected": "watching / 0 rollbacks",
+      "observed": "watching / 0 rollbacks",
+      "pass": true
+    },
+    {
+      "attack": "d",
+      "name": "injection: composite unchanged + tripwire",
+      "expected": "equal composite + judge-integrity",
+      "observed": "unchanged=True tripwire=True",
+      "pass": true
+    },
+    {
+      "attack": "e",
+      "name": "rollback exactly-once across crash",
+      "expected": "rolled-back / 1 call",
+      "observed": "rolled-back->rolled-back / 1 calls",
+      "pass": true
+    },
+    {
+      "attack": "f",
+      "name": "cross-tenant .eval blob denied",
+      "expected": "404/denied",
+      "observed": "BlobAccessDenied (404)",
+      "pass": true
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+id: wololo-evals-quality-gate
+tenant: meridian
+# Ecosystem-integration scenario (SPEC S14 rung 3): wololo-evals is the quality
+# gate every change ships through. This scenario proves three things end to end
+# against a standing Meridian fixture and writes the proof to
+# meridian/proof/wololo-evals-quality-gate-<timestamp>.json.
+#
+# It lives with the service that owns proving it (SPEC's original
+# services/wololo-evals/ layout); vendor it into the kernel meridian/ tree when
+# the estate is assembled.
+agent_mode: scripted            # CI default; a live stack overrides to 'live'
+requires:
+  - wololo-evals service (API + queue worker) on real RLS Postgres
+  - wololo-deploy stub (deploy_stub) for the canary hook
+  - "rung 3 real-Atlas: meridian/atlas/atlas-kyc-svc + atlas-onboarding-api seeded git repos, per-harness docker sandbox images, a model API key"
+proofs:
+  - id: 1-baseline-vs-skill-uplift
+    suite: task-uplift
+    task: fix the KYC silent-drop bug in atlas-kyc-svc
+    skill: fixtures/skill-under-test/SKILL.md
+    acceptance_test: fixtures/kyc-task/acceptance_test.py
+    captures: [per_trial_composites_per_arm, mean_uplift_pct, ci_95, wins, n]
+  - id: 2-repo-eval-real-history
+    suite: repo-eval
+    source: atlas-onboarding-api seeded commit history (generate.py)
+    captures: [correctness, churn_penalty, abstraction_adherence]   # three non-trivial dimensions
+  - id: 3-canary-regression-rollback
+    suite: canary
+    captures: [gate_status_transitions, audit_actions, rollback_calls, idempotency_key]
+success_assertions:
+  - proof #1 captures all 5 paired-trial composites per arm, a real mean uplift_pct, a 95% CI and the wins count
+  - proof #2 scores correctness / churn_penalty / abstraction_adherence, all non-zero and non-identical, with pinned suite_version + rubric_version
+  - proof #3 shows gate_status watching -> regressed -> rolled-back, canary-regression-detected + canary-rollback-fired audit rows, and exactly one rollback call carrying the expected Idempotency-Key
+degraded_mode: >-
+  Without the real Atlas repos + docker sandbox images, proofs #1 and #2 run
+  through the injected exec-seam harness (deterministic, real statistics) and
+  proof #3 runs fully live (Postgres + deploy stub only). The real-Atlas
+  containerized run is the operator precondition; the exact command is in run.py.
