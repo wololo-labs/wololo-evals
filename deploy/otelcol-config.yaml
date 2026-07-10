@@ -1,0 +1,18 @@
+# Local debug collector for rung 2: accepts OTLP/HTTP and logs spans +
+# metering events so the integration test can query them back out (invariant
+# 3). Production points OTEL_EXPORTER_OTLP_ENDPOINT at the real collector.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [debug]
