@@ -71,6 +71,13 @@ class Settings:
     judge_api_key: str = field(
         default_factory=lambda: _env("WOLOLO_EVALS_JUDGE_API_KEY", "")
     )
+    # wololo-deploy canary rollback endpoint. The deploy_stub in compose today;
+    # swapped for the real Flagger confirm-rollout webhook once 06c lands.
+    deploy_base_url: str = field(
+        default_factory=lambda: _env(
+            "WOLOLO_EVALS_DEPLOY_BASE_URL", "http://wololo-deploy-stub:8080"
+        )
+    )
 
 
 _settings: Settings | None = None

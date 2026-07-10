@@ -223,9 +223,14 @@ async def run_once(
     cipher,
     call_model: Callable[[str, str], str],
     worker_id: str = "worker-1",
+    deploy_client=None,
 ) -> Optional[dict]:
     """Lease one job (worker role's global view), execute it under the job
-    tenant's RLS scope, then mark it done/failed. Returns the job or None."""
+    tenant's RLS scope, then mark it done/failed. Returns the job or None.
+
+    ``deploy_client`` is the httpx-shaped client to the wololo-deploy rollback
+    endpoint; required only to service ``canary-poll`` jobs.
+    """
     async with worker_engine.begin() as conn:
         job = await queue.dequeue(conn, worker_id)
     if job is None:
@@ -235,6 +240,16 @@ async def run_once(
             run_id = job["payload"]["run_id"]
             async with tenant_txn(worker_engine, job["tenant_id"]) as wconn:
                 await execute_run(wconn, run_id, cipher=cipher, call_model=call_model)
+        elif job["kind"] == "canary-poll":
+            if deploy_client is None:
+                raise RuntimeError("canary-poll job dequeued without a deploy_client")
+            from ..canary import run_canary_poll
+
+            # run_canary_poll manages its own tenant transactions: the rollback
+            # intent must commit BEFORE the HTTP call (exactly-once, SPEC S5.5).
+            await run_canary_poll(
+                worker_engine, job["tenant_id"], job["payload"]["gate_id"], deploy_client,
+            )
         async with worker_engine.begin() as conn:
             await queue.complete(conn, job["id"])
     except Exception:
@@ -261,6 +276,8 @@ def _call_model_from_settings():
 async def _main() -> None:
     import asyncio
 
+    import httpx
+
     from ..crypto import EnvelopeCipher
     from ..db import make_engine
     from ..otel import init_tracing
@@ -272,10 +289,15 @@ async def _main() -> None:
     cipher = EnvelopeCipher(cfg.master_key_hex, cfg.master_key_id, cfg.keyring_path)
     call_model = _call_model_from_settings()
     idle_backoff = 1.0
-    while True:
-        job = await run_once(engine, cipher=cipher, call_model=call_model)
-        if job is None:
-            await asyncio.sleep(idle_backoff)
+    # Deploy seam: the wololo-deploy rollback endpoint (the stub today, a real
+    # Flagger confirm-rollout webhook once 06c lands — named integration debt).
+    async with httpx.AsyncClient(base_url=cfg.deploy_base_url, timeout=30) as deploy_client:
+        while True:
+            job = await run_once(
+                engine, cipher=cipher, call_model=call_model, deploy_client=deploy_client
+            )
+            if job is None:
+                await asyncio.sleep(idle_backoff)
 
 
 if __name__ == "__main__":
