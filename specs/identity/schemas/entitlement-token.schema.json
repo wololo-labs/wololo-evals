@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.getwololo.dev/identity/entitlement-token.schema.json",
+  "schemaVersion": 1,
+  "title": "entitlement-token",
+  "description": "Wololo entitlement-token claims (DOCTRINE Section 15.1). wololo-deploy (goal 06a) is the SOLE real issuer; every other component imports this contract and stubs the issuer. Expiry is semantic, not structural: an expired token is schema-valid and is flagged by core.contracts.identity.is_expired.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "licence_id": { "type": "string", "minLength": 1 },
+    "plan": { "enum": ["evaluation", "team", "enterprise"] },
+    "features": { "type": "array", "items": { "type": "string" } },
+    "iss": { "type": "string", "minLength": 1 },
+    "kid": { "type": "string", "minLength": 1 },
+    "iat": { "type": "integer" },
+    "exp": { "type": "integer" }
+  },
+  "required": ["schemaVersion", "tenant_id", "licence_id", "plan", "features", "iss", "kid", "iat", "exp"],
+  "additionalProperties": false
+}

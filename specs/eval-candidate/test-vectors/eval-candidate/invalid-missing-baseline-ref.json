@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "cand-0001",
+  "tenant_id": "meridian",
+  "candidate_type": "skill",
+  "candidate_ref": "simplify@1.2.0",
+  "proposed_by": "autoresearch:candidate-gen-7",
+  "payload": {
+    "skill_md": "# simplify\nReuse before building.",
+    "files": {}
+  },
+  "payload_sha256": "dd948bd39e94c5a0199a21a6972e0bd2ca7ec8fca432d8dcd7bbe51c3fa0b8dc",
+  "submitted_at": "2026-07-10T09:00:00Z",
+  "rationale": "reduce diff churn on atlas-kyc-svc fixes",
+  "target_eval_suite": "task-uplift"
+}

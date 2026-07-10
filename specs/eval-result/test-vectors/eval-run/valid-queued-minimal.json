@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "tenant_id": "northwind",
+  "run_id": "run-0002",
+  "candidate_id": "cand-0002",
+  "eval_suite": "skill-review",
+  "status": "queued",
+  "suite_version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0",
+  "rubric_version": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1",
+  "n_trials": 5
+}

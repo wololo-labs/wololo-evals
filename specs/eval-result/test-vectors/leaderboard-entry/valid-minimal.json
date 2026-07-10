@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "tenant_id": "northwind",
+  "model": "claude-haiku-4-5",
+  "harness": "hermes",
+  "skill_ref": "fixture-skill@0.1.0",
+  "composite_score": 0.62,
+  "suite_version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0",
+  "rubric_version": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1",
+  "run_id": "run-0002",
+  "n_trials": 1,
+  "computed_at": "2026-07-10T10:05:00Z"
+}

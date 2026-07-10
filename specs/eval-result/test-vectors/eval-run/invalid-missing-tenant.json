@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "run_id": "run-0001",
+  "candidate_id": "cand-0001",
+  "eval_suite": "task-uplift",
+  "status": "passed",
+  "suite_version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0",
+  "rubric_version": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1",
+  "n_trials": 5,
+  "started_at": "2026-07-10T09:15:00Z",
+  "completed_at": "2026-07-10T09:58:00Z",
+  "composite_score": 0.81,
+  "verdict_stats": {
+    "mean": 12.4,
+    "stddev": 4.1,
+    "ci_low": 7.3,
+    "ci_high": 17.5,
+    "wins": 4,
+    "losses": 1,
+    "n": 5,
+    "low_confidence": false
+  },
+  "eval_log_prefix": "evals/meridian/run-0001/"
+}

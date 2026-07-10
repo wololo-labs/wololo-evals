@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "cand-0002",
+  "tenant_id": "northwind",
+  "candidate_type": "prompt",
+  "candidate_ref": "sha256:9f2c",
+  "proposed_by": "human:jonny",
+  "baseline_ref": "prompt-live-2026-07",
+  "payload": {
+    "template": "You are a KYC reviewer. {{context}}"
+  },
+  "payload_sha256": "7bb392f23a0389ffef8fcfa941ed46381fe81e641f0e89bdcf816adb3fd3c12f",
+  "submitted_at": "2026-07-10T09:05:00Z"
+}

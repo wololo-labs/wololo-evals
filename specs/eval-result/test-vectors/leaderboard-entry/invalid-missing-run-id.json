@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "tenant_id": "meridian",
+  "model": "claude-sonnet-4-5",
+  "harness": "claude-code",
+  "skill_ref": "simplify@1.2.0",
+  "composite_score": 0.81,
+  "suite_version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0",
+  "rubric_version": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1",
+  "n_trials": 5,
+  "score_stddev": 0.05,
+  "ci_low": 0.74,
+  "ci_high": 0.88,
+  "computed_at": "2026-07-10T10:00:00Z"
+}

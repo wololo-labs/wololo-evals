@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "tenant_id": "northwind",
+  "licence_id": "lic-northwind-0001",
+  "plan": "evaluation",
+  "features": [],
+  "iss": "wololo-deploy",
+  "kid": "deploy-signing-2026-01",
+  "iat": 1751600000,
+  "exp": 4102444800
+}
