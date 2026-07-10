@@ -172,6 +172,7 @@ def run_task_uplift(
     k: int = 5,
     sandbox_type: str = "docker",
     arms: Sequence[str] = task_uplift_task.ARMS,
+    exec_factory: Optional[Callable[[], "object"]] = None,
 ) -> SuiteOutcome:
     """One sample per (trial_index, arm); each sample runs the REAL harness
     CLI inside its own Inspect sandbox via the injected exec seam.
@@ -179,10 +180,20 @@ def run_task_uplift(
     ``sandbox_type="docker"`` is the SPEC posture (network-disabled cell per
     trial). ``"local"`` exists for daemonless environments and is a labelled
     degraded mode: no container isolation, smoke-grade only.
+
+    ``exec_factory`` injects the :data:`SandboxExec` seam directly, bypassing
+    the Inspect sandbox entirely. It exists so the harness-under-eval bridge
+    (clone -> skill install -> harness loop -> diff/transcript capture ->
+    acceptance test -> judge -> composite) is exercisable end to end with a
+    fake executor on a machine with no docker daemon; production leaves it None
+    and the real ``sandbox().exec`` drives a pinned per-harness container.
     """
     rubric = base.load_rubric("task-uplift")
     judged = base.judged_dimensions(rubric)
     rubric_text = base.rubric_judge_text(rubric)
+    # No Inspect sandbox is provisioned when the exec seam is injected.
+    make_exec = exec_factory or _sandbox_exec
+    effective_sandbox = None if exec_factory is not None else sandbox_type
 
     samples = [
         Sample(
@@ -209,7 +220,7 @@ def run_task_uplift(
                 skill_slug=skill_slug if arm == "treatment" else None,
                 skill_files=skill_files if arm == "treatment" else None,
             )
-            result = await run_harness_trial(_sandbox_exec(), cfg)
+            result = await run_harness_trial(make_exec(), cfg)
             state.metadata["trial_result"] = result
             return state
 
@@ -220,7 +231,7 @@ def run_task_uplift(
         async def score(state: TaskState, target: Target) -> Score:
             result = state.metadata["trial_result"]
             correct = await run_acceptance_test(
-                _sandbox_exec(), list(fixture.acceptance_command)
+                make_exec(), list(fixture.acceptance_command)
             )
             turns_score = base.turns_efficiency_score(
                 result.turns or fixture.max_turns, fixture.max_turns
@@ -263,12 +274,16 @@ def run_task_uplift(
         dataset=samples,
         solver=_harness_bridge(),
         scorer=_uplift_scorer(),
-        sandbox=sandbox_type,
+        sandbox=effective_sandbox,
     )
     with tempfile.TemporaryDirectory() as log_dir:
+        # An injected exec seam bypasses the Inspect sandbox and may keep
+        # per-trial state (e.g. a fake executor); force sequential samples so
+        # that state is never corrupted by Inspect's default concurrency.
+        eval_kwargs = {"max_samples": 1} if exec_factory is not None else {}
         log = inspect_eval(
             task, model=_NO_MODEL, log_dir=log_dir, display="none",
-            fail_on_error=False,
+            fail_on_error=False, **eval_kwargs,
         )[0]
         log_bytes = _read_log(log)
         if log.status != "success" or not log.samples:
