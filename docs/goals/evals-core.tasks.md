@@ -66,9 +66,10 @@ UI, Meridian rung-3 scenario and the harness-runner docker images are later wave
 - [x] T16 one minimal live eval if model access available (claude CLI OAuth is
       the only live path in this env), honestly labelled; docker-dependent
       harness-runner execution recorded as OPERATOR precondition
-- [ ] T17 README, docker-compose.yml, docs/INTEGRATION-DEBT.md (contract pins +
-      stub ledger), full suite green, branch pushed (no merge; merge phase owns
-      that), fleet-lambda PROGRESS/INDEX status via BRANCH+PR
+- [x] T17 README, docker-compose.yml, docs/INTEGRATION-DEBT.md (contract pins +
+      stub ledger), full suite green (103 passed), branch `f/evals-core` pushed +
+      merged to `wololo-evals` main; fleet-lambda INDEX status via PR #61 (contract
+      families already open as PR #57)
 
 ## Status (wave 1 delivered)
 
