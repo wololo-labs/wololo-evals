@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "tenant_id": "meridian",
+  "licence_id": "lic-meridian-0001",
+  "plan": "team",
+  "features": ["audit-export"],
+  "iss": "wololo-deploy",
+  "kid": "deploy-signing-2025-01",
+  "iat": 1590000000,
+  "exp": 1600000000
+}

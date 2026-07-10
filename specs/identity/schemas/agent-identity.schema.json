@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.getwololo.dev/identity/agent-identity.schema.json",
+  "schemaVersion": 1,
+  "title": "agent-identity",
+  "description": "Wololo agent identity document (DOCTRINE Section 15.1). wololo-broker (goal 03) is the identity authority (SPIFFE); every other component imports this contract. harness is a free string per DOCTRINE Section 4 (provider-neutral, never an enum of provider names). Expiry is semantic, not structural: an expired identity is schema-valid and is flagged by core.contracts.identity.is_expired.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "agent_id": { "type": "string", "minLength": 1 },
+    "spiffe_id": { "type": "string", "pattern": "^spiffe://[^\\s]+$" },
+    "harness": { "type": "string", "minLength": 1 },
+    "issued_at": { "type": "integer" },
+    "expires_at": { "type": "integer" },
+    "attested_by": { "type": "string", "minLength": 1 }
+  },
+  "required": ["schemaVersion", "tenant_id", "agent_id", "spiffe_id", "harness", "issued_at", "expires_at", "attested_by"],
+  "additionalProperties": false
+}

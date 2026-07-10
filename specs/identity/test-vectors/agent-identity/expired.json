@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "tenant_id": "meridian",
+  "agent_id": "freeman",
+  "spiffe_id": "spiffe://meridian.wololo/agent/freeman",
+  "harness": "hermes",
+  "issued_at": 1590000000,
+  "expires_at": 1600000000,
+  "attested_by": "wololo-broker"
+}

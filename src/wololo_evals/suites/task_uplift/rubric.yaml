@@ -1,0 +1,32 @@
+# task-uplift rubric (SPEC S5.2). sha256 of this file IS rubric_version.
+# The canary_weights section is read by the wave-2 canary gate when it
+# rescores live raw-metric windows under this same pinned version.
+suite: task-uplift
+judge:
+  k: 5
+  temperature: 0
+dimensions:
+  correctness:
+    weight: 0.50
+    scorer: acceptance-test   # pass/fail by RUNNING the task's acceptance test in-sandbox, never LLM opinion
+    criterion: >
+      The resulting diff makes the task's acceptance test pass inside the
+      same sandbox the harness ran in.
+  turns_efficiency:
+    weight: 0.20
+    scorer: transcript        # derived from /transcript/events.jsonl identically for every harness
+    criterion: >
+      Fewer harness turns and less wall-clock to completion score higher;
+      both arms are measured from the same fleet-hooks event stream.
+  approach_quality:
+    weight: 0.30
+    scorer: judge
+    criterion: >
+      Does the run actually apply sound approach for the task (and on the
+      treatment arm, use the installed skill's guidance rather than ignoring
+      it): reuses existing helpers and repo patterns, minimal diff for the
+      change, no unrequested abstractions?
+canary_weights:
+  task_success_rate: 0.6
+  error_rate: -0.25
+  tokens_per_task: -0.15

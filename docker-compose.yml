@@ -1,0 +1,77 @@
+# Component-integration stack (validation rung 2). Brings up Postgres, MinIO,
+# the FastAPI service, the queue worker, a local OTEL debug collector, and the
+# wololo-deploy canary stub. `docker compose up -d --wait` then run the
+# integration suite. No daemon in the reference build environment: rung 2 is a
+# documented OPERATOR precondition (see docs/INTEGRATION-DEBT.md); rung 1 runs
+# fully on a local Postgres binary with no Docker (see README).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: wololo_evals
+    volumes:
+      - ./src/wololo_evals/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wololo_evals"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports: ["5432:5432"]
+
+  minio:
+    image: minio/minio:latest
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: wololo
+      MINIO_ROOT_PASSWORD: wololo-dev-secret
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports: ["9000:9000"]
+
+  otelcol:
+    image: otel/opentelemetry-collector:latest
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./deploy/otelcol-config.yaml:/etc/otelcol/config.yaml:ro
+    ports: ["4318:4318"]
+
+  api:
+    build: .
+    command: uvicorn wololo_evals.asgi:app --host 0.0.0.0 --port 8080
+    environment:
+      WOLOLO_EVALS_DATABASE_URL: postgresql+psycopg://wololo_evals_app@postgres/wololo_evals
+      WOLOLO_EVALS_MASTER_KEY: ${WOLOLO_EVALS_MASTER_KEY:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+      WOLOLO_EVALS_JWKS: /app/tests/fixtures/dev-jwks.json
+      WOLOLO_EVALS_ISSUER: wololo-deploy
+      WOLOLO_EVALS_BLOB_BACKEND: s3
+      WOLOLO_EVALS_S3_ENDPOINT: http://minio:9000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol:4318
+    depends_on:
+      postgres: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    ports: ["8080:8080"]
+
+  worker:
+    build: .
+    command: python -m wololo_evals.jobs.worker
+    environment:
+      WOLOLO_EVALS_DATABASE_URL: postgresql+psycopg://wololo_evals_worker@postgres/wololo_evals
+      WOLOLO_EVALS_MASTER_KEY: ${WOLOLO_EVALS_MASTER_KEY:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+      WOLOLO_EVALS_JWKS: /app/tests/fixtures/dev-jwks.json
+      WOLOLO_EVALS_BLOB_BACKEND: s3
+      WOLOLO_EVALS_S3_ENDPOINT: http://minio:9000
+      WOLOLO_EVALS_JUDGE_BACKEND: http
+      WOLOLO_EVALS_JUDGE_API_KEY: ${WOLOLO_EVALS_JUDGE_API_KEY:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol:4318
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  deploy-stub:
+    build: .
+    command: uvicorn wololo_evals.stubs.deploy_stub:create_deploy_stub --factory --host 0.0.0.0 --port 8090
+    ports: ["8090:8090"]

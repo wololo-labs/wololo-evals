@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "tenant_id": "meridian",
+  "run_id": "run-0001",
+  "trial_index": -1,
+  "arm": "treatment",
+  "status": "completed",
+  "model": "claude-sonnet-4-5",
+  "harness": "claude-code",
+  "composite": 0.84,
+  "eval_log_path": "evals/meridian/run-0001/trial-treatment-3.eval",
+  "started_at": "2026-07-10T09:20:00Z",
+  "completed_at": "2026-07-10T09:26:00Z"
+}

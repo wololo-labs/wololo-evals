@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "tenant_id": "meridian",
+  "run_id": "run-0001",
+  "dimension": "correctness",
+  "value": 1.0,
+  "suite_version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0",
+  "rubric_version": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1",
+  "trial_index": 3,
+  "weight": 0.5,
+  "max_value": 1.0
+}

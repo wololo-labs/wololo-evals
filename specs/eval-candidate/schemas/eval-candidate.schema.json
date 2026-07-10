@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.getwololo.dev/eval-candidate/eval-candidate.schema.json",
+  "schemaVersion": 1,
+  "title": "eval-candidate",
+  "description": "The thing being evaluated by wololo-evals (04-wololo-evals SPEC Section 3.1). Produced by autoresearch (09), any other machine producer, or a human via CLI; consumed by wololo-evals as its run input. payload_sha256 is the sha256 of the canonical-JSON payload: content address for dedupe, blob keys and post-decrypt integrity. The payload travels in the clear only on the TLS wire; the service persists it envelope-encrypted, never plaintext.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "candidate_type": { "enum": ["skill", "prompt", "harness-config", "model-config"] },
+    "candidate_ref": { "type": "string", "minLength": 1 },
+    "proposed_by": { "type": "string", "minLength": 1 },
+    "baseline_ref": { "type": "string", "minLength": 1 },
+    "payload": { "type": "object" },
+    "payload_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "submitted_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$",
+      "format": "date-time"
+    },
+    "rationale": { "type": "string" },
+    "target_eval_suite": {
+      "enum": ["skill-review", "task-uplift", "repo-eval", "regression-replay"]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "tenant_id",
+    "candidate_type",
+    "candidate_ref",
+    "proposed_by",
+    "baseline_ref",
+    "payload",
+    "payload_sha256",
+    "submitted_at"
+  ],
+  "additionalProperties": false
+}

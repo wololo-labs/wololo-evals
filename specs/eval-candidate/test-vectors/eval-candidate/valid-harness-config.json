@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "cand-0003",
+  "tenant_id": "meridian",
+  "candidate_type": "harness-config",
+  "candidate_ref": "claude-code@2.1.0#cfg-77",
+  "proposed_by": "autoresearch:sweep-2",
+  "baseline_ref": "claude-code@2.1.0#cfg-default",
+  "payload": {
+    "max_turns": 40,
+    "permission_mode": "acceptEdits"
+  },
+  "payload_sha256": "e289069b68565d67ca498a3ec89d5ec33c24a1c62a7bcc655e944530ef1dff14",
+  "submitted_at": "2026-07-10T09:10:00Z",
+  "target_eval_suite": "regression-replay"
+}

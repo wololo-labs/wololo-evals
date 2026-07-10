@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "harness": "claude-code",
+  "abiVersion": "1.0",
+  "stages": [
+    { "stage": "install", "live": true },
+    { "stage": "load-profile", "live": true },
+    { "stage": "pre-llm-context", "live": true },
+    { "stage": "post-llm-event", "live": true },
+    { "stage": "event-emit", "live": true },
+    { "stage": "collector-flush", "live": true },
+    { "stage": "runtime-smoke", "live": true }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.getwololo.dev/eval-result/eval-score.schema.json",
+  "schemaVersion": 1,
+  "title": "eval-score",
+  "description": "One scored dimension of an eval run (04-wololo-evals SPEC Section 3.2). trial_index null/absent = aggregate row over all trials; an integer = per-trial raw sample (including the k=5 raw judge samples). Score rows are additive to a run, never overwritten, so a run's full scoring history is always reconstructable. Every row is pinned to the suite_version and rubric_version content hashes that produced it (SPEC Section 9). judge is the model id of the LLM judge that produced this score, absent when rule-based.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "dimension": { "type": "string", "minLength": 1 },
+    "value": { "type": "number" },
+    "suite_version": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "rubric_version": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "trial_index": { "type": ["integer", "null"], "minimum": 0 },
+    "weight": { "type": "number", "exclusiveMinimum": 0 },
+    "max_value": { "type": "number", "exclusiveMinimum": 0 },
+    "judge": { "type": "string", "minLength": 1 },
+    "rationale": { "type": "string" }
+  },
+  "required": [
+    "schemaVersion",
+    "tenant_id",
+    "run_id",
+    "dimension",
+    "value",
+    "suite_version",
+    "rubric_version",
+    "weight",
+    "max_value"
+  ],
+  "additionalProperties": false
+}

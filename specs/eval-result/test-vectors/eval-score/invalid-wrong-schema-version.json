@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "tenant_id": "meridian",
+  "run_id": "run-0001",
+  "dimension": "uplift_pct",
+  "value": 12.4,
+  "suite_version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0",
+  "rubric_version": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1",
+  "trial_index": null,
+  "weight": 1.0,
+  "max_value": 100.0,
+  "judge": "claude-opus-4-1",
+  "rationale": "paired mean over 5 trials"
+}

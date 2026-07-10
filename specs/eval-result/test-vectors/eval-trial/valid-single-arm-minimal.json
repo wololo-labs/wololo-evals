@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "tenant_id": "northwind",
+  "run_id": "run-0002",
+  "trial_index": 0,
+  "arm": "single",
+  "status": "running"
+}
