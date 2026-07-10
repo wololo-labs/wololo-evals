@@ -22,7 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "src" / "wololo_evals" / "migrations" / "001_init.sql"
+MIGRATIONS_DIR = ROOT / "src" / "wololo_evals" / "migrations"
 
 
 def _find_pg_bin() -> pathlib.Path | None:
@@ -114,7 +114,7 @@ def pg(tmp_path_factory):
             "-d", "wololo_evals",
             "-v", "ON_ERROR_STOP=1",
             "-q",
-            "-f", str(MIGRATION),
+            *[arg for m in sorted(MIGRATIONS_DIR.glob("*.sql")) for arg in ("-f", str(m))],
         ],
         check=True,
         capture_output=True,
