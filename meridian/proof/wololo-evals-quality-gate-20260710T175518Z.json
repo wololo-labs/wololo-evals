@@ -1,8 +1,8 @@
 {
   "scenario": "wololo-evals-quality-gate",
   "tenant": "meridian",
-  "generated_at": "20260710T164150Z",
-  "mode": "degraded: proofs 1+2 via injected exec seam (real statistics), proof 3 fully live; real-Atlas containerized run is the operator precondition (see run.py)",
+  "generated_at": "20260710T175518Z",
+  "mode": "degraded: proofs 1+2 exercise the real stats/scoring pipeline over deterministic fixture values (degenerate CI, zero variance; real variance only under the operator containerized run), proof 3 fully live; real-Atlas containerized run is the operator precondition (see run.py)",
   "proofs": [
     {
       "id": "1-baseline-vs-skill-uplift",
@@ -38,7 +38,7 @@
       "n": 5,
       "low_confidence": false,
       "status": "passed",
-      "suite_version": "70b23a22a98e5be8ffddd81be89f425f903f46af802523f3390730f57c9357b0",
+      "suite_version": "e2bb3ed2abba0578e1911c406aa3549758463e9a976881fc7daf0b932c64b4fa",
       "rubric_version": "e6deca0515fe6d854b9a1a3271452fc810a48a0283e329d34335c4da46dea06f"
     },
     {
@@ -54,7 +54,7 @@
       "all_distinct": true,
       "composite_score": 0.866667,
       "status": "passed",
-      "suite_version": "c47e20e6c9a6cfd14c36e4f47f22e503797c69c0368e9348bd71eef46769f2d0",
+      "suite_version": "da53502f07db9694afe2bdd8da8bafc3161664764cd5417e9ea017af9a99875a",
       "rubric_version": "2144059239895c98505c2a73268ec9034ca8efa50385b3c2a00ee4a32bc7a7bd"
     },
     {
@@ -63,6 +63,7 @@
       "gate_status_transitions": [
         "watching",
         "watching",
+        "regressed",
         "rolled-back"
       ],
       "audit_actions": [
@@ -71,7 +72,7 @@
         "canary-rollback-fired"
       ],
       "rollback_calls": 1,
-      "idempotency_key": "meridian-gate:24d1b4fd-1f3b-41e3-b45c-0f07c60147e0"
+      "idempotency_key": "meridian-gate:121666f8-a415-4415-ae76-934eda2f7093"
     }
   ]
 }
