@@ -32,7 +32,13 @@ __all__ = [
 ]
 
 CANDIDATE_TYPES = ("skill", "prompt", "harness-config", "model-config")
-EVAL_SUITES = ("skill-review", "task-uplift", "repo-eval", "regression-replay")
+EVAL_SUITES = (
+    "skill-review",
+    "task-uplift",
+    "repo-eval",
+    "regression-replay",
+    "skill-behaviour",
+)
 
 
 def _now_iso() -> str:

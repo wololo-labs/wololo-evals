@@ -14,6 +14,7 @@ SUITE_DIRS = {
     "task-uplift": SUITES_ROOT / "task_uplift",
     "repo-eval": SUITES_ROOT / "repo_eval",
     "regression-replay": SUITES_ROOT / "regression_replay",
+    "skill-behaviour": SUITES_ROOT / "skill_behaviour",
 }
 
 
@@ -30,6 +31,13 @@ def rubric_path(suite: str) -> pathlib.Path:
 
 def load_rubric(suite: str) -> dict:
     rubric = yaml.safe_load(rubric_path(suite).read_text())
+    # The rubric's declared suite MUST equal the registry key it was loaded
+    # under: a drift here would silently pin/judge/version one suite's rubric
+    # under another's name. Nothing else guards this (SPEC S8/S9).
+    if rubric.get("suite") != suite:
+        raise ValueError(
+            f"rubric.yaml suite {rubric.get('suite')!r} != registry key {suite!r}"
+        )
     weights = [d["weight"] for d in rubric["dimensions"].values()]
     total = sum(weights)
     if abs(total - 1.0) > 1e-9:

@@ -32,17 +32,19 @@ from .auth import (
     Verifier,
     bearer_token,
 )
-from .contracts.eval_candidate import build_eval_candidate
+from .contracts.eval_candidate import EVAL_SUITES, build_eval_candidate
 from .db import tenant_txn
 from .jobs import queue
 from .otel import record_metering, tracer
 from .suites import base as suites_base
 from .suites.repo_eval import generate as repo_gen
 
-# All four suites are operator-reachable. repo-eval additionally generates its
-# fixture from real commit history at run creation (see create_run); regression-
-# replay reads its corpus from the candidate payload the operator submits.
-EVAL_SUITES = ("skill-review", "task-uplift", "repo-eval", "regression-replay")
+# Every suite is operator-reachable. The set is the single ``contracts``
+# tuple (imported above, not a second hand-maintained copy) so the API's 400
+# gate and the DB CHECK constraint can never disagree about which suites exist.
+# repo-eval additionally generates its fixture from real commit history at run
+# creation (see create_run); regression-replay reads its corpus from the
+# candidate payload the operator submits.
 N_TRIALS_FLOOR = 5
 
 
