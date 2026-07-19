@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import pathlib
 from dataclasses import dataclass
+from typing import Optional
 
 _DIR = pathlib.Path(__file__).resolve().parent
 
@@ -74,6 +75,42 @@ _RUNNERS = {
         "extra_args": ["--model", "{model}", "--allow-all-tools"],
     },
 }
+
+
+# Per-harness runner image (SPEC I3, docker-sandbox wave-1): the pinned docker
+# image the harness's CLI runs inside, built under ``images/<name>-runner/``.
+# Keyed by harness name so image selection is driven off the decrypted candidate
+# payload's ``harness`` string, no matrix-code change (mirrors ``_RUNNERS``).
+# A harness with no dedicated image (``hermes``) is simply absent here and keeps
+# its current default-sandbox behaviour — resolution returns ``None``.
+_RUNNER_IMAGES = {
+    "claude-code": "wololo-evals/claude-runner",
+    "claude": "wololo-evals/claude-runner",
+    "codex": "wololo-evals/codex-runner",
+}
+
+# Harness name -> container-auth engine id (``container_auth.SUPPORTED_ENGINES``:
+# claude/codex/copilot). The engine id selects which auth env KEYs + read-only
+# credential mounts a live trial receives. A harness with no engine mapping
+# (``hermes``) gets no container auth — absent here, resolution returns ``None``.
+_ENGINE_IDS = {
+    "claude-code": "claude",
+    "claude": "claude",
+    "codex": "codex",
+    "copilot": "copilot",
+}
+
+
+def runner_image(harness: str) -> Optional[str]:
+    """The pinned docker image the harness's CLI runs inside, or ``None`` for a
+    harness with no dedicated runner image (e.g. ``hermes``)."""
+    return _RUNNER_IMAGES.get(harness)
+
+
+def engine_id(harness: str) -> Optional[str]:
+    """The container-auth engine id for a harness, or ``None`` when the harness
+    has no per-engine container auth surface (e.g. ``hermes``)."""
+    return _ENGINE_IDS.get(harness)
 
 
 class HarnessNotEligible(Exception):

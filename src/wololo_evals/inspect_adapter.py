@@ -14,7 +14,8 @@ import asyncio
 import pathlib
 import tempfile
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Sequence
+from typing import Callable, Mapping, Optional, Sequence
+from urllib.parse import urlsplit, urlunsplit
 
 from inspect_ai import Task, eval as inspect_eval
 from inspect_ai.dataset import Sample
@@ -22,7 +23,14 @@ from inspect_ai.scorer import Score, Target, accuracy, scorer
 from inspect_ai.solver import Generate, TaskState, solver
 from inspect_ai.util import sandbox
 
+from . import harnesses as harnesses_mod
 from . import judge as judge_mod
+from .engines.container_auth import (
+    BindMount,
+    ContainerAuthPlan,
+    build_plan,
+    resolve_exec_env,
+)
 from .harness_solver import (
     HarnessTrialConfig,
     TrialErrored,
@@ -163,6 +171,130 @@ def _sandbox_exec():
         return result.returncode, result.stdout, result.stderr
 
     return exec_fn
+
+
+# ---------------------------------------------------------------------------
+# live docker-sandbox wiring (SPEC I3): per-engine image selection + threading
+# container_auth env/mounts + the reachable fixture URL through the exec seam.
+# Additive: nothing here runs unless a caller explicitly wires a container
+# trial; the existing suites keep ``sandbox_type`` / ``exec_factory`` behaviour.
+# ---------------------------------------------------------------------------
+#: The container reaches the host over the Docker gateway alias, attached at run
+#: time via ``--add-host=host.docker.internal:host-gateway`` (built-in on Docker
+#: Desktop; ``host-gateway`` on Linux Docker >= 20.10).
+HOST_DOCKER_INTERNAL = "host.docker.internal"
+ADD_HOST = f"{HOST_DOCKER_INTERNAL}:host-gateway"
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "0.0.0.0", "::1", "localhost"})
+
+
+def container_fixture_url(host_base_url: str, page: str = "") -> str:
+    """Rewrite a host loopback fixture base URL to the URL a *container* reaches
+    it by, then append ``page``.
+
+    ``BrowserFixtureServer`` binds ``127.0.0.1:<ephemeral>`` on the host; inside
+    a container ``127.0.0.1`` is the container itself, so the loopback host is
+    rewritten to :data:`HOST_DOCKER_INTERNAL` (reachable via :data:`ADD_HOST`)
+    while the kernel-assigned port is preserved. A non-loopback host is left as
+    given (already routable)."""
+    parts = urlsplit(host_base_url)
+    if (parts.hostname or "").lower() in _LOOPBACK_HOSTS:
+        netloc = HOST_DOCKER_INTERNAL
+        if parts.port is not None:
+            netloc = f"{HOST_DOCKER_INTERNAL}:{parts.port}"
+        parts = parts._replace(netloc=netloc)
+    url = urlunsplit(parts)
+    if page:
+        url = url.rstrip("/") + "/" + page.lstrip("/")
+    return url
+
+
+@dataclass(frozen=True)
+class ContainerTrialWiring:
+    """Everything a live per-engine trial needs, resolved from the harness name.
+
+    Every field is secret-free and safe to log EXCEPT the seam built by
+    :attr:`exec_factory`, which injects auth VALUES (from
+    :func:`container_auth.resolve_exec_env`) that must never be logged. Log
+    :attr:`plan` (KEY names + mount paths + ``satisfied``), never the resolved
+    exec env.
+    """
+
+    harness: str
+    engine_id: str
+    image: Optional[str]              # None for a harness with no runner image
+    plan: ContainerAuthPlan          # loggable: env_keys + mounts + satisfied
+    fixture_url: str                 # host.docker.internal, container-reachable
+    add_host: str                    # docker --add-host value
+    exec_factory: Callable[[], object]
+
+    @property
+    def mounts(self) -> tuple[BindMount, ...]:
+        """Read-only credential bind-mounts to attach to the sandbox
+        (host_path -> container_path, ``read_only=True``); may be empty."""
+        return self.plan.mounts
+
+
+def wire_container_trial(
+    harness: str,
+    host_fixture_base_url: str,
+    fixture_page: str = "",
+    *,
+    source_env: Optional[Mapping[str, str]] = None,
+    home: Optional[str] = None,
+    base_exec_factory: Optional[Callable[[], object]] = None,
+) -> ContainerTrialWiring:
+    """Resolve a harness's runner image + container-auth plan + reachable fixture
+    URL, and build the exec seam that threads the engine's auth env and the
+    fixture URL into every ``sandbox().exec`` call — without ever logging a value.
+
+    The returned :class:`ContainerTrialWiring` is loggable except its
+    ``exec_factory``. The caller should log ``plan`` and, when
+    ``plan.satisfied`` is False, treat ``plan.operator_preconditions`` as an
+    operator gate and NOT attempt a live run (and in this wave, never a live run
+    regardless). ``plan.mounts`` attach as read-only bind-mounts; the sandbox is
+    run with ``add_host`` so the container reaches the host fixture server.
+
+    Secrets are read only inside the built seam (via ``resolve_exec_env``), at
+    exec time, straight into ``sandbox().exec(env=...)``. ``base_exec_factory``
+    defaults to the production sandbox seam; tests inject a recording fake so the
+    whole path is driven with no docker and no model."""
+    engine = harnesses_mod.engine_id(harness)
+    if engine is None:
+        raise ValueError(
+            f"harness {harness!r} has no container-auth engine mapping"
+        )
+    image = harnesses_mod.runner_image(harness)
+    plan = build_plan(engine, source_env=source_env, home=home)
+    fixture_url = container_fixture_url(host_fixture_base_url, fixture_page)
+    base_factory = base_exec_factory or _sandbox_exec
+
+    def exec_factory():
+        inner = base_factory()
+        # resolve_exec_env is the ONLY read of secret VALUES; the result is
+        # merged into the exec env and NEVER logged (kept out of ``plan``).
+        extra_env = {
+            **resolve_exec_env(engine, source_env=source_env, home=home),
+            "WOLOLO_FIXTURE_URL": fixture_url,
+        }
+
+        async def exec_fn(cmd, env, timeout):
+            # run_harness_trial's per-call env ({profile_env: /profile,
+            # WOLOLO_TRANSCRIPT_DIR: /transcript}) layers ON TOP of the auth +
+            # fixture base, yielding the SPEC exec env shape.
+            merged = {**extra_env, **(dict(env) if env else {})}
+            return await inner(cmd, merged, timeout)
+
+        return exec_fn
+
+    return ContainerTrialWiring(
+        harness=harness,
+        engine_id=engine,
+        image=image,
+        plan=plan,
+        fixture_url=fixture_url,
+        add_host=ADD_HOST,
+        exec_factory=exec_factory,
+    )
 
 
 def run_task_uplift(
