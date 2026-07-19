@@ -240,3 +240,50 @@ def test_label_rejects_unreadable_case_id(tmp_path):
     with pytest.raises(label_mod.LabelError):
         main(["label", str(tmp_path / "missing.json"), "--verdict", "pass",
               "-o", str(tmp_path / "l.jsonl")])
+
+
+# --------------------------------------------------------------------------
+# GAP 3: the shipped dropdowns-skill golden set is non-degenerate
+# --------------------------------------------------------------------------
+# A golden set that is all "pass" gives every judge kappa = 1.0 for free
+# (single-category collapse: expected agreement pe = 1.0), so calibration can
+# never discriminate a good judge from a lazy one. These prove the real golden
+# set now carries both classes and that kappa moves with judge quality.
+_GOLDEN = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "benchmarks" / "dropdowns-skill" / "labels" / "golden.jsonl"
+)
+
+
+def _all_pass_judge(system, user):
+    return json.dumps(
+        {"dimension_scores": {"overall": 1.0}, "rationale": "x", "injection_suspected": False}
+    )
+
+
+def test_shipped_golden_has_both_verdict_classes():
+    verdicts = cal.load_golden_verdicts(_GOLDEN)
+    assert set(verdicts.values()) == {"pass", "fail"}, verdicts
+    assert list(verdicts.values()).count("fail") >= 1
+
+
+def test_shipped_golden_kappa_is_meaningful_not_degenerate():
+    verdicts = cal.load_golden_verdicts(_GOLDEN)
+    # Content encodes each human verdict so the deterministic judge can mirror
+    # (pass) or diverge (all-pass) from the labels.
+    items = [
+        cal.CalibrationItem(cid, "GOOD" if v == "pass" else "BAD", v)
+        for cid, v in verdicts.items()
+    ]
+
+    # A judge that reproduces the human labels: perfect kappa. Because both
+    # classes are present, pe < 1.0, so this 1.0 is genuine agreement, not the
+    # degenerate single-category 1.0.
+    agree = cal.run_calibration(items, _judge, k=1, golden_agreement_min=0.7)
+    assert agree.kappa == 1.0 and agree.passed
+    assert agree.n == len(verdicts)
+
+    # A lazy judge that calls everything pass now FAILS calibration — the exact
+    # discrimination an all-pass golden set could never provide.
+    lazy = cal.run_calibration(items, _all_pass_judge, k=1, golden_agreement_min=0.7)
+    assert lazy.kappa < 0.7 and not lazy.passed
