@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0.0",
+  "id": "dropdowns-skill",
+  "evaluation_type": "skill_behaviour",
+  "description": "Dogfood benchmark for the browser-harness dropdowns.md skill: does the agent open dropdowns correctly (native select, react-select-style widget, portal-rendered menu), select the requested option by real screenshot-then-click interaction rather than a JS value hack, and stay silent on a page with no dropdown at all.",
+  "pass_threshold": 0.7,
+  "golden_set": "labels/golden.jsonl",
+  "engines": ["claude", "codex", "copilot"]
+}

@@ -1,0 +1,96 @@
+{
+  "schema_version": "2.0.0",
+  "matrix_id": "candidate-v2",
+  "generated_at": "2026-07-18T11:00:00Z",
+  "benchmark": "examples/runs/dropdowns-synthetic/benchmark",
+  "evaluation_type": "skill_behaviour",
+  "workflow": {
+    "id": "dropdowns",
+    "archetype": "skill_behaviour",
+    "ref": "local",
+    "version": "v2"
+  },
+  "asset": {
+    "id": "synthetic-skill-v2",
+    "kind": "agent_skill",
+    "path": "fixtures/synthetic-skill/v2-regressed"
+  },
+  "iteration": {
+    "index": 1,
+    "snapshot_dir": null
+  },
+  "seeds": 2,
+  "concurrency": 2,
+  "cache_mode": "off",
+  "budget_usd": 0.0,
+  "spend_usd": 0.0,
+  "engines": [
+    {
+      "engine_id": "claude",
+      "cli_version": "2.1.4",
+      "models": [
+        "claude-sonnet-4-5"
+      ],
+      "prompts": [
+        "default"
+      ]
+    },
+    {
+      "engine_id": "codex",
+      "cli_version": "0.48.2",
+      "models": [
+        "gpt-5-codex"
+      ],
+      "prompts": [
+        "default"
+      ]
+    }
+  ],
+  "baseline_run": "baseline-v1",
+  "provenance": {
+    "harness_version": "0.2.0",
+    "engine_cli_versions": {
+      "claude": "2.1.4",
+      "codex": "0.48.2"
+    },
+    "judge": {
+      "engine": "replay",
+      "model": "recorded",
+      "config_digest": "synthetic-golden-kappa-1.0"
+    },
+    "fixture_digests": {
+      "synthetic-skill": "sha256:synthetic-v2"
+    },
+    "hermetic": true,
+    "exfiltration_scan_scope": "workspace+artefacts",
+    "repro_command": "gh-aw-evals replay --config matrix-configs/dropdowns-synthetic-v2.toml"
+  },
+  "combos": [
+    {
+      "combo_id": "claude__claude-sonnet-4-5__default__v2",
+      "engine_id": "claude",
+      "model_id": "claude-sonnet-4-5",
+      "prompt_id": "default",
+      "asset_id": "synthetic-skill-v2",
+      "role": "treatment",
+      "cli_version": "2.1.4",
+      "benchmark_score": 0.6362,
+      "pass_rate": 0.5,
+      "combo_dir": "combos/claude__claude-sonnet-4-5__default__v2",
+      "scorecard_path": "combos/claude__claude-sonnet-4-5__default__v2/runs/combo-run-claude-v2/scorecard.json"
+    },
+    {
+      "combo_id": "codex__gpt-5-codex__default__v2",
+      "engine_id": "codex",
+      "model_id": "gpt-5-codex",
+      "prompt_id": "default",
+      "asset_id": "synthetic-skill-v2",
+      "role": "treatment",
+      "cli_version": "0.48.2",
+      "benchmark_score": 0.6362,
+      "pass_rate": 0.5,
+      "combo_dir": "combos/codex__gpt-5-codex__default__v2",
+      "scorecard_path": "combos/codex__gpt-5-codex__default__v2/runs/combo-run-codex-v2/scorecard.json"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": "2.1.0",
+  "run_id": "combo-run-codex-v2-s-portal-s0",
+  "case_id": "s-portal",
+  "seed": 0,
+  "status": "ok",
+  "attempts": 1,
+  "score": 0.28,
+  "passed": false,
+  "signals": [
+    {
+      "evaluator_id": "used_skill",
+      "kind": "assertion",
+      "slot": "activation_correct",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "skill_activated(dropdowns) present in trace"
+    },
+    {
+      "evaluator_id": "selected_option",
+      "kind": "assertion",
+      "slot": "task_outcome",
+      "score": 0.0,
+      "weight": 1.0,
+      "verdict": "fail",
+      "evidence": "blind click on late-arriving geometry missed the option; no value committed"
+    },
+    {
+      "evaluator_id": "screenshot_before_click",
+      "kind": "assertion",
+      "slot": "trace_conformance",
+      "score": 0.0,
+      "weight": 1.0,
+      "verdict": "fail",
+      "evidence": "trace:require_order(screenshot, click) violated: click with no preceding screenshot"
+    },
+    {
+      "evaluator_id": "selection_explained",
+      "kind": "judge",
+      "slot": "llm_judge_overall",
+      "score": 0.2,
+      "weight": 1.0,
+      "verdict": "fail",
+      "evidence": "claims success but the page never reflected the choice"
+    }
+  ],
+  "artefact_ref": "seeds/0/workspace/s-portal/.gh-aw-advisory/"
+}

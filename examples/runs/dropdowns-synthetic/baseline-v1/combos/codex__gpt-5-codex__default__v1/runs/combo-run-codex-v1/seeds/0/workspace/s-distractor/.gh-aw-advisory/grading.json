@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "case_id": "s-distractor",
+  "seed": 0,
+  "signals": [
+    {
+      "evaluator_id": "used_skill",
+      "kind": "assertion",
+      "slot": "activation_correct",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "no skill_activated event: dropdowns stayed silent (correct)"
+    },
+    {
+      "evaluator_id": "answered_licence",
+      "kind": "judge",
+      "slot": "llm_judge_overall",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "answer states the open surface is Apache-2.0"
+    }
+  ],
+  "slot_scores": {
+    "activation_correct": 1.0,
+    "llm_judge_overall": 1.0
+  },
+  "score": 1.0,
+  "passed": true
+}

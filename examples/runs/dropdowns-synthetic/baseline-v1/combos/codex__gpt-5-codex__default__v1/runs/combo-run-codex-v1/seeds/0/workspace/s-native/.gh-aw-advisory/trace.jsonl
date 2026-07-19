@@ -1,0 +1,11 @@
+{"seq":0,"ts_ms":1000,"kind":"lifecycle","name":"skill_activated","target":"dropdowns","args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L1"}
+{"seq":1,"ts_ms":1250,"kind":"tool_call","name":"screenshot","target":"viewport","args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L2"}
+{"seq":2,"ts_ms":1500,"kind":"tool_result","name":"screenshot","target":"viewport","args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L3"}
+{"seq":3,"ts_ms":1750,"kind":"tool_call","name":"click","target":"trigger","args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L4"}
+{"seq":4,"ts_ms":2000,"kind":"tool_result","name":"click","target":"trigger","args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L5"}
+{"seq":5,"ts_ms":2250,"kind":"tool_call","name":"screenshot","target":"viewport","args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L6"}
+{"seq":6,"ts_ms":2500,"kind":"tool_result","name":"screenshot","target":"viewport","args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L7"}
+{"seq":7,"ts_ms":2750,"kind":"tool_call","name":"click","target":"option","args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L8"}
+{"seq":8,"ts_ms":3000,"kind":"tool_result","name":"click","target":"option","args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L9"}
+{"seq":9,"ts_ms":3250,"kind":"tool_call","name":"screenshot","target":"viewport","args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L10"}
+{"seq":10,"ts_ms":3500,"kind":"message","name":"assistant","target":null,"args_digest":null,"result_digest":null,"tokens_in":0,"tokens_out":0,"raw_ref":"codex.raw.jsonl#L12"}

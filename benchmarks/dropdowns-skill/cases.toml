@@ -1,0 +1,90 @@
+# Dogfood casebook for the browser-harness `dropdowns.md` skill.
+#
+# One case per browser fixture page in ../../fixtures/browser/pages. Every
+# treatment case asserts the skill activated (`trace:used_skill`), that a
+# screenshot preceded the committing click (`trace:require_order`), and — on
+# the native <select> — that the agent never bypassed real interaction with a
+# JS value hack (`trace:deny_tools(js)`). The distractor page carries no
+# dropdown; the skill must stay silent (role = "distractor",
+# expected_outcome = "no_activation").
+#
+# `cases compile` turns this into the canonical `cases.jsonl`; keep the two in
+# sync (`cases compile --check`).
+
+version = 2
+
+[defaults]
+expected_skill = "dropdowns"
+assertions = ["used_dropdowns_skill", "screenshot_before_click", "selection_explained"]
+
+[defaults.assertion_weights]
+used_dropdowns_skill = 1.0
+screenshot_before_click = 1.0
+selection_explained = 1.0
+
+[assertions]
+# activation_correct slot (trace:used_skill; inverted for no_activation cases)
+used_dropdowns_skill = "trace:used_skill(dropdowns)"
+# trace_conformance slot (trajectory assertions over the normalised trace)
+screenshot_before_click = "trace:require_order(screenshot, click)"
+no_js_value_hack = "trace:deny_tools(js)"
+# task_outcome slot (deterministic acceptance over the committed DOM value)
+selected_portugal = "code:output.dom_selected.get('country') == 'pt'"
+selected_svelte = "code:output.dom_selected.get('framework') == 'svelte'"
+selected_lisbon = "code:output.dom_selected.get('timezone') == 'lisbon'"
+# llm_judge_overall slot (plain natural-language string -> judge)
+selection_explained = "the answer states which option it selected and confirms the page visibly reflected that choice"
+answered_licence = "the answer states the open surface (engines, trace, cli, fixtures) is licensed Apache-2.0"
+
+[[cases]]
+case_id = "case-native-select"
+fixture_id = "page_native_select"
+expected_skill = "dropdowns"
+case_weight = 1.0
+title = "Native <select>: choose Portugal"
+difficulty = "easy"
+tags = ["native", "select"]
+input_text = "Set the shipping destination to Portugal."
+expected_outcome = "pass"
+assertions = ["used_dropdowns_skill", "screenshot_before_click", "no_js_value_hack", "selected_portugal", "selection_explained"]
+metadata = { page = "fixtures/browser/pages/native-select.html" }
+
+[[cases]]
+case_id = "case-react-select"
+fixture_id = "page_react_select"
+expected_skill = "dropdowns"
+case_weight = 1.0
+title = "Custom combobox: choose Svelte"
+difficulty = "medium"
+tags = ["custom", "combobox", "react-select"]
+input_text = "Choose Svelte as the project framework."
+expected_outcome = "pass"
+assertions = ["used_dropdowns_skill", "screenshot_before_click", "selected_svelte", "selection_explained"]
+metadata = { page = "fixtures/browser/pages/react-select.html" }
+
+[[cases]]
+case_id = "case-portal-menu"
+fixture_id = "page_portal_menu"
+expected_skill = "dropdowns"
+case_weight = 1.0
+title = "Portal-rendered menu: choose Lisbon (WET)"
+difficulty = "hard"
+tags = ["portal", "late-geometry"]
+input_text = "Set the meeting timezone to Lisbon (WET)."
+expected_outcome = "pass"
+assertions = ["used_dropdowns_skill", "screenshot_before_click", "selected_lisbon", "selection_explained"]
+metadata = { page = "fixtures/browser/pages/portal-menu.html" }
+
+[[cases]]
+case_id = "case-distractor-no-dropdown"
+role = "distractor"
+fixture_id = "page_distractor"
+expected_skill = "dropdowns"
+case_weight = 1.0
+title = "No dropdown present: skill must not activate"
+difficulty = "easy"
+tags = ["distractor", "no-activation"]
+input_text = "What licence is the open surface under?"
+expected_outcome = "no_activation"
+assertions = ["used_dropdowns_skill", "answered_licence"]
+metadata = { page = "fixtures/browser/pages/distractor-no-dropdown.html" }
