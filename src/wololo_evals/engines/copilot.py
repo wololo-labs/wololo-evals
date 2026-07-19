@@ -7,8 +7,10 @@ than exposing a per-run USD figure, so ``_parse_usage`` reports tokens when the
 log carries them and leaves cost at zero.
 
 The wave proof does not depend on this adapter running live (spec §Edge cases):
-it ships with recorded fixtures replayed through the ``replay`` engine; the swap
-condition (token + one live smoke) is ledgered in ``docs/INTEGRATION-DEBT.md``.
+it ships with recorded fixtures replayed through the ``replay`` engine. The swap
+condition (a working ``COPILOT_GITHUB_TOKEN`` plus one live smoke trial) is
+ledgered in ``docs/INTEGRATION-DEBT.md`` under the stub-ledger row
+"copilot live validation deferred".
 """
 from __future__ import annotations
 
