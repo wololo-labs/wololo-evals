@@ -1,0 +1,39 @@
+# skill-behaviour rubric (wave-2 SPEC M4). sha256 of this file IS rubric_version.
+# The dimension names are the core.interfaces GATE_FAMILY_WEIGHTS['skill_behaviour']
+# slot names, and the weights are those raw points over 100 (they sum to 1.0 so
+# load_rubric accepts them, and base.composite matches compose() when the judge
+# is enabled). Only llm_judge_overall goes through the hardened judge; the other
+# three slots are rule-based off the trace / acceptance test.
+suite: skill-behaviour
+judge:
+  k: 5
+  temperature: 0
+dimensions:
+  activation_correct:
+    weight: 0.25
+    scorer: trace             # rule-based off the trace used_skill lifecycle event
+    criterion: >
+      Did the skill activate exactly when it should: fired on a genuine case
+      (recall) and stayed silent on a distractor (non-activation). Settled by
+      the harness-emitted event stream, never judge opinion.
+  task_outcome:
+    weight: 0.40
+    scorer: acceptance-test   # pass/fail by RUNNING the acceptance test in-sandbox
+    criterion: >
+      The resulting diff makes the task's acceptance test pass inside the same
+      sandbox the harness ran in, measured against the oracle restored from the
+      trusted pinned ref.
+  trace_conformance:
+    weight: 0.20
+    scorer: trace             # rule-based trace: assertion over the tool-call sequence
+    criterion: >
+      Did the observed sequence of tool calls follow the workflow the skill's
+      own SKILL.md declares, rather than ignoring the skill's guidance and
+      freelancing.
+  llm_judge_overall:
+    weight: 0.15
+    scorer: judge
+    criterion: >
+      Overall, does the run apply a sound approach for the task and use the
+      installed skill's guidance well: reuses existing helpers and repo
+      patterns, minimal diff, no unrequested abstractions?

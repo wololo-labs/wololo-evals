@@ -1,0 +1,5 @@
+{"schema_version":"2.0.0"}
+{"case_id":"s-native","role":"treatment","title":"Native <select>: choose Portugal","expected_outcome":"pass","expected_skill":"dropdowns"}
+{"case_id":"s-react","role":"treatment","title":"Custom combobox: choose Svelte","expected_outcome":"pass","expected_skill":"dropdowns"}
+{"case_id":"s-portal","role":"treatment","title":"Portal menu: choose Lisbon (WET)","expected_outcome":"pass","expected_skill":"dropdowns"}
+{"case_id":"s-distractor","role":"distractor","title":"No dropdown: skill must stay silent","expected_outcome":"no_activation","expected_skill":"dropdowns"}

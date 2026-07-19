@@ -1,0 +1,98 @@
+<!doctype html>
+<!--
+  Fixture: react-select-style custom widget, built in vanilla JS to mimic
+  react-select's DOM (a role=combobox control that renders an absolutely
+  positioned option menu on open, with role=option rows). No <select>
+  element exists, so the skill cannot cheat with .value=; it must open the
+  control and click the "Svelte" option. Self-contained, no network.
+  Acceptance oracle reads [data-selected-value] / #selection-result.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Custom combobox — framework</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; color: #111; }
+    label { display: block; font-weight: 600; margin-bottom: .5rem; }
+    .rs-control {
+      position: relative; min-width: 18rem; border: 1px solid #b3b3b3;
+      border-radius: 4px; padding: .5rem .75rem; cursor: pointer;
+      background: #fff; user-select: none;
+    }
+    .rs-control[aria-expanded="true"] { border-color: #2684ff; }
+    .rs-placeholder { color: #808080; }
+    .rs-menu {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: #fff; border: 1px solid #ccc; border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15); z-index: 10; overflow: hidden;
+    }
+    .rs-menu[hidden] { display: none; }
+    .rs-option { padding: .5rem .75rem; }
+    .rs-option:hover, .rs-option.is-focused { background: #deebff; }
+    .rs-option.is-selected { background: #2684ff; color: #fff; }
+    #selection-result { margin-top: 1.5rem; font-size: 1.1rem; }
+    #selection-result strong { color: #0a6; }
+  </style>
+</head>
+<body>
+  <h1>Project framework</h1>
+  <p>Choose the frontend framework for the new project.</p>
+
+  <label id="fw-label" for="framework">Framework</label>
+  <div class="rs-control" id="framework" role="combobox" tabindex="0"
+       aria-haspopup="listbox" aria-expanded="false"
+       aria-labelledby="fw-label" data-testid="framework-combobox"
+       data-selected-value="">
+    <span class="rs-value rs-placeholder">Select a framework…</span>
+  </div>
+
+  <div class="rs-menu" id="framework-menu" role="listbox" hidden
+       aria-labelledby="fw-label">
+    <div class="rs-option" role="option" data-value="react">React</div>
+    <div class="rs-option" role="option" data-value="vue">Vue</div>
+    <div class="rs-option" role="option" data-value="svelte">Svelte</div>
+    <div class="rs-option" role="option" data-value="solid">SolidJS</div>
+    <div class="rs-option" role="option" data-value="angular">Angular</div>
+  </div>
+
+  <p id="selection-result">No framework selected yet.</p>
+
+  <script>
+    // Vanilla re-creation of react-select's open/close + option-commit
+    // behaviour. The menu is closed until the control is clicked, and the
+    // value is committed only when an option row is clicked.
+    const control = document.getElementById('framework');
+    const menu = document.getElementById('framework-menu');
+    const value = control.querySelector('.rs-value');
+    const result = document.getElementById('selection-result');
+
+    function openMenu() {
+      menu.hidden = false;
+      control.setAttribute('aria-expanded', 'true');
+    }
+    function closeMenu() {
+      menu.hidden = true;
+      control.setAttribute('aria-expanded', 'false');
+    }
+    control.addEventListener('click', () => {
+      menu.hidden ? openMenu() : closeMenu();
+    });
+    menu.addEventListener('click', (event) => {
+      const option = event.target.closest('.rs-option');
+      if (!option) return;
+      menu.querySelectorAll('.rs-option').forEach((o) =>
+        o.classList.remove('is-selected'));
+      option.classList.add('is-selected');
+      value.textContent = option.textContent;
+      value.classList.remove('rs-placeholder');
+      control.setAttribute('data-selected-value', option.dataset.value);
+      result.innerHTML = 'Selected: <strong>' + option.textContent + '</strong>';
+      closeMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeMenu();
+    });
+  </script>
+</body>
+</html>

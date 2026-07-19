@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "id": "dropdowns-synthetic",
+  "evaluation_type": "skill_behaviour",
+  "description": "Synthetic self-contained A/B benchmark used only to exercise scoring + gate deterministically from recorded replay logs (no model calls).",
+  "pass_threshold": 0.7,
+  "golden_set": "labels/golden.jsonl",
+  "engines": [
+    "claude",
+    "codex"
+  ]
+}

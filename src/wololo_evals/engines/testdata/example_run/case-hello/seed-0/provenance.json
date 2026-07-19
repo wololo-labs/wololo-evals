@@ -1,0 +1,6 @@
+{
+  "engine_id": "claude",
+  "model_id": "claude-opus-4-6",
+  "tokens_in": 128,
+  "tokens_out": 47
+}

@@ -36,6 +36,7 @@ from .suites.skill_review import task as skill_review_task
 from .suites.task_uplift import task as task_uplift_task
 from .suites.repo_eval import task as repo_eval_task
 from .suites.regression_replay import task as regression_replay_task
+from .suites.skill_behaviour import task as skill_behaviour_task
 
 # mockllm satisfies Inspect's model requirement for suites whose scoring
 # never touches Inspect's model loop (our judge goes through its own
@@ -325,6 +326,187 @@ def run_task_uplift(
                     "injection_suspected": meta["injection_suspected"],
                     "prescan": meta["prescan"],
                     "extras": {
+                        "turns": meta["turns"],
+                        "wall_clock_s": meta["wall_clock_s"],
+                    },
+                }
+            )
+        if injection:
+            return SuiteOutcome(
+                status="errored", error="judge-integrity",
+                trials=trials, eval_log_bytes=log_bytes,
+            )
+        return SuiteOutcome(status="completed", trials=trials, eval_log_bytes=log_bytes)
+
+
+# ---------------------------------------------------------------------------
+# skill-behaviour: paired v1-vs-v2 skill-upgrade A/B, harness-under-eval
+# ---------------------------------------------------------------------------
+def run_skill_behaviour(
+    fixture: skill_behaviour_task.SkillBehaviourFixture,
+    runner: HarnessRunner,
+    n_trials: int,
+    skill_slug: str,
+    skill_files_baseline: dict,
+    skill_files_treatment: dict,
+    call_model: Callable[[str, str], str],
+    *,
+    k: int = 5,
+    sandbox_type: str = "docker",
+    arms: Sequence[str] = skill_behaviour_task.ARMS,
+    exec_factory: Optional[Callable[[], "object"]] = None,
+    judge_enabled: bool = True,
+) -> SuiteOutcome:
+    """One sample per (trial_index, arm); each sample runs the REAL harness CLI
+    inside its own Inspect sandbox via the injected exec seam. Unlike task-uplift
+    BOTH arms install a skill -- baseline the incumbent (v1), treatment the
+    proposed upgrade (v2) -- so both go through the harness bridge's treatment
+    install path; the logical arm (from sample metadata) is what pairs and
+    persists. Per-trial composite maps onto the skill_behaviour family slots
+    (activation_correct/task_outcome/trace_conformance rule-based; the one judge
+    slot llm_judge_overall, skipped when ``judge_enabled`` is False).
+    """
+    rubric = base.load_rubric("skill-behaviour")
+    judged = base.judged_dimensions(rubric)  # ["llm_judge_overall"]
+    rubric_text = base.rubric_judge_text(rubric)
+    make_exec = exec_factory or _sandbox_exec
+    effective_sandbox = None if exec_factory is not None else sandbox_type
+    skill_by_arm = {"baseline": skill_files_baseline, "treatment": skill_files_treatment}
+
+    samples = [
+        Sample(
+            input=fixture.task_prompt,
+            id=f"{arm}-{i}",
+            metadata={"arm": arm, "trial_index": i},
+        )
+        for i in range(n_trials)
+        for arm in arms
+    ]
+
+    @solver
+    def _skill_bridge():
+        async def solve(state: TaskState, generate: Generate) -> TaskState:
+            arm = state.metadata["arm"]
+            # Both arms install a skill (v1 vs v2), so both use the bridge's
+            # treatment install path; the logical arm lives in sample metadata.
+            cfg = HarnessTrialConfig(
+                runner=runner,
+                task_prompt=fixture.task_prompt,
+                fixture_repo=fixture.repo,
+                fixture_ref=fixture.ref,
+                arm="treatment",
+                max_turns=fixture.max_turns,
+                wall_clock_cap_s=fixture.wall_clock_cap_s,
+                skill_slug=skill_slug,
+                skill_files=skill_by_arm[arm],
+            )
+            state.metadata["trial_result"] = await run_harness_trial(make_exec(), cfg)
+            return state
+
+        return solve
+
+    @scorer(metrics=[accuracy()])
+    def _skill_scorer():
+        async def score(state: TaskState, target: Target) -> Score:
+            result = state.metadata["trial_result"]
+            # Restore the correctness oracle from the trusted pinned ref before
+            # running acceptance (same tamper defense as task-uplift/repo-eval).
+            exec_fn = make_exec()
+            await materialize_oracle_files(
+                exec_fn, fixture.ref, list(fixture.oracle_files)
+            )
+            correct = await run_acceptance_test(
+                exec_fn, list(fixture.acceptance_command)
+            )
+            activation = skill_behaviour_task.activation_correct_score(
+                result.events, expects_activation=fixture.expects_activation
+            )
+            conformance = skill_behaviour_task.trace_conformance_score(
+                result.events, fixture.declared_workflow
+            )
+            values = {
+                "activation_correct": activation,
+                "task_outcome": 1.0 if correct else 0.0,
+                "trace_conformance": conformance,
+            }
+            judge_samples: list[dict] = []
+            injection = False
+            prescan: list[str] = []
+            if judge_enabled:
+                events_summary = (
+                    f"turns={result.turns} wall_clock_s={result.wall_clock_s:.1f} "
+                    f"events={len(result.events)}"
+                )
+                judged_result = await asyncio.to_thread(
+                    judge_mod.run_judge,
+                    call_model,
+                    rubric_text,
+                    skill_behaviour_task.judge_content(
+                        result.diff, result.untracked, events_summary
+                    ),
+                    judged,
+                    k,
+                )
+                values.update(judged_result.dimension_medians)
+                judge_samples = judged_result.samples
+                injection = judged_result.injection_suspected
+                prescan = judged_result.prescan
+            comp = skill_behaviour_task.compose(values, judge_disabled=not judge_enabled)
+            return Score(
+                value=comp,
+                metadata={
+                    "dimension_values": values,
+                    "judge_samples": judge_samples,
+                    "injection_suspected": injection,
+                    "prescan": prescan,
+                    "judge_disabled": not judge_enabled,
+                    "used_skill": skill_behaviour_task.used_skill(result.events),
+                    "turns": result.turns,
+                    "wall_clock_s": result.wall_clock_s,
+                },
+            )
+
+        return score
+
+    task = Task(
+        dataset=samples,
+        solver=_skill_bridge(),
+        scorer=_skill_scorer(),
+        sandbox=effective_sandbox,
+    )
+    with tempfile.TemporaryDirectory() as log_dir:
+        eval_kwargs = {"max_samples": 1} if exec_factory is not None else {}
+        log = inspect_eval(
+            task, model=_NO_MODEL, log_dir=log_dir, display="none",
+            fail_on_error=False, **eval_kwargs,
+        )[0]
+        log_bytes = _read_log(log)
+        if log.status != "success" or not log.samples:
+            return SuiteOutcome(
+                status="errored",
+                error=str(log.error or "inspect eval failed"),
+                eval_log_bytes=log_bytes,
+            )
+        trials: list[dict] = []
+        injection = False
+        for s in log.samples:
+            if s.error is not None or not s.scores:
+                continue  # errored trial: excluded, never scored as zero (S6.8)
+            sc = next(iter(s.scores.values()))
+            meta = sc.metadata
+            injection = injection or meta["injection_suspected"]
+            trials.append(
+                {
+                    "trial_index": s.metadata["trial_index"],
+                    "arm": s.metadata["arm"],
+                    "dimension_values": meta["dimension_values"],
+                    "composite": float(sc.as_float()),
+                    "judge_samples": meta["judge_samples"],
+                    "injection_suspected": meta["injection_suspected"],
+                    "prescan": meta["prescan"],
+                    "extras": {
+                        "judge_disabled": meta["judge_disabled"],
+                        "used_skill": meta["used_skill"],
                         "turns": meta["turns"],
                         "wall_clock_s": meta["wall_clock_s"],
                     },

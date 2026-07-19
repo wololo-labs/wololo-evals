@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "case_id": "s-native",
+  "seed": 0,
+  "signals": [
+    {
+      "evaluator_id": "used_skill",
+      "kind": "assertion",
+      "slot": "activation_correct",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "skill_activated(dropdowns) present in trace"
+    },
+    {
+      "evaluator_id": "selected_option",
+      "kind": "assertion",
+      "slot": "task_outcome",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "committed DOM value matches the requested option"
+    },
+    {
+      "evaluator_id": "screenshot_before_click",
+      "kind": "assertion",
+      "slot": "trace_conformance",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "an initial screenshot precedes the clicks"
+    },
+    {
+      "evaluator_id": "no_js_value_hack",
+      "kind": "assertion",
+      "slot": "trace_conformance",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "no js() DOM-value hack"
+    },
+    {
+      "evaluator_id": "selection_explained",
+      "kind": "judge",
+      "slot": "llm_judge_overall",
+      "score": 0.8,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "correct option but no post-commit verification described"
+    }
+  ],
+  "slot_scores": {
+    "activation_correct": 1.0,
+    "task_outcome": 1.0,
+    "trace_conformance": 1.0,
+    "llm_judge_overall": 0.8
+  },
+  "score": 0.97,
+  "passed": true
+}

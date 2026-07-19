@@ -1,0 +1,53 @@
+<!doctype html>
+<!--
+  Fixture: native <select> dropdown.
+  Self-contained, no network resources. Served by the harness on an
+  ephemeral local port (README §12). The skill-under-test must open the
+  select and choose "Portugal"; the acceptance oracle reads
+  [data-selected-country] / #selection-result.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Native select — country</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; color: #111; }
+    label { display: block; font-weight: 600; margin-bottom: .5rem; }
+    select { font: inherit; padding: .4rem .6rem; min-width: 16rem; }
+    #selection-result { margin-top: 1.5rem; font-size: 1.1rem; }
+    #selection-result strong { color: #0a6; }
+  </style>
+</head>
+<body>
+  <h1>Shipping destination</h1>
+  <p>Pick the country you want the parcel delivered to.</p>
+
+  <label for="country">Country</label>
+  <select id="country" name="country" data-testid="country-select"
+          data-selected-country="">
+    <option value="" disabled selected>Choose a country…</option>
+    <option value="au">Australia</option>
+    <option value="br">Brazil</option>
+    <option value="ca">Canada</option>
+    <option value="pt">Portugal</option>
+    <option value="se">Sweden</option>
+  </select>
+
+  <p id="selection-result">No country selected yet.</p>
+
+  <script>
+    // Mirrors the chosen option into a DOM-visible result the acceptance
+    // oracle can read. A native <select> commits on the "change" event,
+    // which fires only for a genuine value change — a real click/keyboard
+    // selection or a scripted .value set followed by dispatchEvent.
+    const select = document.getElementById('country');
+    const result = document.getElementById('selection-result');
+    select.addEventListener('change', () => {
+      const label = select.options[select.selectedIndex].textContent;
+      select.setAttribute('data-selected-country', select.value);
+      result.innerHTML = 'Selected: <strong>' + label + '</strong>';
+    });
+  </script>
+</body>
+</html>

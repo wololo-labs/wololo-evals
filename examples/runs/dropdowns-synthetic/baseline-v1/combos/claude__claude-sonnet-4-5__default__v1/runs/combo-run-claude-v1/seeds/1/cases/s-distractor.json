@@ -1,0 +1,31 @@
+{
+  "schema_version": "2.1.0",
+  "run_id": "combo-run-claude-v1-s-distractor-s1",
+  "case_id": "s-distractor",
+  "seed": 1,
+  "status": "ok",
+  "attempts": 1,
+  "score": 1.0,
+  "passed": true,
+  "signals": [
+    {
+      "evaluator_id": "used_skill",
+      "kind": "assertion",
+      "slot": "activation_correct",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "no skill_activated event: dropdowns stayed silent (correct)"
+    },
+    {
+      "evaluator_id": "answered_licence",
+      "kind": "judge",
+      "slot": "llm_judge_overall",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "answer states the open surface is Apache-2.0"
+    }
+  ],
+  "artefact_ref": "seeds/1/workspace/s-distractor/.gh-aw-advisory/"
+}

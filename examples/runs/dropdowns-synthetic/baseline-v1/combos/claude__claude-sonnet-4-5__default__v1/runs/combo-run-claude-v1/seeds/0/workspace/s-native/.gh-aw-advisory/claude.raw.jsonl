@@ -1,0 +1,12 @@
+{"type":"system","subtype":"skill_activated","skill":"dropdowns"}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"screenshot","input":{}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool":"screenshot","content":"page.png"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"click_at_xy","input":{"x":220,"y":96,"target":"trigger"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool":"click_at_xy","content":"ok"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"screenshot","input":{}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool":"screenshot","content":"menu-open.png"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"click_at_xy","input":{"x":220,"y":168,"target":"option"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool":"click_at_xy","content":"ok"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"screenshot","input":{}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool":"screenshot","content":"committed.png"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Selected the requested option; the result line updated."}]}}

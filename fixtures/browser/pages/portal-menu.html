@@ -1,0 +1,119 @@
+<!doctype html>
+<!--
+  Fixture: portal-rendered dropdown menu. The trigger is one element; its
+  option menu is created and appended to <body> (a "portal") only after the
+  trigger is clicked, and the option rows are inserted on a short delay to
+  simulate late-arriving geometry (the exact trap dropdowns.md warns about:
+  re-measure after opening). The skill must open the trigger, wait for the
+  portal menu to populate, then click "Lisbon (WET)". Self-contained, no
+  network. Acceptance oracle reads [data-selected-tz] / #selection-result.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portal menu — timezone</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; color: #111; }
+    label { display: block; font-weight: 600; margin-bottom: .5rem; }
+    .tz-trigger {
+      font: inherit; padding: .5rem .9rem; min-width: 16rem; text-align: left;
+      border: 1px solid #b3b3b3; border-radius: 4px; background: #fff;
+      cursor: pointer;
+    }
+    .tz-trigger[aria-expanded="true"] { border-color: #6c47ff; }
+    /* The portal menu is a body-level layer, positioned via JS. */
+    .tz-portal-menu {
+      position: absolute; background: #fff; border: 1px solid #ccc;
+      border-radius: 4px; box-shadow: 0 4px 14px rgba(0,0,0,.18);
+      min-width: 16rem; z-index: 1000; padding: .25rem 0;
+    }
+    .tz-portal-loading { padding: .5rem .9rem; color: #808080; }
+    .tz-portal-option { padding: .5rem .9rem; cursor: pointer; }
+    .tz-portal-option:hover { background: #efeaff; }
+    #selection-result { margin-top: 1.5rem; font-size: 1.1rem; }
+    #selection-result strong { color: #0a6; }
+  </style>
+</head>
+<body>
+  <h1>Meeting timezone</h1>
+  <p>Set the timezone the invite should be shown in.</p>
+
+  <label id="tz-label" for="tz-trigger">Timezone</label>
+  <button type="button" class="tz-trigger" id="tz-trigger"
+          aria-haspopup="listbox" aria-expanded="false"
+          aria-labelledby="tz-label" data-testid="tz-trigger"
+          data-selected-tz="">Select a timezone…</button>
+
+  <p id="selection-result">No timezone selected yet.</p>
+
+  <script>
+    // The menu lives in a portal (appended to <body>, not under the trigger)
+    // and its option rows arrive on a timer, so any code that measures the
+    // menu immediately after click sees only a loading row. A correct skill
+    // re-screenshots / re-queries after the options land.
+    const trigger = document.getElementById('tz-trigger');
+    const result = document.getElementById('selection-result');
+    const OPTIONS = [
+      { value: 'utc', label: 'UTC' },
+      { value: 'lisbon', label: 'Lisbon (WET)' },
+      { value: 'berlin', label: 'Berlin (CET)' },
+      { value: 'tokyo', label: 'Tokyo (JST)' },
+    ];
+    let portal = null;
+
+    function closeMenu() {
+      if (portal) { portal.remove(); portal = null; }
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+
+    function openMenu() {
+      closeMenu();
+      portal = document.createElement('div');
+      portal.className = 'tz-portal-menu';
+      portal.setAttribute('role', 'listbox');
+      portal.id = 'tz-portal-menu';
+      // Position under the trigger.
+      const rect = trigger.getBoundingClientRect();
+      portal.style.top = (window.scrollY + rect.bottom + 4) + 'px';
+      portal.style.left = (window.scrollX + rect.left) + 'px';
+      // Late geometry: only a loading placeholder is present at first paint.
+      const loading = document.createElement('div');
+      loading.className = 'tz-portal-loading';
+      loading.textContent = 'Loading timezones…';
+      portal.appendChild(loading);
+      document.body.appendChild(portal);
+      trigger.setAttribute('aria-expanded', 'true');
+
+      // Options populate after a short delay.
+      setTimeout(() => {
+        if (!portal) return;
+        portal.innerHTML = '';
+        for (const opt of OPTIONS) {
+          const row = document.createElement('div');
+          row.className = 'tz-portal-option';
+          row.setAttribute('role', 'option');
+          row.dataset.value = opt.value;
+          row.textContent = opt.label;
+          row.addEventListener('click', () => commit(opt));
+          portal.appendChild(row);
+        }
+      }, 250);
+    }
+
+    function commit(opt) {
+      trigger.textContent = opt.label;
+      trigger.setAttribute('data-selected-tz', opt.value);
+      result.innerHTML = 'Selected: <strong>' + opt.label + '</strong>';
+      closeMenu();
+    }
+
+    trigger.addEventListener('click', () => {
+      trigger.getAttribute('aria-expanded') === 'true' ? closeMenu() : openMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeMenu();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,251 @@
+{
+  "schema_version": "2.1.0",
+  "combo_id": "codex__gpt-5-codex__default__v2",
+  "engine_id": "codex",
+  "model_id": "gpt-5-codex",
+  "asset_id": "synthetic-skill-v2",
+  "role": "treatment",
+  "benchmark_score": 0.6362,
+  "pass_rate": 0.5,
+  "invalid_rate": 0.0,
+  "infra_rate": 0.0,
+  "runtime_seconds": 0.0,
+  "cost_usd": 0.0,
+  "tokens_in": 0,
+  "tokens_out": 0,
+  "pass_at_k": {
+    "1": 0.5,
+    "2": 0.5
+  },
+  "pass_pow_k": {
+    "1": 0.5,
+    "2": 0.5
+  },
+  "benchmark_score_ci": [
+    0.2875,
+    0.985
+  ],
+  "pass_rate_ci": [
+    0.15,
+    0.85
+  ],
+  "judge_disabled": false,
+  "self_judged": false,
+  "cases": [
+    {
+      "case_id": "s-native",
+      "role": "treatment",
+      "status": "ok",
+      "score": 0.97,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "attempts": 2,
+      "assertions_total": 5,
+      "assertions_passed": 5,
+      "artefact_ref": "cases/s-native.json",
+      "signals": [
+        {
+          "evaluator_id": "used_skill",
+          "kind": "assertion",
+          "slot": "activation_correct",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "evidence": "skill_activated(dropdowns) present in trace"
+        },
+        {
+          "evaluator_id": "selected_option",
+          "kind": "assertion",
+          "slot": "task_outcome",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "evidence": "committed DOM value matches the requested option"
+        },
+        {
+          "evaluator_id": "screenshot_before_click",
+          "kind": "assertion",
+          "slot": "trace_conformance",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "evidence": "an initial screenshot precedes the clicks"
+        },
+        {
+          "evaluator_id": "no_js_value_hack",
+          "kind": "assertion",
+          "slot": "trace_conformance",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "evidence": "no js() DOM-value hack"
+        },
+        {
+          "evaluator_id": "selection_explained",
+          "kind": "judge",
+          "slot": "llm_judge_overall",
+          "score": 0.8,
+          "weight": 1.0,
+          "verdict": "pass",
+          "evidence": "correct option but no post-commit verification described"
+        }
+      ],
+      "baseline_deltas": {
+        "baseline-v1": {
+          "score_delta": -0.03,
+          "flipped": false
+        }
+      }
+    },
+    {
+      "case_id": "s-react",
+      "role": "treatment",
+      "status": "ok",
+      "score": 0.295,
+      "pass_rate": 0.0,
+      "invalid_rate": 0.0,
+      "attempts": 2,
+      "assertions_total": 4,
+      "assertions_passed": 1,
+      "artefact_ref": "cases/s-react.json",
+      "signals": [
+        {
+          "evaluator_id": "used_skill",
+          "kind": "assertion",
+          "slot": "activation_correct",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "evidence": "skill_activated(dropdowns) present in trace"
+        },
+        {
+          "evaluator_id": "selected_option",
+          "kind": "assertion",
+          "slot": "task_outcome",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "fail",
+          "evidence": "blind click on late-arriving geometry missed the option; no value committed"
+        },
+        {
+          "evaluator_id": "screenshot_before_click",
+          "kind": "assertion",
+          "slot": "trace_conformance",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "fail",
+          "evidence": "trace:require_order(screenshot, click) violated: click with no preceding screenshot"
+        },
+        {
+          "evaluator_id": "selection_explained",
+          "kind": "judge",
+          "slot": "llm_judge_overall",
+          "score": 0.3,
+          "weight": 1.0,
+          "verdict": "fail",
+          "evidence": "claims success but the page never reflected the choice"
+        }
+      ],
+      "baseline_deltas": {
+        "baseline-v1": {
+          "score_delta": -0.705,
+          "flipped": true
+        }
+      }
+    },
+    {
+      "case_id": "s-portal",
+      "role": "treatment",
+      "status": "ok",
+      "score": 0.28,
+      "pass_rate": 0.0,
+      "invalid_rate": 0.0,
+      "attempts": 2,
+      "assertions_total": 4,
+      "assertions_passed": 1,
+      "artefact_ref": "cases/s-portal.json",
+      "signals": [
+        {
+          "evaluator_id": "used_skill",
+          "kind": "assertion",
+          "slot": "activation_correct",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "evidence": "skill_activated(dropdowns) present in trace"
+        },
+        {
+          "evaluator_id": "selected_option",
+          "kind": "assertion",
+          "slot": "task_outcome",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "fail",
+          "evidence": "blind click on late-arriving geometry missed the option; no value committed"
+        },
+        {
+          "evaluator_id": "screenshot_before_click",
+          "kind": "assertion",
+          "slot": "trace_conformance",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "fail",
+          "evidence": "trace:require_order(screenshot, click) violated: click with no preceding screenshot"
+        },
+        {
+          "evaluator_id": "selection_explained",
+          "kind": "judge",
+          "slot": "llm_judge_overall",
+          "score": 0.2,
+          "weight": 1.0,
+          "verdict": "fail",
+          "evidence": "claims success but the page never reflected the choice"
+        }
+      ],
+      "baseline_deltas": {
+        "baseline-v1": {
+          "score_delta": -0.705,
+          "flipped": true
+        }
+      }
+    },
+    {
+      "case_id": "s-distractor",
+      "role": "distractor",
+      "status": "ok",
+      "score": 1.0,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "attempts": 2,
+      "assertions_total": 2,
+      "assertions_passed": 2,
+      "artefact_ref": "cases/s-distractor.json",
+      "signals": [
+        {
+          "evaluator_id": "used_skill",
+          "kind": "assertion",
+          "slot": "activation_correct",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "evidence": "no skill_activated event: dropdowns stayed silent (correct)"
+        },
+        {
+          "evaluator_id": "answered_licence",
+          "kind": "judge",
+          "slot": "llm_judge_overall",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "evidence": "answer states the open surface is Apache-2.0"
+        }
+      ],
+      "baseline_deltas": {
+        "baseline-v1": {
+          "score_delta": 0.0,
+          "flipped": false
+        }
+      }
+    }
+  ]
+}

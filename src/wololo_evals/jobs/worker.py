@@ -12,8 +12,10 @@ injectable (``exec_factory``) so the whole moat is exercisable with a fake
 executor where no daemon exists. The repo-eval path is single-arm
 harness-under-eval over a generated real-history fixture (correctness +
 rule-based churn_penalty + hardened judge); the regression-replay path is a
-single-arm hardened judge over the corrections corpus. All four suites resolve
-to a real worker path; only a suite outside the DDL check set raises
+single-arm hardened judge over the corrections corpus. The skill-behaviour path
+is a paired v1-vs-v2 skill-upgrade A/B (rule-based activation/task-outcome/trace-
+conformance slots plus one hardened judge slot). All five suites resolve to a
+real worker path; only a suite outside the DDL check set raises
 :class:`HarnessExecutionRequired`.
 
 ``call_model`` is injected (``(system, user) -> str``) so the whole
@@ -101,6 +103,10 @@ async def execute_run(
             )
         if run.eval_suite == "regression-replay":
             return await _run_regression_replay(conn, run, cipher, call_model, k)
+        if run.eval_suite == "skill-behaviour":
+            return await _run_skill_behaviour(
+                conn, run, cipher, call_model, k, exec_factory
+            )
         # No suite matched the DDL check-constrained set: refuse loudly rather
         # than fabricate a verdict (a status regression here would corrupt the
         # canary gate's "did this resolve" read).
@@ -360,6 +366,197 @@ async def _run_task_uplift(conn, run, cipher, call_model, k, exec_factory) -> di
     # candidate under evaluation), pinned to the run's suite/rubric versions.
     dims = list(outcome.trials[0]["dimension_values"])
     rubric = suites_base.load_rubric("task-uplift")
+    for dim in dims:
+        median = statistics.median(t["dimension_values"][dim] for t in by_arm["treatment"])
+        weight = rubric["dimensions"][dim]["weight"]
+        await _score(conn, tenant_id, run_id, dim, median, run,
+                     trial_index=None, weight=weight, judge="injected-judge")
+
+    treatment_mean = statistics.fmean(treatment)
+    status = "passed" if passed else "failed"
+    await conn.execute(
+        text(
+            "update wololo_evals.runs set status = :s, composite_score = :c, "
+            "verdict_stats = cast(:v as jsonb), completed_at = now() where id = :id"
+        ),
+        {"s": status, "c": treatment_mean, "v": json.dumps(vstats), "id": run_id},
+    )
+
+    await conn.execute(
+        text(
+            "insert into wololo_evals.leaderboard "
+            "(tenant_id, model, harness, skill_ref, composite_score, n_trials, "
+            " score_stddev, ci_low, ci_high, suite_version, rubric_version, run_id) "
+            "values (:t, :m, :h, :sk, :cs, :n, :sd, :cl, :ch, :sv, :rv, :r) "
+            "on conflict (tenant_id, model, harness, skill_ref, rubric_version, run_id) "
+            "do nothing"
+        ),
+        {
+            "t": tenant_id, "m": model, "h": runner.harness, "sk": cand.candidate_ref,
+            "cs": treatment_mean, "n": n_trials, "sd": vstats["stddev"],
+            "cl": vstats["ci_low"], "ch": vstats["ci_high"],
+            "sv": run.suite_version, "rv": run.rubric_version, "r": run_id,
+        },
+    )
+
+    await append_audit_event(conn, tenant_id, "worker", "run-completed", run_id)
+    record_metering(tenant_id, "run", 1, **{"metering.composite": treatment_mean,
+                                            "metering.uplift_pct": vstats["mean"]})
+    return {
+        "status": status,
+        "composite_score": treatment_mean,
+        "verdict_stats": vstats,
+        "run_id": run_id,
+    }
+
+
+class SkillBehaviourConfigError(Exception):
+    """A skill-behaviour candidate payload is missing the harness/fixture/skill
+    fields the run needs; the run errors rather than fabricating a trial."""
+
+
+async def _run_skill_behaviour(conn, run, cipher, call_model, k, exec_factory) -> dict:
+    """Paired v1-vs-v2 skill-upgrade A/B (SPEC M4): N paired baseline(v1)-vs-
+    treatment(v2) trials through the harness bridge, paired uplift statistics,
+    frozen composite, model+harness leaderboard row -- the same paired tail as
+    task-uplift.
+
+    The candidate payload carries the run plan: ``harness``, ``skill_slug``,
+    ``skill_files_baseline`` (v1) + ``skill_files_treatment`` (v2), an optional
+    ``model`` and ``judge_enabled`` flag, and ``task_fixture`` (with
+    ``expects_activation`` + ``declared_workflow`` driving the rule-based
+    activation/trace-conformance slots). When ``judge_enabled`` is False the
+    judge slot is skipped (verdict=skipped), its weight leaves the denominator,
+    and the run is flagged ``judge_disabled`` -- but it still produces a real
+    paired verdict off the three rule-based slots.
+    """
+    import asyncio
+    import statistics
+
+    from .. import stats as stats_mod
+    from ..harnesses import resolve_runner
+    from ..inspect_adapter import run_skill_behaviour
+    from ..suites.skill_behaviour.task import ARMS, SkillBehaviourFixture
+
+    run_id = str(run.id)
+    tenant_id = run.tenant_id
+    cand = (
+        await conn.execute(
+            text(
+                "select candidate_ref, payload_ciphertext, payload_sha256 "
+                "from wololo_evals.candidates where id = :id"
+            ),
+            {"id": run.candidate_id},
+        )
+    ).first()
+    payload = cipher.decrypt_payload(
+        tenant_id, cand.payload_ciphertext, cand.payload_sha256
+    )
+
+    async def _error_run(reason: str, *, audit: str | None = None) -> dict:
+        await conn.execute(
+            text(
+                "update wololo_evals.runs set status = 'errored', completed_at = now() "
+                "where id = :id"
+            ),
+            {"id": run_id},
+        )
+        if audit:
+            await append_audit_event(
+                conn, tenant_id, "worker", audit, run_id, decision="denied"
+            )
+        return {"status": "errored", "reason": reason, "run_id": run_id}
+
+    try:
+        harness = payload["harness"]
+        skill_slug = payload["skill_slug"]
+        skill_files_baseline = payload["skill_files_baseline"]
+        skill_files_treatment = payload["skill_files_treatment"]
+        judge_enabled = bool(payload.get("judge_enabled", True))
+        fx = payload["task_fixture"]
+        fixture = SkillBehaviourFixture(
+            fixture_id=fx["fixture_id"],
+            repo=fx["repo"],
+            ref=fx["ref"],
+            task_prompt=fx["task_prompt"],
+            acceptance_command=tuple(fx["acceptance_command"]),
+            expects_activation=bool(fx.get("expects_activation", True)),
+            declared_workflow=tuple(fx.get("declared_workflow", ())),
+            oracle_files=tuple(fx.get("oracle_files", ())),
+            max_turns=int(fx.get("max_turns", 20)),
+            wall_clock_cap_s=int(fx.get("wall_clock_cap_s", 900)),
+        )
+    except (KeyError, TypeError) as exc:
+        raise SkillBehaviourConfigError(
+            f"skill-behaviour candidate payload incomplete: {exc}"
+        ) from exc
+
+    runner = resolve_runner(harness, smoke=run.smoke)
+    n_trials = run.n_trials
+
+    outcome = await asyncio.to_thread(
+        run_skill_behaviour,
+        fixture, runner, n_trials, skill_slug,
+        skill_files_baseline, skill_files_treatment, call_model,
+        k=k, arms=ARMS, exec_factory=exec_factory, judge_enabled=judge_enabled,
+    )
+    if judge_enabled:
+        record_metering(tenant_id, "judge-samples", k * n_trials)
+
+    if outcome.status == "errored":
+        if outcome.error == "judge-integrity":
+            return await _error_run("judge-integrity", audit="judge-integrity-flagged")
+        return await _error_run(outcome.error or "harness execution errored")
+
+    by_arm: dict[str, list[dict]] = {arm: [] for arm in ARMS}
+    for tr in outcome.trials:
+        by_arm.setdefault(tr["arm"], []).append(tr)
+    for arm in ARMS:
+        if len(by_arm[arm]) < n_trials:
+            # An arm short of n_trials completed trials is 'errored', never a
+            # 'failed' verdict computed over a partial arm (SPEC S6.8).
+            return await _error_run(
+                f"arm {arm!r} produced {len(by_arm[arm])}/{n_trials} completed trials"
+            )
+
+    model = payload.get("model", "harness-default")
+    baseline = [t["composite"] for t in sorted(by_arm["baseline"], key=lambda t: t["trial_index"])]
+    treatment = [t["composite"] for t in sorted(by_arm["treatment"], key=lambda t: t["trial_index"])]
+
+    for arm in ARMS:
+        for tr in by_arm[arm]:
+            await conn.execute(
+                text(
+                    "insert into wololo_evals.trials "
+                    "(tenant_id, run_id, trial_index, arm, status, model, harness, "
+                    " composite, started_at, completed_at) "
+                    "values (:t,:r,:ti,:a,'completed',:m,:h,:c, now(), now())"
+                ),
+                {"t": tenant_id, "r": run_id, "ti": tr["trial_index"], "a": arm,
+                 "m": model, "h": runner.harness, "c": tr["composite"]},
+            )
+
+    diffs = stats_mod.paired_uplift_pcts(baseline, treatment)
+    vstats = stats_mod.verdict_stats(diffs)
+    vstats["uplift_pct"] = vstats["mean"]
+    # judge-disabled runs are non-authoritative for judge-weighted gating: the
+    # flag rides the verdict blob so every downstream consumer (gate, leaderboard
+    # presenter) can see the judge slot was skipped (weight left the denominator).
+    vstats["judge_disabled"] = not judge_enabled
+
+    tenant_row = (
+        await conn.execute(
+            text("select min_effect_pct from wololo_evals.tenants where tenant_id = :t"),
+            {"t": tenant_id},
+        )
+    ).first()
+    passed = stats_mod.task_uplift_passed(vstats, tenant_row.min_effect_pct)
+
+    # Aggregate per-dimension score rows = median across the treatment arm (the
+    # upgrade under evaluation). When the judge is disabled its dimension is
+    # simply absent from dimension_values, so it is never scored or weighted.
+    dims = list(outcome.trials[0]["dimension_values"])
+    rubric = suites_base.load_rubric("skill-behaviour")
     for dim in dims:
         median = statistics.median(t["dimension_values"][dim] for t in by_arm["treatment"])
         weight = rubric["dimensions"][dim]["weight"]

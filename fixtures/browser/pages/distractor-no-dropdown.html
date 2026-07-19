@@ -1,0 +1,56 @@
+<!doctype html>
+<!--
+  Fixture: DISTRACTOR. A plain content page with NO dropdown of any kind —
+  only headings, prose, a text input and a button. The dropdowns skill must
+  NOT activate here; a false activation fails activation_correct
+  (README §18.2 activation precision). Self-contained, no network.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Licensing FAQ</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 44rem;
+           color: #111; }
+    h2 { margin-top: 1.75rem; }
+    .faq-search { margin: 1.5rem 0; }
+    .faq-search input { font: inherit; padding: .4rem .6rem; width: 20rem; }
+    .faq-search button { font: inherit; padding: .4rem .9rem; }
+  </style>
+</head>
+<body>
+  <h1>Licensing FAQ</h1>
+  <p>Answers to common questions about how this project is licensed. There is
+     nothing to select on this page — it is reference reading only.</p>
+
+  <div class="faq-search">
+    <label for="faq-q">Search the FAQ</label><br />
+    <input id="faq-q" type="text" placeholder="e.g. commercial use" />
+    <button type="button" id="faq-search-btn">Search</button>
+  </div>
+
+  <h2>What licence is the open surface under?</h2>
+  <p>The engines, trace, and CLI directories are Apache-2.0. The fixture pages
+     and browser benchmark data ship under the same permissive terms.</p>
+
+  <h2>Can I use it commercially?</h2>
+  <p>Yes. Apache-2.0 permits commercial use, modification, and distribution,
+     provided the notice and licence text are retained.</p>
+
+  <h2>Why is the scoring core closed?</h2>
+  <p>The suites, judge, stats, and versioning engines remain proprietary while
+     their interfaces are still moving; only the outer surface is opened.</p>
+
+  <script>
+    // Purely cosmetic: the search button just echoes a status line. There is
+    // no dropdown, listbox, combobox, or <select> anywhere on this page.
+    const btn = document.getElementById('faq-search-btn');
+    const input = document.getElementById('faq-q');
+    btn.addEventListener('click', () => {
+      const q = input.value.trim();
+      btn.textContent = q ? 'Searched: ' + q : 'Search';
+    });
+  </script>
+</body>
+</html>

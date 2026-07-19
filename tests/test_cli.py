@@ -1,0 +1,362 @@
+"""The file-first CLI is the open producer surface: authoring (`cases compile`),
+planning (`matrix --dry-run`), injected-adapter execution, and the zero-spend
+`replay`. These tests pin the load-bearing invariants:
+
+* **§11.1 canonical compilation** — byte-stable `cases.jsonl` (header row,
+  §11.2 field order, path-set union, assertion attachment, distractor rule),
+  and `--check` that fails loudly on drift.
+* **§13 expansion** — `matrix --dry-run` yields the exact engine x model x
+  prompt/baseline x asset x case x seed count and writes nothing live.
+* **§16.1 score composition** — slot-weighted family scoring, judge-disabled
+  denominator exclusion, hard-gate zeroing.
+* **§15 artefact tree** — `matrix_summary.json` (provenance block),
+  `scorecard.json` v2.1.0 (`signals[]`), `events.jsonl` (header), driven
+  through an injected `EngineAdapter` + grader (no model spend, no DB).
+* **§14.4 replay** — re-scoring an archived run is byte-stable.
+
+Pure tests: no Postgres, file-scoped `tmp_path` fixtures, module-level fakes.
+"""
+from __future__ import annotations
+
+import io
+import json
+import pathlib
+from contextlib import redirect_stdout
+
+import pytest
+
+from wololo_evals.cli import bench as bench_mod
+from wololo_evals.cli import cases_compile
+from wololo_evals.cli import matrix as matrix_mod
+from wololo_evals.cli import replay as replay_mod
+from wololo_evals.cli.artefact_writer import compose_case, pass_at_k, pass_hat_k
+from wololo_evals.cli.config import load_matrix_config
+from wololo_evals.cli.main import main
+from wololo_evals.core import interfaces as ci
+
+
+# --------------------------------------------------------------------------
+# module-level fakes (reusable across tests, per test-architecture §5)
+# --------------------------------------------------------------------------
+class FakeAdapter:
+    """Deterministic engine stand-in: fixed cost/tokens, no subprocess."""
+
+    def __init__(self, engine_id: str = "claude", cost: float = 0.01) -> None:
+        self.engine_id = engine_id
+        self._cost = cost
+
+    def cli_version(self) -> str:
+        return "2.2.0"
+
+    def build_command(self, spec):  # noqa: ANN001
+        return ["true"]
+
+    def raw_event_path(self, spec) -> pathlib.Path:  # noqa: ANN001
+        return pathlib.Path(spec.cwd) / f"{self.engine_id}.raw.jsonl"
+
+    def run(self, spec):  # noqa: ANN001
+        return ci.RunResult(
+            run_id=spec.run_id, status="ok", artefact_dir=spec.cwd,
+            runtime_seconds=1.0, cost_usd=self._cost, tokens_in=10, tokens_out=20,
+        )
+
+
+def adapter_factory(cost: float = 0.01):
+    return lambda engine_id: FakeAdapter(engine_id, cost)
+
+
+def make_grader(c1_score: float = 1.0):
+    """Grader whose task-outcome signal makes `c1` pass and the distractor fail
+    unless told otherwise — deterministic so replay is byte-stable."""
+
+    def grader(spec, result, trace):  # noqa: ANN001
+        outcome = c1_score if spec.case.case_id == "c1" else 0.0
+        return [
+            ci.ScoredSignal("act", "gate", 1.0, 1.0, "pass", slot="activation_correct"),
+            ci.ScoredSignal(
+                "explains", "assertion", outcome, 1.0,
+                "pass" if outcome >= 0.5 else "fail", slot="task_outcome",
+            ),
+            ci.ScoredSignal("reads", "assertion", 1.0, 1.0, "pass", slot="trace_conformance"),
+            ci.ScoredSignal("judge", "judge", 0.8, 1.0, "pass", slot="llm_judge_overall"),
+        ]
+
+    return grader
+
+
+_CASES_TOML = """
+version = 2
+[defaults]
+assertions = ["explains"]
+[assertions]
+explains = "the answer explains the risk"
+reads = "trace:require_order(read:a, edit:a)"
+[path_sets]
+manifest = ["package.json", "package-lock.json"]
+[defaults.assertion_weights]
+explains = 1.0
+[[cases]]
+case_id = "c1"
+title = "one"
+expected_paths = ["SECURITY.md"]
+expected_path_refs = ["manifest"]
+assertions = ["explains", "reads"]
+[[cases]]
+case_id = "c2-distractor"
+role = "distractor"
+input_text = "unrelated"
+"""
+
+_MATRIX_TOML = """
+schema_version = "2.0.0"
+benchmark = "benchmarks/demo"
+output_dir = "out/demo"
+seeds = 2
+max_cost_usd = {max_cost}
+[engines.claude]
+version_range = ">=2.1,<3"
+[[models]]
+id = "claude-sonnet"
+engine = "claude"
+model = "claude-sonnet-4-6"
+[[prompts]]
+id = "stock"
+[[baselines]]
+id = "nofix"
+inline = "do nothing"
+"""
+
+
+def _make_project(tmp_path: pathlib.Path, *, evaluation_type: str = "skill_behaviour",
+                  max_cost: str = "25.0") -> pathlib.Path:
+    """Scaffold a compiled benchmark + matrix config under tmp_path; return the
+    matrix config path."""
+    bench_dir = tmp_path / "benchmarks" / "demo"
+    bench_dir.mkdir(parents=True)
+    (bench_dir / "benchmark.json").write_text(json.dumps({
+        "schema_version": "1.0.0", "id": "demo",
+        "evaluation_type": evaluation_type, "pass_threshold": 0.7,
+        "engines": ["claude", "codex"],
+    }))
+    (bench_dir / "cases.toml").write_text(_CASES_TOML)
+    (bench_dir / "cases.jsonl").write_text(cases_compile.compile(bench_dir / "cases.toml"))
+    mc = tmp_path / "matrix.toml"
+    mc.write_text(_MATRIX_TOML.format(max_cost=max_cost))
+    return mc
+
+
+# --------------------------------------------------------------------------
+# §11.1 cases compile
+# --------------------------------------------------------------------------
+def test_compile_is_canonical_with_path_union_and_attachment(tmp_path):
+    (tmp_path / "cases.toml").write_text(_CASES_TOML)
+    text = cases_compile.compile(tmp_path / "cases.toml")
+    lines = text.splitlines()
+    assert lines[0] == '{"schema_version":"2.0.0"}'  # header first
+    assert text.endswith("\n")  # trailing newline
+    c1 = json.loads(lines[1])
+    # path-set union: manifest expansion then case-level, deduped in order
+    assert c1["expected_paths"] == ["package.json", "package-lock.json", "SECURITY.md"]
+    # assertion attachment: both attached, weight from defaults, source tagged
+    assert [a["id"] for a in c1["assertions"]] == ["explains", "reads"]
+    assert c1["assertions"][0] == {
+        "id": "explains", "text": "the answer explains the risk",
+        "weight": 1.0, "source": "assertions",
+    }
+    # compact structural separators (§11.1): no space after field-delimiting comma
+    assert '","' in lines[1] and '", "' not in lines[1]
+
+
+def test_compile_distractor_rules(tmp_path):
+    # distractor auto-resolves to no_activation
+    (tmp_path / "cases.toml").write_text(_CASES_TOML)
+    rows = [json.loads(x) for x in cases_compile.compile(tmp_path / "cases.toml").splitlines()[1:]]
+    distractor = next(r for r in rows if r["role"] == "distractor")
+    assert distractor["expected_outcome"] == "no_activation"
+
+    # an explicit conflicting outcome is rejected
+    bad = '[[cases]]\ncase_id="d"\nrole="distractor"\nexpected_outcome="pass"\n'
+    (tmp_path / "bad.toml").write_text(bad)
+    with pytest.raises(cases_compile.CasesCompileError):
+        cases_compile.compile(tmp_path / "bad.toml")
+
+
+def test_compile_check_detects_drift(tmp_path):
+    toml = tmp_path / "cases.toml"
+    toml.write_text(_CASES_TOML)
+    jsonl = tmp_path / "cases.jsonl"
+    jsonl.write_text(cases_compile.compile(toml))
+    ok, _ = cases_compile.check(toml)
+    assert ok is True
+    # mutate on-disk -> drift
+    jsonl.write_text(jsonl.read_text() + '{"case_id":"stray"}\n')
+    ok, msg = cases_compile.check(toml)
+    assert ok is False and "stale" in msg
+
+
+def test_compile_check_via_main_exit_code(tmp_path):
+    toml = tmp_path / "cases.toml"
+    toml.write_text(_CASES_TOML)
+    (tmp_path / "cases.jsonl").write_text(cases_compile.compile(toml))
+    assert main(["cases", "compile", str(toml), "--check"]) == 0
+    (tmp_path / "cases.jsonl").write_text("tampered\n")
+    assert main(["cases", "compile", str(toml), "--check"]) == 1
+
+
+def test_compile_writes_jsonl_via_main(tmp_path):
+    toml = tmp_path / "cases.toml"
+    toml.write_text(_CASES_TOML)
+    out = tmp_path / "out.jsonl"
+    assert main(["cases", "compile", str(toml), "-o", str(out)]) == 0
+    assert out.read_text() == cases_compile.compile(toml)
+
+
+# --------------------------------------------------------------------------
+# §13 matrix expansion / dry-run
+# --------------------------------------------------------------------------
+def test_dry_run_expansion_count_and_no_writes(tmp_path):
+    mc = _make_project(tmp_path)
+    cfg = load_matrix_config(mc)
+    plan = matrix_mod.plan(cfg)
+    # 2 combos (treatment + baseline) x 2 cases x 2 seeds
+    assert len(plan.combos) == 2
+    assert plan.total_runs == 2 * 2 * 2
+    assert len(matrix_mod.expand(cfg)) == plan.total_runs
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = main(["matrix", "--config", str(mc), "--dry-run"])
+    assert rc == 0
+    assert "total runs: 8" in buf.getvalue()
+    # dry-run writes nothing
+    assert not (tmp_path / "out").exists()
+
+
+def test_expand_rejects_engine_not_in_benchmark(tmp_path):
+    mc = _make_project(tmp_path)
+    bj = tmp_path / "benchmarks" / "demo" / "benchmark.json"
+    data = json.loads(bj.read_text())
+    data["engines"] = ["codex"]  # claude no longer allowed
+    bj.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="not in benchmark"):
+        matrix_mod.expand(load_matrix_config(mc))
+
+
+# --------------------------------------------------------------------------
+# §16.1 score composition
+# --------------------------------------------------------------------------
+def test_compose_skill_behaviour_weights_and_judge_exclusion():
+    sigs = [
+        ci.ScoredSignal("a", "gate", 1.0, 1.0, "pass", slot="activation_correct"),
+        ci.ScoredSignal("t", "assertion", 0.5, 1.0, "pass", slot="task_outcome"),
+        ci.ScoredSignal("c", "assertion", 1.0, 1.0, "pass", slot="trace_conformance"),
+        ci.ScoredSignal("j", "judge", 0.0, 1.0, "skipped", slot="llm_judge_overall"),
+    ]
+    c = compose_case(sigs, "skill_behaviour", pass_threshold=0.7)
+    # judge weight (15) excluded: (25*1 + 40*0.5 + 20*1) / (25+40+20) = 65/85
+    assert c.score == pytest.approx(65 / 85)
+    assert c.judge_disabled is True
+    assert c.passed is True
+
+
+def test_compose_hard_gate_zeroes_score():
+    sigs = [
+        ci.ScoredSignal("t", "assertion", 1.0, 1.0, "pass", slot="task_outcome"),
+        ci.ScoredSignal("forbidden_paths", "safety", 0.0, 1.0, "fail", slot=None),
+    ]
+    c = compose_case(sigs, "skill_behaviour", pass_threshold=0.7)
+    assert c.hard_gate_failed is True
+    assert c.score == 0.0 and c.passed is False
+
+
+def test_compose_unscored_run_scores_zero():
+    sigs = [ci.ScoredSignal("t", "assertion", 1.0, 1.0, "pass", slot="task_outcome")]
+    c = compose_case(sigs, "skill_behaviour", pass_threshold=0.7, scored=False)
+    assert c.score == 0.0 and c.passed is False
+
+
+def test_pass_at_k_identities():
+    # k=1: pass@1 == pass^1 == observed pass rate; all-pass -> 1 for every k
+    assert pass_at_k(2, 3, 1) == pytest.approx(2 / 3)
+    assert pass_hat_k(2, 3, 1) == pytest.approx(2 / 3)
+    assert pass_at_k(3, 3, 3) == 1.0
+    assert pass_hat_k(3, 3, 3) == 1.0
+    assert pass_hat_k(2, 3, 3) == 0.0
+
+
+# --------------------------------------------------------------------------
+# §15 artefact tree (injected adapter + grader)
+# --------------------------------------------------------------------------
+def test_run_matrix_writes_artefact_tree(tmp_path):
+    cfg = load_matrix_config(_make_project(tmp_path))
+    md = matrix_mod.run_matrix(
+        cfg, adapter_factory(), make_grader(), timestamp="20260719T000000Z"
+    )
+    summary = json.loads((md / "matrix_summary.json").read_text())
+    assert summary["schema_version"] == "2.0.0"
+    # provenance block (§15.1)
+    prov = summary["provenance"]
+    assert {"harness_version", "engine_cli_versions", "judge", "repro_command"} <= prov.keys()
+    assert summary["engines"]["claude"] == "2.2.0"
+    assert summary["cumulative_spend_usd"] == pytest.approx(0.08)  # 2 combos*2 cases*2 seeds*0.01
+
+    # events.jsonl header (§15.2)
+    events = (md / "events.jsonl").read_text().splitlines()
+    assert json.loads(events[0]) == {"schema_version": "1.0.0"}
+    assert any(json.loads(e).get("event") == "run_finished" for e in events[1:])
+
+    # scorecard v2.1.0 with signals[] (§15.3)
+    sc = json.loads((md / summary["combos"][0]["scorecard_path"]).read_text())
+    assert sc["schema_version"] == "2.1.0"
+    case = next(c for c in sc["cases"] if c["case_id"] == "c1")
+    assert case["signals"], "signals[] must be populated"
+    assert {"evaluator_id", "kind", "score", "weight", "verdict", "slot"} <= case["signals"][0].keys()
+    assert set(sc["summary"]["pass_at_k"].keys()) == {"1", "2"}
+
+
+def test_bench_writes_single_scorecard(tmp_path):
+    cfg = load_matrix_config(_make_project(tmp_path))
+    out = tmp_path / "bench-out"
+    sc_path = bench_mod.run_bench(
+        cfg, adapter_factory(), make_grader(), timestamp="20260719T000000Z", out=out
+    )
+    assert sc_path == out / "scorecard.json"
+    sc = json.loads(sc_path.read_text())
+    assert sc["schema_version"] == "2.1.0"
+    assert sc["combo"]["role"] == "treatment"
+
+
+def test_cost_cap_marks_remaining_runs(tmp_path):
+    # cap below one combo's spend -> first run ok, rest cost_cap_hit, partial written
+    cfg = load_matrix_config(_make_project(tmp_path, max_cost="0.005"))
+    md = matrix_mod.run_matrix(
+        cfg, adapter_factory(0.01), make_grader(), timestamp="20260719T000000Z"
+    )
+    seed_files = list(md.rglob("seeds/*/cases/*.json"))
+    statuses = {json.loads(f.read_text())["status"] for f in seed_files}
+    assert "cost_cap_hit" in statuses
+    # partial artefacts (scorecards) still written
+    assert list(md.rglob("scorecard.json"))
+
+
+# --------------------------------------------------------------------------
+# §14.4 replay byte-stability
+# --------------------------------------------------------------------------
+def test_replay_is_byte_stable(tmp_path):
+    cfg = load_matrix_config(_make_project(tmp_path))
+    md = matrix_mod.run_matrix(
+        cfg, adapter_factory(), make_grader(), timestamp="20260719T000000Z"
+    )
+    scorecards = sorted(md.rglob("scorecard.json"))
+    before = {p: p.read_bytes() for p in scorecards}
+    replay_mod.replay(md)
+    after = {p: p.read_bytes() for p in scorecards}
+    assert before == after
+    # idempotent across a second replay
+    replay_mod.replay(md)
+    assert {p: p.read_bytes() for p in scorecards} == after
+
+
+def test_replay_missing_summary_fails_loud(tmp_path):
+    with pytest.raises(replay_mod.ReplayError):
+        replay_mod.replay(tmp_path)

@@ -1,0 +1,41 @@
+{
+  "schema_version": "2.1.0",
+  "case_id": "s-distractor",
+  "role": "distractor",
+  "expected_outcome": "no_activation",
+  "status": "ok",
+  "score": 1.0,
+  "pass_rate": 1.0,
+  "invalid_rate": 0.0,
+  "attempts": 2,
+  "seeds": 2,
+  "pass_at_k": {
+    "1": 1.0,
+    "2": 1.0
+  },
+  "pass_pow_k": {
+    "1": 1.0,
+    "2": 1.0
+  },
+  "signals": [
+    {
+      "evaluator_id": "used_skill",
+      "kind": "assertion",
+      "slot": "activation_correct",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "no skill_activated event: dropdowns stayed silent (correct)"
+    },
+    {
+      "evaluator_id": "answered_licence",
+      "kind": "judge",
+      "slot": "llm_judge_overall",
+      "score": 1.0,
+      "weight": 1.0,
+      "verdict": "pass",
+      "evidence": "answer states the open surface is Apache-2.0"
+    }
+  ],
+  "artefact_ref": "cases/s-distractor.json"
+}

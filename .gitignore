@@ -11,3 +11,7 @@ build/
 *.eval
 blobdata/
 pgdata/
+
+# agent scratch + local sync artifact
+.agents/
+uv.lock
