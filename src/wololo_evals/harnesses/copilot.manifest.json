@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "harness": "copilot",
+  "abiVersion": "1.0",
+  "stages": [
+    { "stage": "install", "live": true },
+    { "stage": "load-profile", "live": true },
+    { "stage": "pre-llm-context", "live": true },
+    { "stage": "post-llm-event", "live": false },
+    { "stage": "event-emit", "live": false },
+    { "stage": "collector-flush", "live": false },
+    { "stage": "runtime-smoke", "live": false }
+  ]
+}

@@ -40,6 +40,39 @@ _RUNNERS = {
             "--output", "json",
         ],
     },
+    # Engine-aligned runners (SPEC M2). Keyed by the engine id (claude/codex/
+    # copilot) so a live trial's raw stdout stream normalises through the
+    # matching trace/ normaliser. Each command is the CLI's real headless
+    # invocation emitting a line-delimited event stream; the model id and
+    # permission flags sit in extra_args (rendered only for a model-bound run).
+    "claude": {
+        "profile_env": "CLAUDE_CONFIG_DIR",
+        "skills_subdir": "skills",
+        "command": [
+            "claude", "-p", "{task_prompt}",
+            "--output-format", "stream-json", "--verbose",
+            "--max-turns", "{max_turns}",
+        ],
+        "extra_args": ["--model", "{model}", "--dangerously-skip-permissions"],
+    },
+    "codex": {
+        "profile_env": "CODEX_HOME",
+        "skills_subdir": "skills",
+        "command": [
+            "codex", "exec", "--json", "--skip-git-repo-check",
+            "{task_prompt}",
+        ],
+        "extra_args": ["--model", "{model}"],
+    },
+    "copilot": {
+        "profile_env": "XDG_CONFIG_HOME",
+        "skills_subdir": "copilot/skills",
+        "command": [
+            "copilot", "-p", "{task_prompt}",
+            "--log-level", "all",
+        ],
+        "extra_args": ["--model", "{model}", "--allow-all-tools"],
+    },
 }
 
 
@@ -55,12 +88,23 @@ class HarnessRunner:
     profile_env: str
     skills_subdir: str
     command: tuple[str, ...]
+    # The one per-engine seam (SPEC M2): model id + permission flags live here,
+    # rendered ONLY when a model is supplied so the base command stays a pure
+    # {task_prompt}/{max_turns} template. Empty for the wave-1 runners, so their
+    # rendered command is byte-identical to before.
+    extra_args: tuple[str, ...] = ()
 
-    def render_command(self, task_prompt: str, max_turns: int) -> list[str]:
-        return [
-            arg.format(task_prompt=task_prompt, max_turns=max_turns)
-            for arg in self.command
-        ]
+    def render_command(
+        self, task_prompt: str, max_turns: int, model: str | None = None
+    ) -> list[str]:
+        subs = {"task_prompt": task_prompt, "max_turns": max_turns, "model": model or ""}
+        argv = [arg.format(**subs) for arg in self.command]
+        # The model/permission tail is appended only for a real (model-bound)
+        # run; a model-less invocation renders the bare base command (the
+        # smoke shape). Runners with no extra_args are unaffected either way.
+        if model is not None and self.extra_args:
+            argv.extend(arg.format(**subs) for arg in self.extra_args)
+        return argv
 
 
 def load_manifest(harness: str) -> dict:
@@ -88,4 +132,5 @@ def resolve_runner(harness: str, *, smoke: bool = False) -> HarnessRunner:
         profile_env=runner_cfg["profile_env"],
         skills_subdir=runner_cfg["skills_subdir"],
         command=tuple(runner_cfg["command"]),
+        extra_args=tuple(runner_cfg.get("extra_args", ())),
     )

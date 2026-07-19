@@ -17,17 +17,24 @@ fake executor.
 from __future__ import annotations
 
 import json
+import os
+import pathlib
 import shlex
+import tempfile
 import time
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Mapping, Optional
+from typing import TYPE_CHECKING, Awaitable, Callable, Mapping, Optional
 
 from .harnesses import HarnessRunner
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, no runtime import
+    from .core.interfaces import TraceEvent
 
 WORKSPACE = "/workspace"
 PROFILE = "/profile"
 TRANSCRIPT = "/transcript"
 EVENTS_FILE = f"{TRANSCRIPT}/events.jsonl"
+TRACE_FILE = f"{WORKSPACE}/trace.jsonl"
 
 # (cmd, env, timeout_seconds) -> (returncode, stdout, stderr)
 SandboxExec = Callable[
@@ -64,6 +71,11 @@ class HarnessTrialResult:
     turns: int = 0
     wall_clock_s: float = 0.0
     harness_stdout: str = ""
+    # Normalised trajectory (SPEC M2): the engine's raw event stream mapped to
+    # TraceEvent[] via trace/. Empty for the wave-1 harnesses (no normaliser)
+    # and for any engine whose stream fails to parse — trace is an additive
+    # artefact, never a reason to error a trial.
+    trace: "list[TraceEvent]" = field(default_factory=list)
 
 
 async def _check(exec_fn: SandboxExec, cmd: list[str], timeout: int = 120,
@@ -78,6 +90,47 @@ def count_turns(events: list[dict]) -> int:
     """Turn count off the fleet-hooks event stream, identical for every
     harness: one turn per post-llm event."""
     return sum(1 for e in events if e.get("stage") == "post-llm-event")
+
+
+async def _normalise_and_persist_trace(
+    exec_fn: SandboxExec, engine_id: str, raw_stream: str
+) -> "list[TraceEvent]":
+    """Normalise the engine's raw event stream into ``TraceEvent[]`` via the
+    open ``trace/`` package and drop a canonical ``trace.jsonl`` beside the
+    other trial artefacts in the workspace (SPEC M2, open-surface §14.3/§15.2).
+
+    Best-effort by design: a harness with no registered normaliser (the wave-1
+    ``claude-code``/``hermes`` runners) or a stream that fails to parse yields
+    an empty trace and never errors the trial — normalisation strictness is
+    enforced where the trace is *consumed* for scoring, not in this bridge.
+    ``trace/`` imports only ``core.interfaces`` + stdlib, so this adds no DB or
+    vendor coupling; the import is lazy so trace-less trials never load it."""
+    from wololo_evals import trace as trace_pkg
+
+    if engine_id not in trace_pkg.NORMALISERS:
+        return []
+    tmp = tempfile.NamedTemporaryFile(
+        "w", suffix=".raw.jsonl", delete=False, encoding="utf-8"
+    )
+    try:
+        tmp.write(raw_stream)
+        tmp.close()
+        raw_path = pathlib.Path(tmp.name)
+        try:
+            events = trace_pkg.normalise_stream(engine_id, raw_path)
+        except trace_pkg.TraceParseError:
+            return []
+        # Canonicalise through trace/'s own writer so the persisted bytes match
+        # what the replay engine's regression tests expect, then materialise it
+        # inside the trial workspace via the exec seam (host dotfiles untouched).
+        trace_pkg.write_trace(raw_path, events, engine_id=engine_id)
+        content = raw_path.read_text(encoding="utf-8")
+    finally:
+        os.unlink(tmp.name)
+    await exec_fn(
+        ["sh", "-c", 'printf %s "$1" > "$2"', "-", content, TRACE_FILE], None, 60
+    )
+    return events
 
 
 async def run_harness_trial(
@@ -145,6 +198,12 @@ async def run_harness_trial(
                     events.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue  # a torn tail line never errors the trial
+
+    # 5. Trajectory (SPEC M2, additive): normalise the harness's raw event
+    #    stream into trace.jsonl alongside the diff. No-op for harnesses with
+    #    no trace/ normaliser, so wave-1 runners are wholly unaffected.
+    trace = await _normalise_and_persist_trace(exec_fn, cfg.runner.harness, out)
+
     return HarnessTrialResult(
         exit_code=code,
         diff=diff,
@@ -153,6 +212,7 @@ async def run_harness_trial(
         turns=count_turns(events),
         wall_clock_s=wall,
         harness_stdout=out,
+        trace=trace,
     )
 
 
