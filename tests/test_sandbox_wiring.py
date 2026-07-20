@@ -141,7 +141,7 @@ async def test_claude_trial_wiring(tmp_path):
     assert len(wiring.mounts) == 1
     mount = wiring.mounts[0]
     assert mount.host_path == str(cred)
-    assert mount.container_path == "/root/.claude/.credentials.json"
+    assert mount.container_path == "/profile/.credentials.json"
     assert mount.read_only is True
 
     # 4. fixture URL rewritten onto host.docker.internal + add-host value
@@ -189,7 +189,7 @@ async def test_codex_trial_wiring(tmp_path):
 
     assert len(wiring.mounts) == 1
     assert wiring.mounts[0].host_path == str(cred)
-    assert wiring.mounts[0].container_path == "/root/.codex/auth.json"
+    assert wiring.mounts[0].container_path == "/profile/auth.json"
     assert wiring.mounts[0].read_only is True
 
     assert wiring.fixture_url == (

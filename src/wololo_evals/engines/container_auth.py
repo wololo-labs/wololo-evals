@@ -11,9 +11,11 @@ one engine's auth into the container:
   the ``sandbox().exec`` call (e.g. ``CLAUDE_CODE_OAUTH_TOKEN``,
   ``OPENAI_API_KEY``);
 - **read-only bind-mounts** — host credential files mounted read-only into the
-  container at the path the CLI reads (e.g. ``~/.claude/.credentials.json`` ->
-  ``/root/.claude/.credentials.json``; ``~/.codex/auth.json`` ->
-  ``/root/.codex/auth.json``).
+  container at the path the CLI reads. The runner images point each CLI at the
+  in-sandbox ``/profile`` dir (``CLAUDE_CONFIG_DIR=/profile`` for claude,
+  ``CODEX_HOME=/profile`` for codex), so the mount destinations track that:
+  ``~/.claude/.credentials.json`` -> ``/profile/.credentials.json``;
+  ``~/.codex/auth.json`` -> ``/profile/auth.json``.
 
 Security contract (non-negotiable):
 
@@ -100,7 +102,7 @@ _AUTH_SPECS: Mapping[str, _EngineAuth] = {
         engine_id="claude",
         token_env_vars=("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"),
         credential_mounts=(
-            ("~/.claude/.credentials.json", "/root/.claude/.credentials.json"),
+            ("~/.claude/.credentials.json", "/profile/.credentials.json"),
         ),
         json_token_source=None,
         provision_hint=(
@@ -111,7 +113,7 @@ _AUTH_SPECS: Mapping[str, _EngineAuth] = {
     "codex": _EngineAuth(
         engine_id="codex",
         token_env_vars=("OPENAI_API_KEY", "CODEX_AUTH_TOKEN"),
-        credential_mounts=(("~/.codex/auth.json", "/root/.codex/auth.json"),),
+        credential_mounts=(("~/.codex/auth.json", "/profile/auth.json"),),
         json_token_source=_JsonTokenSource(
             env_var="OPENAI_API_KEY",
             path="~/.codex/auth.json",

@@ -11,6 +11,7 @@ worker calls them via ``asyncio.to_thread``.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import pathlib
 import tempfile
 from dataclasses import dataclass, field
@@ -25,6 +26,7 @@ from inspect_ai.util import sandbox
 
 from . import harnesses as harnesses_mod
 from . import judge as judge_mod
+from .engines import sandbox_compose
 from .engines.container_auth import (
     BindMount,
     ContainerAuthPlan,
@@ -297,6 +299,120 @@ def wire_container_trial(
     )
 
 
+def _resolve_execution(
+    stack: contextlib.ExitStack,
+    *,
+    container_wiring: Optional["ContainerTrialWiring"],
+    exec_factory: Optional[Callable[[], object]],
+    sandbox_type: str,
+):
+    """Resolve the ``(make_exec, sandbox_spec)`` a harness suite runs with, and
+    register any provisioning teardown on ``stack``.
+
+    Three mutually-exclusive modes cleanly resolve the historical
+    ``exec_factory``-vs-``sandbox`` exclusivity:
+
+    - ``container_wiring`` set -> the REAL run: PROVISION the per-engine runner
+      image via a rendered compose spec (image + read-only cred mounts +
+      ``host.docker.internal`` add-host + the non-secret fixture URL), and use
+      the wiring's ``exec_factory`` so auth VALUES + the fixture URL layer onto
+      every ``sandbox().exec`` at exec time (never on disk, never logged). This
+      is the fix for the wave-1 gap where ``sandbox_type="docker"`` provisioned
+      Inspect's GENERIC image with no image selection / mounts / add-host.
+    - ``exec_factory`` set -> the fake-exec unit path: NO Inspect sandbox is
+      provisioned; the injected seam stands in for ``sandbox().exec`` so the
+      whole bridge runs with no docker and no model.
+    - neither -> the pre-existing default: a bare ``sandbox_type`` sandbox,
+      behaviour unchanged for every existing caller/test.
+    """
+    if container_wiring is not None:
+        if exec_factory is not None:
+            raise ValueError(
+                "pass either container_wiring (real provisioned run) or "
+                "exec_factory (fake-exec unit path), not both"
+            )
+        compose_path = stack.enter_context(
+            sandbox_compose.sandbox_compose_file(container_wiring)
+        )
+        # ("docker", <compose path>) is Inspect's shorthand for
+        # SandboxEnvironmentSpec("docker", <path>); the rendered compose file
+        # selects the runner image and attaches the mounts + add-host.
+        return container_wiring.exec_factory, (sandbox_type, compose_path)
+    make_exec = exec_factory or _sandbox_exec
+    effective_sandbox = None if exec_factory is not None else sandbox_type
+    return make_exec, effective_sandbox
+
+
+def probe_container(
+    container_wiring: "ContainerTrialWiring",
+    cmd: Sequence[str],
+    *,
+    sandbox_type: str = "docker",
+    timeout: int = 120,
+) -> tuple[int, str, str]:
+    """Provision ``container_wiring``'s runner-image sandbox through Inspect and
+    run ONE non-model command inside it, returning ``(returncode, stdout,
+    stderr)``.
+
+    This is the offline proof that the real production provisioning path works:
+    Inspect accepts the rendered compose spec, brings up the pinned runner image
+    with the read-only credential mounts and ``host.docker.internal`` add-host,
+    and the command runs through the SAME ``sandbox().exec`` seam production
+    uses. Intended for ``['claude', '--version']`` / ``['codex', '--version']``
+    and other auth-free, model-free commands — it NEVER invokes a model. Raises
+    ``RuntimeError`` if provisioning/eval fails (e.g. docker unavailable).
+    """
+    @solver
+    def _probe_bridge():
+        async def solve(state: TaskState, generate: Generate) -> TaskState:
+            # The wiring's exec_factory layers auth + fixture env onto the real
+            # sandbox().exec; for a --version probe that env is simply unused.
+            exec_fn = container_wiring.exec_factory()
+            code, out, err = await exec_fn(list(cmd), {}, timeout)
+            state.metadata["probe"] = {"code": code, "out": out, "err": err}
+            return state
+
+        return solve
+
+    @scorer(metrics=[accuracy()])
+    def _probe_scorer():
+        async def score(state: TaskState, target: Target) -> Score:
+            probe = state.metadata["probe"]
+            return Score(value=1.0, metadata={"probe": probe})
+
+        return score
+
+    with contextlib.ExitStack() as stack:
+        _make_exec, effective_sandbox = _resolve_execution(
+            stack,
+            container_wiring=container_wiring,
+            exec_factory=None,
+            sandbox_type=sandbox_type,
+        )
+        log_dir = stack.enter_context(tempfile.TemporaryDirectory())
+        task = Task(
+            dataset=[Sample(input="probe", id="probe-0")],
+            solver=_probe_bridge(),
+            scorer=_probe_scorer(),
+            sandbox=effective_sandbox,
+        )
+        log = inspect_eval(
+            task, model=_NO_MODEL, log_dir=log_dir, display="none",
+            fail_on_error=False,
+        )[0]
+        # The eval log is loaded lazily from ``log_dir``; read everything BEFORE
+        # the ExitStack tears the temp dir (and the compose file) down.
+        if log.status != "success" or not log.samples:
+            raise RuntimeError(
+                f"container probe failed: {log.error or 'no samples'}"
+            )
+        sample = log.samples[0]
+        if sample.error is not None or not sample.scores:
+            raise RuntimeError(f"container probe errored: {sample.error}")
+        probe = next(iter(sample.scores.values())).metadata["probe"]
+        return probe["code"], probe["out"], probe["err"]
+
+
 def run_task_uplift(
     fixture: task_uplift_task.TaskFixture,
     runner: HarnessRunner,
@@ -309,6 +425,7 @@ def run_task_uplift(
     sandbox_type: str = "docker",
     arms: Sequence[str] = task_uplift_task.ARMS,
     exec_factory: Optional[Callable[[], "object"]] = None,
+    container_wiring: Optional["ContainerTrialWiring"] = None,
 ) -> SuiteOutcome:
     """One sample per (trial_index, arm); each sample runs the REAL harness
     CLI inside its own Inspect sandbox via the injected exec seam.
@@ -323,13 +440,32 @@ def run_task_uplift(
     acceptance test -> judge -> composite) is exercisable end to end with a
     fake executor on a machine with no docker daemon; production leaves it None
     and the real ``sandbox().exec`` drives a pinned per-harness container.
+
+    ``container_wiring`` is the REAL production path: a
+    :class:`ContainerTrialWiring` (from :func:`wire_container_trial`) whose
+    rendered compose spec PROVISIONS the per-engine runner image with the
+    read-only credential mounts and the ``host.docker.internal`` add-host, and
+    whose ``exec_factory`` layers the auth env + fixture URL onto every
+    ``sandbox().exec`` at exec time (never on disk, never logged). It is
+    mutually exclusive with ``exec_factory`` (the fake-exec unit path).
     """
     rubric = base.load_rubric("task-uplift")
     judged = base.judged_dimensions(rubric)
     rubric_text = base.rubric_judge_text(rubric)
-    # No Inspect sandbox is provisioned when the exec seam is injected.
-    make_exec = exec_factory or _sandbox_exec
-    effective_sandbox = None if exec_factory is not None else sandbox_type
+    # The exec seam is resolved eagerly (no disk state needed): the wiring's
+    # exec_factory for a real provisioned run, else the injected fake or the
+    # production ``sandbox().exec``. The Inspect sandbox spec (which needs the
+    # compose file to persist through the eval) is resolved in the eval block.
+    if container_wiring is not None and exec_factory is not None:
+        raise ValueError(
+            "pass either container_wiring (real provisioned run) or "
+            "exec_factory (fake-exec unit path), not both"
+        )
+    make_exec = (
+        container_wiring.exec_factory
+        if container_wiring is not None
+        else (exec_factory or _sandbox_exec)
+    )
 
     samples = [
         Sample(
@@ -416,16 +552,28 @@ def run_task_uplift(
 
         return score
 
-    task = Task(
-        dataset=samples,
-        solver=_harness_bridge(),
-        scorer=_uplift_scorer(),
-        sandbox=effective_sandbox,
-    )
-    with tempfile.TemporaryDirectory() as log_dir:
+    with contextlib.ExitStack() as stack:
+        # Resolve the Inspect sandbox spec: for a real wired run this renders +
+        # materialises the compose file that selects the runner image and
+        # attaches the ro cred mounts + add-host (registered on ``stack`` so it
+        # outlives the eval); the fake-exec path gets None; otherwise the bare
+        # ``sandbox_type``. ``make_exec`` was already bound eagerly above.
+        _, effective_sandbox = _resolve_execution(
+            stack,
+            container_wiring=container_wiring,
+            exec_factory=exec_factory,
+            sandbox_type=sandbox_type,
+        )
+        task = Task(
+            dataset=samples,
+            solver=_harness_bridge(),
+            scorer=_uplift_scorer(),
+            sandbox=effective_sandbox,
+        )
         # An injected exec seam bypasses the Inspect sandbox and may keep
         # per-trial state (e.g. a fake executor); force sequential samples so
         # that state is never corrupted by Inspect's default concurrency.
+        log_dir = stack.enter_context(tempfile.TemporaryDirectory())
         eval_kwargs = {"max_samples": 1} if exec_factory is not None else {}
         log = inspect_eval(
             task, model=_NO_MODEL, log_dir=log_dir, display="none",
@@ -488,6 +636,7 @@ def run_skill_behaviour(
     arms: Sequence[str] = skill_behaviour_task.ARMS,
     exec_factory: Optional[Callable[[], "object"]] = None,
     judge_enabled: bool = True,
+    container_wiring: Optional["ContainerTrialWiring"] = None,
 ) -> SuiteOutcome:
     """One sample per (trial_index, arm); each sample runs the REAL harness CLI
     inside its own Inspect sandbox via the injected exec seam. Unlike task-uplift
@@ -497,12 +646,26 @@ def run_skill_behaviour(
     persists. Per-trial composite maps onto the skill_behaviour family slots
     (activation_correct/task_outcome/trace_conformance rule-based; the one judge
     slot llm_judge_overall, skipped when ``judge_enabled`` is False).
+
+    ``container_wiring`` is the REAL production path (see :func:`run_task_uplift`):
+    its rendered compose spec provisions the per-engine runner image with the
+    read-only credential mounts + ``host.docker.internal`` add-host, and its
+    ``exec_factory`` layers auth env + fixture URL at exec time. Mutually
+    exclusive with the fake-exec ``exec_factory``.
     """
     rubric = base.load_rubric("skill-behaviour")
     judged = base.judged_dimensions(rubric)  # ["llm_judge_overall"]
     rubric_text = base.rubric_judge_text(rubric)
-    make_exec = exec_factory or _sandbox_exec
-    effective_sandbox = None if exec_factory is not None else sandbox_type
+    if container_wiring is not None and exec_factory is not None:
+        raise ValueError(
+            "pass either container_wiring (real provisioned run) or "
+            "exec_factory (fake-exec unit path), not both"
+        )
+    make_exec = (
+        container_wiring.exec_factory
+        if container_wiring is not None
+        else (exec_factory or _sandbox_exec)
+    )
     skill_by_arm = {"baseline": skill_files_baseline, "treatment": skill_files_treatment}
 
     samples = [
@@ -600,13 +763,23 @@ def run_skill_behaviour(
 
         return score
 
-    task = Task(
-        dataset=samples,
-        solver=_skill_bridge(),
-        scorer=_skill_scorer(),
-        sandbox=effective_sandbox,
-    )
-    with tempfile.TemporaryDirectory() as log_dir:
+    with contextlib.ExitStack() as stack:
+        # Same three-mode resolution as run_task_uplift: real compose spec (with
+        # the compose file kept alive on ``stack``), fake-exec None, or the bare
+        # sandbox_type. ``make_exec`` was already bound eagerly above.
+        _, effective_sandbox = _resolve_execution(
+            stack,
+            container_wiring=container_wiring,
+            exec_factory=exec_factory,
+            sandbox_type=sandbox_type,
+        )
+        task = Task(
+            dataset=samples,
+            solver=_skill_bridge(),
+            scorer=_skill_scorer(),
+            sandbox=effective_sandbox,
+        )
+        log_dir = stack.enter_context(tempfile.TemporaryDirectory())
         eval_kwargs = {"max_samples": 1} if exec_factory is not None else {}
         log = inspect_eval(
             task, model=_NO_MODEL, log_dir=log_dir, display="none",
