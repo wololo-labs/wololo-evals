@@ -92,7 +92,7 @@ def test_claude_credentials_file_mount(tmp_path):
     mount = plan.mounts[0]
     assert isinstance(mount, BindMount)
     assert mount.host_path == str(cred)
-    assert mount.container_path == "/root/.claude/.credentials.json"
+    assert mount.container_path == "/profile/.credentials.json"
     assert mount.read_only is True
 
 
@@ -126,7 +126,7 @@ def test_codex_auth_json_provides_mount_and_advertised_key(tmp_path):
     # the mount is present, read-only, at the CLI's expected path.
     assert len(plan.mounts) == 1
     assert plan.mounts[0].host_path == str(auth)
-    assert plan.mounts[0].container_path == "/root/.codex/auth.json"
+    assert plan.mounts[0].container_path == "/profile/auth.json"
     assert plan.mounts[0].read_only is True
     # OPENAI_API_KEY is advertised as a KEY (value stays lazy).
     assert "OPENAI_API_KEY" in plan.env_keys
