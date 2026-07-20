@@ -38,9 +38,10 @@ These need a human and are **not** performed anywhere in the wave. `build_plan`
 reports `satisfied=True` on this host because a *credential file* exists — but
 that is presence-optimism. On this host `resolve_exec_env` returns **no usable
 API-key env** for either engine (both logins are ChatGPT/OAuth, not API keys),
-and the images set `CLAUDE_CONFIG_DIR` / `CODEX_HOME` to `/profile` while the
-`container_auth` mounts target `/root/.claude` / `/root/.codex` — a
-location mismatch. So you must provision a working auth path first:
+The images set `CLAUDE_CONFIG_DIR` / `CODEX_HOME` to `/profile`, and
+`container_auth` now mounts credentials to `/profile/.credentials.json` /
+`/profile/auth.json` to match — so a mounted credential lands where the CLI
+reads it. You still provision a working auth path first:
 
 ### 2a. Claude auth — pick ONE
 
@@ -51,10 +52,11 @@ location mismatch. So you must provision a working auth path first:
   Then the smoke passes `-e CLAUDE_CODE_OAUTH_TOKEN` (docker forwards the value
   from your env; it never appears on the command line or in logs).
 
-- **Alternative (mount the credential where the CLI actually reads it):** the
-  CLI reads `$CLAUDE_CONFIG_DIR/.credentials.json`, and the image sets
-  `CLAUDE_CONFIG_DIR=/profile`, so mount to `/profile`, **not** the
-  `container_auth` default of `/root/.claude`:
+- **Alternative (mount the credential):** the CLI reads
+  `$CLAUDE_CONFIG_DIR/.credentials.json` and the image sets
+  `CLAUDE_CONFIG_DIR=/profile`; `container_auth` now mounts to `/profile`
+  to match, so the production path handles this for you. For a manual
+  `docker run` the mount is:
   ```bash
   # in the docker run below, use:
   -v "$HOME/.claude/.credentials.json:/profile/.credentials.json:ro"
@@ -249,15 +251,15 @@ code 0 means the harness loop completed — it does **not** assert the edit is
 correct (correctness is scored separately by the acceptance test, not part of
 the smoke).
 
-> **Honest caveat — `events.jsonl` is a fleet-hooks deliverable, not the CLI's.**
-> The runner images ship only the vanilla `claude` / `codex` CLI; the
-> `post-llm-event` JSONL stream is emitted by the fleet-hooks integration behind
-> each harness's manifest liveness claim, which is **out of this repo's scope**
-> (`docs/INTEGRATION-DEBT.md`). If step 4.2 prints `0` on the live smoke, that is
-> the expected signal that fleet-hooks event emission is not yet wired for these
-> images — the auth + model-turn + git-diff half of the plumbing is still proven,
-> and the turn-count seam is the known remaining integration debt to close before
-> a verdict-bearing run. Record the result either way.
+> **`events.jsonl` is now emitted by the runner entrypoints.** Each image's
+> entrypoint transforms the CLI's own event stream (claude `stream-json`
+> `assistant` events; codex `exec --json` `item.completed` / `agent_message`)
+> into `post-llm-event` JSONL lines at `$WOLOLO_TRANSCRIPT_DIR/events.jsonl`,
+> so `count_turns` sees real turns. This is proven offline against canned
+> event streams (`tests/test_events_emission.py`); the live smoke confirms the
+> real CLIs still emit those tags. If step 4.2 prints `0`, it means a CLI
+> changed its event-stream shape — treat that as a seam to re-align, not an
+> expected result. Record the result either way.
 
 ---
 
