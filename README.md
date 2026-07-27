@@ -288,5 +288,6 @@ executed commercial agreement.
 
 These subtrees carry their own Apache-2.0 `LICENSE` file and are published open:
 `specs/eval-candidate/`, `specs/eval-result/`, `src/wololo_evals/cli/`,
-`src/wololo_evals/trace/`, `src/wololo_evals/engines/`, `fixtures/browser/` and
-`examples/runs/dropdowns-synthetic/`.
+`src/wololo_evals/trace/`, `src/wololo_evals/engines/`,
+`benchmarks/dropdowns-skill/`, `fixtures/browser/`, `fixtures/synthetic-skill/`
+and `examples/runs/dropdowns-synthetic/`.
