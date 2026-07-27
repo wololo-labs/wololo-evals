@@ -1,0 +1,111 @@
+name: Approval Gate
+
+# Reports a failing check on any pull request that has not been approved by the
+# repository owner. GitHub Free cannot apply branch protection to private repos,
+# so this check cannot physically block a merge, it makes an unapproved merge
+# loud instead of silent. See CONTRIBUTING.md.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: approval-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  owner-approval:
+    name: Owner approval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for owner approval
+        uses: actions/github-script@v7
+        env:
+          OWNER_LOGIN: stevengonsalvez
+        with:
+          script: |
+            const owner = process.env.OWNER_LOGIN;
+            const pr = context.payload.pull_request;
+            const marker = '<!-- approval-gate -->';
+
+            if (pr.draft) {
+              core.notice('Pull request is a draft, approval gate skipped.');
+              return;
+            }
+
+            // GitHub does not allow self-approval, so a PR opened by the owner
+            // is treated as owner-blessed on authorship alone.
+            const selfAuthored = pr.user.login === owner;
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+
+            // Only APPROVED / CHANGES_REQUESTED / DISMISSED change standing.
+            // A plain comment review does not, so it must not overwrite an
+            // earlier approval.
+            const decisive = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED']);
+            let ownerState = null;
+            for (const review of reviews) {
+              if (review.user?.login !== owner) continue;
+              if (!decisive.has(review.state)) continue;
+              ownerState = review.state;
+            }
+
+            const approved = selfAuthored || ownerState === 'APPROVED';
+
+            const body = approved
+              ? `${marker}\n✅ **Approval gate green.** ` +
+                (selfAuthored
+                  ? `Authored by @${owner}, which counts as owner approval.`
+                  : `Approved by @${owner}.`)
+              : `${marker}\n🚫 **Approval gate red, do not merge.**\n\n` +
+                `This pull request needs an approving review from @${owner}` +
+                (ownerState === 'CHANGES_REQUESTED'
+                  ? `, who has requested changes.`
+                  : ownerState === 'DISMISSED'
+                    ? `, whose previous approval was dismissed.`
+                    : `.`) +
+                `\n\nThis organisation is on GitHub Free, so branch protection ` +
+                `cannot block the merge button on a private repository. The ` +
+                `rule is a convention and it is binding, see ` +
+                `[CONTRIBUTING.md](../blob/HEAD/CONTRIBUTING.md).`;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              per_page: 100,
+            });
+            const existing = comments.find(
+              (c) => c.user?.type === 'Bot' && c.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body,
+              });
+            }
+
+            if (!approved) {
+              core.setFailed(`Awaiting approving review from @${owner}.`);
+            }
