@@ -1,0 +1,9 @@
+# Every path in this repository is owned by @stevengonsalvez.
+# GitHub requests their review automatically on every pull request.
+#
+# Enforcement note: this org is on GitHub Free, which cannot apply branch
+# protection to private repositories, so "require review from CODEOWNERS"
+# cannot be turned on. See CONTRIBUTING.md: the approval requirement is a
+# binding convention, backed by the Approval Gate workflow.
+
+* @stevengonsalvez
