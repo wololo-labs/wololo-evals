@@ -109,3 +109,65 @@ jobs:
             if (!approved) {
               core.setFailed(`Awaiting approving review from @${owner}.`);
             }
+
+  signed-commits:
+    name: Signed commits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every commit in this pull request is GPG signed
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const marker = '<!-- signed-commits -->';
+
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+
+            const unsigned = commits.filter((c) => !c.commit.verification?.verified);
+
+            const body = unsigned.length === 0
+              ? `${marker}\n✅ **All ${commits.length} commit(s) signed and verified.**`
+              : `${marker}\n🚫 **Unsigned commits, do not merge.**\n\n` +
+                `${unsigned.length} of ${commits.length} commit(s) are not verified:\n\n` +
+                unsigned
+                  .map((c) => `- \`${c.sha.slice(0, 7)}\` ${c.commit.message.split('\n')[0]} ` +
+                              `(${c.commit.verification?.reason || 'unknown'})`)
+                  .join('\n') +
+                `\n\nSign them with \`git commit -S\` (or rebase with ` +
+                `\`git rebase --exec 'git commit --amend --no-edit -S' <base>\`) and force-push ` +
+                `this branch. See [CONTRIBUTING.md](../blob/HEAD/CONTRIBUTING.md).`;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              per_page: 100,
+            });
+            const existing = comments.find(
+              (c) => c.user?.type === 'Bot' && c.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else if (unsigned.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body,
+              });
+            }
+
+            if (unsigned.length > 0) {
+              core.setFailed(`${unsigned.length} unsigned commit(s) in this pull request.`);
+            }
