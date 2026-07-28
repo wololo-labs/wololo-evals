@@ -1,0 +1,64 @@
+name: CI
+
+# Builds the package and runs the real pytest suite. The suite does NOT use a
+# service container: tests/conftest.py starts its own throwaway PostgreSQL
+# cluster from local binaries (initdb/postgres on PATH or under
+# /usr/lib/postgresql/*/bin) over a unix socket, and applies
+# src/wololo_evals/migrations/*.sql to it, so all this job has to guarantee is
+# that a Postgres server package is installed. Compose-marked trials skip
+# loudly on their own (they need WOLOLO_EVALS_COMPOSE_TRIAL plus a model API
+# key); everything else runs for real.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Ensure PostgreSQL server binaries are present
+        run: |
+          set -euo pipefail
+          if ! ls /usr/lib/postgresql/*/bin/initdb >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends postgresql
+          fi
+          pgbin="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)"
+          echo "$pgbin" >> "$GITHUB_PATH"
+          "$pgbin/initdb" --version
+          "$pgbin/postgres" --version
+
+      - name: Install the package with its dev extras
+        run: uv pip install --system -e '.[dev]'
+
+      - name: Build the distribution
+        run: uv build
+
+      - name: Run the test suite
+        run: pytest -q -rs --durations=10
