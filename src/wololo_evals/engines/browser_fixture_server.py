@@ -9,8 +9,13 @@ convenience that returns ``None`` when no Chromium binary is on ``PATH``.
 
 Design (matches the engines pillar: stdlib only, no vendor SDKs):
 
-- Binds ``127.0.0.1:0`` — loopback only, kernel-assigned free port, so any
-  number of these can run concurrently (each parallel trial gets its own port).
+- Binds ``0.0.0.0:0``: kernel-assigned free port, so any number of these can run
+  concurrently (each parallel trial gets its own port). All interfaces, not just
+  loopback, because a container reaches this server over the Docker gateway
+  alias ``host.docker.internal``. On Linux that alias resolves to the bridge
+  gateway address, and a socket bound to ``127.0.0.1`` refuses connections
+  arriving there. ``base_url`` still advertises loopback for host-side callers;
+  ``inspect_adapter.container_fixture_url`` rewrites it for container callers.
 - ``ThreadingHTTPServer`` on a daemon thread; the context-manager stops it on
   exit. ``srv.base_url`` is the root to fetch pages from.
 - Serving is pinned to the pages directory via ``SimpleHTTPRequestHandler``'s
@@ -88,8 +93,10 @@ class BrowserFixtureServer:
         if self._httpd is not None:
             return self
         handler = functools.partial(_QuietHandler, directory=str(self._pages_dir))
-        # ("127.0.0.1", 0): loopback only + kernel-assigned free port.
-        self._httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        # ("0.0.0.0", 0): all interfaces + kernel-assigned free port. Must not
+        # be loopback: containers reach this over the Docker bridge gateway.
+        # Serving stays confined to the pages directory by translate_path.
+        self._httpd = http.server.ThreadingHTTPServer(("0.0.0.0", 0), handler)
         self._thread = threading.Thread(
             target=self._httpd.serve_forever, name="browser-fixture-server", daemon=True
         )
