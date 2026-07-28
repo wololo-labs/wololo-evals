@@ -43,6 +43,17 @@ jobs:
             // is treated as owner-blessed on authorship alone.
             const selfAuthored = pr.user.login === owner;
 
+            // Dependency bots (Dependabot, Renovate) open mechanical version
+            // bumps continuously. Gating those on a human review means the
+            // repository can never be green, so they are exempt here. They are
+            // NOT exempt from the Signed commits check or from CI, which are
+            // what actually establish that a bump is safe to take.
+            const botAuthored = pr.user.type === 'Bot';
+            if (botAuthored) {
+              core.notice(`Opened by bot ${pr.user.login}, owner approval not required.`);
+              return;
+            }
+
             const reviews = await github.paginate(github.rest.pulls.listReviews, {
               owner: context.repo.owner,
               repo: context.repo.repo,
