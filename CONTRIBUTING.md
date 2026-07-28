@@ -31,10 +31,21 @@ changes authored by agents.
 ### A note on enforcement
 
 This organisation runs on GitHub Free, which cannot apply branch protection or
-rulesets to private repositories. The `Approval Gate` workflow reports a failing
-check and comments on any PR lacking @stevengonsalvez's approval, and CODEOWNERS
-requests their review automatically, but GitHub will not physically block a
-merge or a direct push to `main`.
+rulesets to private repositories, so neither "require a review" nor "require
+signed commits" can be switched on. Two workflow checks stand in for them:
+
+| Check | Reports red when |
+|---|---|
+| `Owner approval` | no approving review from @stevengonsalvez |
+| `Signed commits` | any commit in the PR is not a verified signature |
+
+CODEOWNERS also requests @stevengonsalvez's review automatically. None of this
+physically blocks a merge or a direct push to `main`.
+
+Note the difference in strength between the two checks. `Signed commits` tests a
+cryptographic property, so it cannot be talked around. `Owner approval` tests an
+identity claim, and anyone acting with the owner's credentials satisfies it
+trivially, so treat it as a reminder rather than a control.
 
 **The gate is therefore a convention, and the convention is binding.** Treat a
 red Approval Gate as a hard stop. If you find a commit that reached `main`
