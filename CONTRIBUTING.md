@@ -39,6 +39,12 @@ signed commits" can be switched on. Two workflow checks stand in for them:
 | `Owner approval` | no approving review from @stevengonsalvez |
 | `Signed commits` | any commit in the PR is not a verified signature |
 
+Dependency bots (Dependabot, Renovate) are exempt from `Owner approval`. They
+open mechanical version bumps continuously, and gating those on a human review
+means the repository can never be green. They are **not** exempt from
+`Signed commits` or from CI, which are what actually establish that a bump is
+safe to take.
+
 CODEOWNERS also requests @stevengonsalvez's review automatically. None of this
 physically blocks a merge or a direct push to `main`.
 
