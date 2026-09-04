@@ -11,7 +11,7 @@ Gate fails (non-zero exit) when any of:
 * the paired-bootstrap 95% CI **upper** bound of the benchmark-score delta is
   below ``-max_regression`` (a significant regression against the
   tolerance-shifted null, ``--max-regression`` default 0);
-* any case newly trips a hard gate (§16.1) — regardless of significance;
+* any case newly trips a hard gate (§16.1), regardless of significance;
 * a signal named by ``--signal-guard`` scored lower than it did on the
   baseline. A composite benchmark score can improve while one measure that
   matters slips underneath it, so a guard lets CI pin an individual signal

@@ -1,15 +1,15 @@
 """The production grader is the module that decides what a run scored, so its
 dispatch table is the load-bearing invariant of the whole gate:
 
-* **dispatch by kind** — a ``trace:`` assertion reaches the trajectory engine,
+* **dispatch by kind**: a ``trace:`` assertion reaches the trajectory engine,
   a ``code:`` assertion reaches the acceptance runner, and a plain-text
   assertion reaches the judge; each emits a ``ScoredSignal`` on its §16.1 slot;
-* **live-shaped runs score above zero** — the whole point of replacing the
+* **live-shaped runs score above zero**: the whole point of replacing the
   scoreless default, and a failing assertion still scores that case zero;
-* **activation inversion** — on a distractor, staying silent is the pass;
-* **fail loudly** — a malformed assertion is ``evaluator_error``, never a
+* **activation inversion**: on a distractor, staying silent is the pass;
+* **fail loudly**: a malformed assertion is ``evaluator_error``, never a
   silent zero that reads as a bad candidate;
-* **sandboxing** — a ``code:`` expression cannot reach past its namespace.
+* **sandboxing**: a ``code:`` expression cannot reach past its namespace.
 
 Pure: module-level fakes, ``tmp_path`` fixtures, no Postgres, no engine
 subprocess, no network, no model.

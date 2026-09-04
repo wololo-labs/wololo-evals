@@ -1,5 +1,5 @@
 """The two mechanical QE scorers, run against the committed quoting-service
-fixture — the same fixture the QE benchmark grades, so these tests prove the
+fixture, the same one the QE benchmark grades, so these tests prove the
 numbers the gate reports are computed, not recorded.
 
 * the mutation scorer really mutates and really runs the tests (marked

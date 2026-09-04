@@ -190,7 +190,7 @@ def parse_code_assertion(text: str) -> ast.Expression:
     """Parse and validate ``code:<expr>`` into a checked AST.
 
     Raises :class:`CodeAssertionError` on a syntax error, a disallowed node
-    type, or a private/dunder name — the three ways an expression could reach
+    type, or a private/dunder name: the three ways an expression could reach
     past the evaluation namespace.
     """
     body = text.strip()
