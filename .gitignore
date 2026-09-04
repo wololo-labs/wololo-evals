@@ -16,3 +16,4 @@ pgdata/
 .agents/
 uv.lock
 logs/
+examples/runs/qe-quoting/out/
