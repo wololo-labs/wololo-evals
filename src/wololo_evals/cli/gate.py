@@ -6,12 +6,21 @@ returns a significance-gated regression verdict (README §16.4). The statistical
 core lives in :mod:`wololo_evals.core.ab`; this module is the file-first reader
 and presenter around it.
 
-Gate fails (non-zero exit) when either:
+Gate fails (non-zero exit) when any of:
 
 * the paired-bootstrap 95% CI **upper** bound of the benchmark-score delta is
   below ``-max_regression`` (a significant regression against the
-  tolerance-shifted null, ``--max-regression`` default 0), or
-* any case newly trips a hard gate (§16.1) — regardless of significance.
+  tolerance-shifted null, ``--max-regression`` default 0);
+* any case newly trips a hard gate (§16.1) — regardless of significance;
+* a signal named by ``--signal-guard`` scored lower than it did on the
+  baseline. A composite benchmark score can improve while one measure that
+  matters slips underneath it, so a guard lets CI pin an individual signal
+  (``--signal-guard qe_flake_resistance``) without turning every signal into a
+  gate.
+
+Every signal present in both runs is reported with its baseline mean, candidate
+mean and delta, whether or not it is guarded: a gate that only prints one number
+cannot be argued with, and the point of the mechanical signals is that they can.
 
 Two refusals guard the inputs (also non-zero exit, but distinct from a
 regression): a run flagged ``judge_disabled`` is rejected outright, and a
@@ -36,6 +45,7 @@ from ..core import interfaces as ci
 __all__ = [
     "GateError",
     "GateVerdict",
+    "SignalDelta",
     "evaluate",
     "add_arguments",
     "run",
@@ -47,6 +57,9 @@ _EXIT_REGRESSION = 1
 _EXIT_REFUSED = 2
 
 _CALIBRATION_SUBDIR = ("labels", "calibration")
+
+#: Float slack below which a signal delta is noise, not a regression.
+_SIGNAL_EPSILON = 1e-9
 
 
 class GateError(ValueError):
@@ -74,6 +87,46 @@ def _case_hard_failed(signals: Sequence[Mapping[str, object]], hard: frozenset[s
 
 def _case_has_active_judge(signals: Sequence[Mapping[str, object]]) -> bool:
     return any(s.get("kind") == "judge" and s.get("verdict") != "skipped" for s in signals)
+
+
+@dataclass(frozen=True)
+class SignalDelta:
+    """One evaluator's mean score in each run, and the gap between them.
+
+    Means are over every (combo, case, seed) row that emitted the signal, so a
+    signal a case did not emit never counts as a zero against it.
+    """
+
+    evaluator_id: str
+    kind: str
+    slot: Optional[str]
+    baseline_mean: float
+    candidate_mean: float
+    baseline_n: int
+    candidate_n: int
+    guarded: bool = False
+
+    @property
+    def delta(self) -> float:
+        return self.candidate_mean - self.baseline_mean
+
+    @property
+    def regressed(self) -> bool:
+        return self.delta < -_SIGNAL_EPSILON
+
+    def as_json(self) -> dict:
+        return {
+            "evaluator_id": self.evaluator_id,
+            "kind": self.kind,
+            "slot": self.slot,
+            "baseline_mean": self.baseline_mean,
+            "candidate_mean": self.candidate_mean,
+            "delta": self.delta,
+            "baseline_n": self.baseline_n,
+            "candidate_n": self.candidate_n,
+            "guarded": self.guarded,
+            "regressed": self.regressed,
+        }
 
 
 @dataclass(frozen=True)
@@ -159,6 +212,54 @@ def _case_rows(sc: Mapping[str, object]) -> dict[str, Mapping[str, object]]:
     return {str(c["case_id"]): c for c in sc.get("cases", [])}
 
 
+def _signal_means(run: _RunView) -> dict[str, tuple[str, Optional[str], float, int]]:
+    """``evaluator_id -> (kind, slot, mean score, n)`` across a whole run.
+
+    ``skipped`` rows are excluded from the mean: a judge that did not run is
+    not a judge that scored zero, and averaging it in would make the disabled
+    path look like a regression against an enabled one.
+    """
+    totals: dict[str, list[float]] = {}
+    meta: dict[str, tuple[str, Optional[str]]] = {}
+    for combo in run.combos:
+        for case in combo.scorecard.get("cases", []):
+            for signal in case.get("signals", []):
+                if signal.get("verdict") == "skipped":
+                    continue
+                sid = str(signal.get("evaluator_id"))
+                totals.setdefault(sid, []).append(float(signal.get("score", 0.0)))
+                meta.setdefault(sid, (str(signal.get("kind", "")), signal.get("slot")))
+    return {
+        sid: (meta[sid][0], meta[sid][1], sum(scores) / len(scores), len(scores))
+        for sid, scores in totals.items()
+        if scores
+    }
+
+
+def _signal_deltas(
+    run: _RunView, base: _RunView, guards: Sequence[str]
+) -> list[SignalDelta]:
+    """Pair every signal that both runs emitted. A signal only one run emitted
+    is left out: there is no comparison to make, and inventing a zero for the
+    missing side would report a regression that did not happen."""
+    guarded = set(guards)
+    candidate = _signal_means(run)
+    baseline = _signal_means(base)
+    return [
+        SignalDelta(
+            evaluator_id=sid,
+            kind=candidate[sid][0],
+            slot=candidate[sid][1],
+            baseline_mean=baseline[sid][2],
+            candidate_mean=candidate[sid][2],
+            baseline_n=baseline[sid][3],
+            candidate_n=candidate[sid][3],
+            guarded=sid in guarded,
+        )
+        for sid in sorted(set(candidate) & set(baseline))
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Judge calibration lookup (§17): the newest calibration record for a benchmark
 # ---------------------------------------------------------------------------
@@ -225,6 +326,8 @@ class GateVerdict:
     quarantined_cases: Sequence[str]
     unmatched_cases: Sequence[str]
     judge: Mapping[str, object]
+    signal_deltas: Sequence[SignalDelta] = ()
+    guarded_regressions: Sequence[str] = ()
 
     @property
     def exit_code(self) -> int:
@@ -249,6 +352,8 @@ class GateVerdict:
             "quarantined_cases": list(self.quarantined_cases),
             "unmatched_cases": list(self.unmatched_cases),
             "judge": dict(self.judge),
+            "signals": [d.as_json() for d in self.signal_deltas],
+            "guarded_regressions": list(self.guarded_regressions),
         }
         if v is not None:
             payload["stats"] = {
@@ -312,6 +417,22 @@ class GateVerdict:
                     "",
                     *(f"- `{cid}`" for cid in self.quarantined_cases),
                 ]
+        if self.signal_deltas:
+            lines += [
+                "",
+                "## Signals (mean score per evaluator)",
+                "",
+                "| signal | slot | baseline | candidate | delta | |",
+                "| --- | --- | ---: | ---: | ---: | --- |",
+            ]
+            for d in self.signal_deltas:
+                marker = "REGRESSED" if d.regressed else ""
+                if d.guarded:
+                    marker = ("GUARDED " + marker).strip()
+                lines.append(
+                    f"| `{d.evaluator_id}` | {d.slot or '-'} | {d.baseline_mean:.4f} "
+                    f"| {d.candidate_mean:.4f} | {d.delta:+.4f} | {marker} |"
+                )
         judge = self.judge
         lines += [
             "",
@@ -361,6 +482,7 @@ def evaluate(
     benchmark_dir: Optional[str | pathlib.Path] = None,
     golden_agreement: Optional[float] = None,
     judge_agreement_min: float = 0.7,
+    signal_guards: Sequence[str] = (),
 ) -> GateVerdict:
     """Produce the §16.4 gate verdict comparing ``run_dir`` against ``baseline_dir``.
 
@@ -466,9 +588,25 @@ def evaluate(
         confidence=confidence,
         seed=seed,
     )
-    verdict = "regression" if ab_verdict.regressed else "pass"
+    deltas = _signal_deltas(run, base, signal_guards)
+    guarded_regressions = tuple(
+        d.evaluator_id for d in deltas if d.guarded and d.regressed
+    )
+    missing_guards = tuple(
+        g for g in signal_guards
+        if g not in {d.evaluator_id for d in deltas}
+    )
+    if missing_guards:
+        return _refused(
+            run_p, base_p, run, max_regression,
+            f"guarded signal(s) {list(missing_guards)} are not present in both "
+            f"runs; refusing to report a guard that measured nothing",
+            judge_info,
+        )
+
+    verdict = "regression" if (ab_verdict.regressed or guarded_regressions) else "pass"
     reason = ""
-    if ab_verdict.regressed:
+    if verdict == "regression":
         parts = []
         if ab_verdict.significant_regression:
             parts.append(
@@ -477,6 +615,10 @@ def evaluate(
         if ab_verdict.newly_failing_hard_gates:
             parts.append(
                 f"{len(ab_verdict.newly_failing_hard_gates)} newly failing hard gate(s)"
+            )
+        if guarded_regressions:
+            parts.append(
+                "guarded signal(s) regressed: " + ", ".join(guarded_regressions)
             )
         reason = "regression: " + "; ".join(parts)
 
@@ -493,6 +635,8 @@ def evaluate(
         quarantined_cases=tuple(quarantined),
         unmatched_cases=tuple(unmatched),
         judge=judge_info,
+        signal_deltas=tuple(deltas),
+        guarded_regressions=guarded_regressions,
     )
 
 
@@ -515,6 +659,14 @@ def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
         help="inject judge κ directly (skip the calibration-record lookup)",
     )
     parser.add_argument("--judge-agreement-min", type=float, default=0.7)
+    parser.add_argument(
+        "--signal-guard", action="append", default=[], metavar="EVALUATOR_ID",
+        help=(
+            "fail the gate if this signal's mean score regressed against the "
+            "baseline (repeatable). Refuses when the signal is absent from "
+            "either run."
+        ),
+    )
     parser.add_argument("-o", "--out", default=None, help="JSON verdict output path")
 
 
@@ -529,6 +681,7 @@ def run(args) -> int:  # noqa: ANN001 - argparse namespace
         benchmark_dir=args.benchmark,
         golden_agreement=args.golden_agreement,
         judge_agreement_min=args.judge_agreement_min,
+        signal_guards=tuple(args.signal_guard or ()),
     )
     out = pathlib.Path(args.out) if args.out else pathlib.Path(args.run) / "gate_verdict.json"
     out.parent.mkdir(parents=True, exist_ok=True)
