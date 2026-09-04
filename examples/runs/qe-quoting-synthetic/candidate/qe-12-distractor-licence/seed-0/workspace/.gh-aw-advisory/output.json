@@ -1,0 +1,10 @@
+{
+  "answer": "The quoting-service fixture is published under Apache-2.0; its LICENSE file sits at examples/fixtures/quoting-service/LICENSE. Nothing here calls for new tests.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 7
+  },
+  "test_files": [],
+  "tests_added": 0
+}

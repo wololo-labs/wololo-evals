@@ -261,6 +261,7 @@ def _seed_case_payload(
         "score": composed.score,
         "passed": composed.passed,
         "hard_gate_failed": composed.hard_gate_failed,
+        "evaluator_errors": composed.evaluator_errors,
         "cost_usd": result.cost_usd,
         "tokens_in": result.tokens_in,
         "tokens_out": result.tokens_out,

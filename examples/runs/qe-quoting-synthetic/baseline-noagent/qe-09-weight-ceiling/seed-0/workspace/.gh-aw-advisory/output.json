@@ -1,0 +1,10 @@
+{
+  "answer": "No test authoring was performed: this is the no-agent control arm. The repository's shipped suite ran as it stands.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 7
+  },
+  "test_files": [],
+  "tests_added": 0
+}

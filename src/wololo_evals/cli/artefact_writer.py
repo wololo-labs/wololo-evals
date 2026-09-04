@@ -44,6 +44,10 @@ __all__ = [
 ]
 
 SCORECARD_SCHEMA_VERSION = "2.1.0"
+
+#: Verdicts that carry no observation about the candidate, so contribute to no
+#: slot mean: the evaluator was switched off, or it could not run.
+_NON_VERDICTS = frozenset({"skipped", "evaluator_error"})
 MATRIX_SUMMARY_SCHEMA_VERSION = "2.0.0"
 EVENTS_SCHEMA_VERSION = "1.0.0"
 
@@ -53,7 +57,14 @@ EVENTS_SCHEMA_VERSION = "1.0.0"
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class ComposedCase:
-    """Result of composing one (case, seed) attempt's signals into a score."""
+    """Result of composing one (case, seed) attempt's signals into a score.
+
+    ``evaluator_errors`` counts the signals that could not be evaluated at all.
+    They are excluded from the slot means rather than folded in as zeroes, so
+    the count is the only place they show up in the arithmetic; a non-zero
+    value means part of this case went unmeasured and the score covers less
+    than it looks like it does.
+    """
 
     score: float
     passed: bool
@@ -61,6 +72,7 @@ class ComposedCase:
     judge_disabled: bool
     slot_scores: Mapping[str, float]
     signals: Sequence[ci.ScoredSignal]
+    evaluator_errors: int = 0
 
 
 def _hard_gates(evaluation_type: str) -> frozenset[str]:
@@ -96,11 +108,14 @@ def compose_case(
         s.kind == "judge" and s.verdict == "skipped" for s in signals
     )
 
-    # Step 1: slot score = assertion-weight-weighted mean of its (non-skipped)
-    # signals, clamped to [0, 1]. Skipped signals are excluded outright.
+    # Step 1: slot score = assertion-weight-weighted mean of its evaluated
+    # signals, clamped to [0, 1]. Both non-verdicts are excluded outright:
+    # `skipped` (the evaluator was switched off) and `evaluator_error` (it
+    # could not run). Neither is evidence about the candidate.
+    evaluator_errors = sum(1 for s in signals if s.verdict == "evaluator_error")
     by_slot: dict[str, list[ci.ScoredSignal]] = {}
     for s in signals:
-        if s.verdict == "skipped" or s.slot is None or s.slot not in weights:
+        if s.verdict in _NON_VERDICTS or s.slot is None or s.slot not in weights:
             continue
         by_slot.setdefault(s.slot, []).append(s)
 
@@ -130,6 +145,7 @@ def compose_case(
         judge_disabled=judge_off,
         slot_scores=slot_scores,
         signals=tuple(signals),
+        evaluator_errors=evaluator_errors,
     )
 
 
@@ -228,6 +244,10 @@ def _case_row(
         "invalid_rate": (invalid / n) if n else 0.0,
         "infra_rate": (infra / n) if n else 0.0,
         "attempts": sum(so.result.attempts for so in seeds),
+        # Signals that could not be evaluated. They score nothing either way,
+        # so a non-zero count here is the only warning that this case's score
+        # covers less than the full set of checks it declared.
+        "evaluator_errors": sum(so.composed.evaluator_errors for so in seeds),
         "case_weight": case.case_weight,
         "quarantined": case.quarantined,
         "assertion_counts": _assertion_counts(

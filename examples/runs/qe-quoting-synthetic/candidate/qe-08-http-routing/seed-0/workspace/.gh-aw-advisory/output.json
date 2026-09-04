@@ -1,0 +1,12 @@
+{
+  "answer": "Drove the real server over a socket: /health, a genuine POST to /quotes with its Content-Type, and 404 on an unknown path for both verbs. The input that breaks it is any routing change, which handle_quote alone cannot see.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 11
+  },
+  "test_files": [
+    "tests_generated/test_http_routing.py"
+  ],
+  "tests_added": 4
+}

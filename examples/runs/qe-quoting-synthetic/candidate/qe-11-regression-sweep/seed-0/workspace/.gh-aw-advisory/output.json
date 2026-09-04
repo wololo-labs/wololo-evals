@@ -1,0 +1,12 @@
+{
+  "answer": "Pinned fifteen rate-card rows derived by hand from the published rates, asserted through both the pricing function and the HTTP layer. The inputs that break it are any change to a base rate, a per-kg rate, the surcharge, or the rounding rule.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 38
+  },
+  "test_files": [
+    "tests_generated/test_regression_sweep.py"
+  ],
+  "tests_added": 31
+}

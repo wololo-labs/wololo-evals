@@ -1,0 +1,12 @@
+{
+  "answer": "Pinned that express must be a real boolean. The input that breaks it is the string 'yes': accepting a truthy value silently doubles a customer's quote.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 17
+  },
+  "test_files": [
+    "tests_generated/test_express_flag.py"
+  ],
+  "tests_added": 10
+}

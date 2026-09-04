@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0.0",
+  "id": "qe-skill",
+  "evaluation_type": "skill_behaviour",
+  "description": "Does a test-authoring skill produce a suite that would actually have caught the bug? Twelve cases over examples/fixtures/quoting-service, a stdlib-only parcel quoting service. Each treatment case asks for tests over one slice of the service and is graded on three mechanical signals computed at gate time: the mutation kill rate against the fixture, the share of the seeded defects in seeded_defects.json the suite goes red on, and the four rule-based qe-review rubric dimensions (assertion strength, flake resistance, changed-line coverage, absence of tautological assertions). The twelfth case is a distractor with no testing work in it: the skill must stay silent.",
+  "pass_threshold": 0.7,
+  "golden_set": "labels/golden.jsonl",
+  "engines": ["claude", "codex", "copilot", "replay"]
+}

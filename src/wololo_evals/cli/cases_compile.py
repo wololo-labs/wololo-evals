@@ -204,10 +204,14 @@ def _build_row(
         + [str(x) for x in case.get("expected_paths", [])]
     )
 
-    # --- metadata deep-merge (metadata_file <- inline) ---
+    # --- metadata deep-merge (defaults file <- case file <- inline) ---
+    # ``[defaults] metadata_file`` carries the shared block a whole casebook
+    # points at one fixture with, matching how ``input_text_file`` already
+    # falls back to defaults; a case's own file and inline table layer over it.
     metadata: dict = {}
-    if case.get("metadata_file"):
-        metadata = dict(_read_json(casebook_dir, str(case["metadata_file"])))
+    for source in (defaults.get("metadata_file"), case.get("metadata_file")):
+        if source:
+            metadata = _deep_merge(metadata, _read_json(casebook_dir, str(source)))
     if isinstance(case.get("metadata"), Mapping):
         metadata = _deep_merge(metadata, case["metadata"])  # type: ignore[arg-type]
 

@@ -1,0 +1,220 @@
+# QE casebook for a test-authoring skill, graded against
+# ../../examples/fixtures/quoting-service.
+#
+# Eleven treatment cases, one per slice of the quoting service, plus a
+# distractor with no testing work in it. Every treatment case is scored the
+# same way, because the question is always the same one: would this suite have
+# caught the bug?
+#
+#   activation_correct  trace:used_skill  - did the skill fire on real QE work
+#                       (and, on the distractor, stay silent)
+#   trace_conformance   the skill read the code before writing tests, ran what
+#                       it wrote, and never edited the code under test to make
+#                       its own tests pass
+#   task_outcome        the mechanical QE signals: mutation kill rate, seeded
+#                       defect catch rate, and the qe-review rubric, all
+#                       recomputed at gate time from the suite the run left in
+#                       its workspace (never read back from the recording)
+#   llm_judge_overall   one plain-text assertion per case, scored `skipped`
+#                       when no judge is configured (the zero-spend path)
+#
+# The `code:` assertions read `qe.*`, which is the live output of those
+# scorers for this run - so an assertion here fails when the tests are weak,
+# not when a recording says they were.
+#
+# `cases compile` turns this into the canonical `cases.jsonl`; keep the two in
+# sync (`cases compile --check`).
+
+version = 2
+
+[defaults]
+expected_skill = "qe-test-authoring"
+metadata_file = "qe-target.json"
+assertions = [
+  "used_qe_skill",
+  "read_before_writing_tests",
+  "ran_what_it_wrote",
+  "left_the_code_under_test_alone",
+  "suite_is_green",
+  "suite_is_stable",
+  "no_vacuous_assertions",
+  "explains_what_the_tests_pin",
+]
+
+[defaults.assertion_weights]
+used_qe_skill = 1.0
+read_before_writing_tests = 1.0
+ran_what_it_wrote = 1.0
+left_the_code_under_test_alone = 2.0
+suite_is_green = 1.0
+suite_is_stable = 1.0
+no_vacuous_assertions = 1.0
+catches_the_weight_defect = 2.0
+explains_what_the_tests_pin = 1.0
+
+[assertions]
+# --- activation_correct slot -------------------------------------------------
+used_qe_skill = "trace:used_skill(qe-test-authoring)"
+
+# --- trace_conformance slot --------------------------------------------------
+read_before_writing_tests = "trace:require_order(read, write)"
+ran_what_it_wrote = "trace:require_order(write, bash)"
+# The failure mode that makes a QE agent worthless: editing the code under test
+# until the tests it just wrote go green. Weighted 2.0 - it is worse than a
+# weak suite, because it destroys the thing being tested.
+left_the_code_under_test_alone = "trace:deny_tools(edit:quoting/*, write:quoting/*)"
+
+# --- task_outcome slot (code:, evaluated by the acceptance runner) -----------
+# `output` is what the run recorded about itself; `qe` is what the standing
+# scorers computed about it just now.
+suite_is_green = "code:output.pytest.failed == 0 and output.pytest.passed > 0"
+suite_is_stable = "code:qe.rubric.flake_resistance == 1.0"
+no_vacuous_assertions = "code:qe.rubric.no_tautological_assertions >= 0.75"
+catches_the_weight_defect = "code:'non-positive-weight-accepted' in qe.defects.caught"
+
+# --- llm_judge_overall slot (plain natural language -> judge) ----------------
+explains_what_the_tests_pin = "the answer names the specific behaviour the new tests pin and the input that would break it, rather than restating that tests were added"
+answers_the_licence_question = "the answer states the fixture is licensed Apache-2.0 and does not propose writing tests"
+
+# =============================================================================
+# Treatment cases
+# =============================================================================
+[[cases]]
+case_id = "qe-01-weight-boundary"
+fixture_id = "quoting_service"
+case_weight = 2.0
+title = "Weight boundary: the smallest and largest parcel the service prices"
+difficulty = "medium"
+tags = ["boundary", "validation", "seeded-defect"]
+input_text = "Write pytest tests for the weight_grams boundary in the quoting service: the smallest parcel it should price and the largest it should accept."
+assertions = [
+  "used_qe_skill",
+  "read_before_writing_tests",
+  "ran_what_it_wrote",
+  "left_the_code_under_test_alone",
+  "suite_is_green",
+  "suite_is_stable",
+  "no_vacuous_assertions",
+  "catches_the_weight_defect",
+  "explains_what_the_tests_pin",
+]
+metadata = { slice = "weight boundary", targets_defect = "non-positive-weight-accepted" }
+
+[[cases]]
+case_id = "qe-02-destination-zones"
+fixture_id = "quoting_service"
+case_weight = 1.0
+title = "Destination zones: every zone priced from the rate table"
+difficulty = "easy"
+tags = ["pricing", "zones"]
+input_text = "Write pytest tests covering every destination zone the quoting service supports, and what it does with an unknown one."
+metadata = { slice = "destination zones" }
+
+[[cases]]
+case_id = "qe-03-express-multiplier"
+fixture_id = "quoting_service"
+case_weight = 1.0
+title = "Express delivery multiplies the whole quote, surcharge included"
+difficulty = "medium"
+tags = ["pricing", "express", "interaction"]
+input_text = "Write pytest tests for express delivery pricing in the quoting service, including a parcel that is both heavy and express."
+metadata = { slice = "express multiplier" }
+
+[[cases]]
+case_id = "qe-04-heavy-surcharge"
+fixture_id = "quoting_service"
+case_weight = 1.0
+title = "Heavy surcharge pinned at its threshold, not either side of it"
+difficulty = "medium"
+tags = ["pricing", "boundary"]
+input_text = "Write pytest tests for the heavy-parcel surcharge in the quoting service. Pin the threshold itself."
+metadata = { slice = "heavy surcharge" }
+
+[[cases]]
+case_id = "qe-05-kilogram-rounding"
+fixture_id = "quoting_service"
+case_weight = 1.0
+title = "Part kilograms round up"
+difficulty = "medium"
+tags = ["pricing", "rounding"]
+input_text = "Write pytest tests for how the quoting service rounds part kilograms when it prices a parcel."
+metadata = { slice = "kilogram rounding" }
+
+[[cases]]
+case_id = "qe-06-malformed-body"
+fixture_id = "quoting_service"
+case_weight = 1.0
+title = "Malformed request bodies answer 400 rather than raising"
+difficulty = "easy"
+tags = ["http", "error-handling"]
+input_text = "Write pytest tests for what POST /quotes does with a request body that is not a valid JSON object."
+metadata = { slice = "malformed body" }
+
+[[cases]]
+case_id = "qe-07-weight-type-validation"
+fixture_id = "quoting_service"
+case_weight = 1.0
+title = "weight_grams must be an integer, and a bool is not one"
+difficulty = "hard"
+tags = ["validation", "types"]
+input_text = "Write pytest tests for the type validation on weight_grams in the quoting service."
+metadata = { slice = "weight type validation" }
+
+[[cases]]
+case_id = "qe-08-http-routing"
+fixture_id = "quoting_service"
+case_weight = 1.0
+title = "Routing and health, driven over a real socket"
+difficulty = "hard"
+tags = ["http", "routing", "integration"]
+input_text = "Write pytest tests for the quoting service's HTTP routing: the health endpoint, a real POST to /quotes, and what an unknown path returns."
+metadata = { slice = "http routing" }
+
+[[cases]]
+case_id = "qe-09-weight-ceiling"
+fixture_id = "quoting_service"
+case_weight = 1.0
+title = "The carrier weight ceiling is inclusive"
+difficulty = "medium"
+tags = ["boundary", "validation"]
+input_text = "Write pytest tests for the maximum parcel weight the quoting service accepts."
+metadata = { slice = "weight ceiling" }
+
+[[cases]]
+case_id = "qe-10-express-flag-validation"
+fixture_id = "quoting_service"
+case_weight = 1.0
+title = "The express flag must be a real boolean"
+difficulty = "medium"
+tags = ["validation", "types"]
+input_text = "Write pytest tests for the validation on the express flag in the quoting service."
+metadata = { slice = "express flag validation" }
+
+[[cases]]
+case_id = "qe-11-regression-sweep"
+fixture_id = "quoting_service"
+case_weight = 2.0
+title = "A rate-card sweep across the whole pricing surface"
+difficulty = "hard"
+tags = ["pricing", "regression", "table-driven"]
+input_text = "Write a table-driven pytest suite that pins the quoting service's prices across the whole rate card."
+metadata = { slice = "regression sweep" }
+
+# =============================================================================
+# Distractor: no testing work here, so the skill must not fire
+# =============================================================================
+[[cases]]
+case_id = "qe-12-distractor-licence"
+role = "distractor"
+fixture_id = "quoting_service"
+case_weight = 1.0
+title = "A licence question: the test-authoring skill must stay silent"
+difficulty = "easy"
+tags = ["distractor", "no-activation"]
+input_text = "What licence is the quoting-service fixture published under?"
+expected_outcome = "no_activation"
+assertions = ["used_qe_skill", "answers_the_licence_question"]
+# No test authoring here, so the QE scorers have nothing of this run's to
+# score: opt out rather than grading the fixture's own shipped suite as if
+# this run had written it.
+metadata = { slice = "distractor", qe = { enabled = false } }

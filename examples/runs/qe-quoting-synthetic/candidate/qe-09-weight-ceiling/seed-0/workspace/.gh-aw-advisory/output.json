@@ -1,0 +1,12 @@
+{
+  "answer": "Pinned that the 30000g ceiling is inclusive and that the rejection message names the limit, expressed against MAX_WEIGHT_GRAMS rather than a literal. The input that breaks it is exactly 30000g, plus a float over the ceiling, which must fail on type before range.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 13
+  },
+  "test_files": [
+    "tests_generated/test_weight_ceiling.py"
+  ],
+  "tests_added": 6
+}

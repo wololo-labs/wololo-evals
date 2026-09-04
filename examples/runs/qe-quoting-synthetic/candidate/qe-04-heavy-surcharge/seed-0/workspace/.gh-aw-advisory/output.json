@@ -1,0 +1,12 @@
+{
+  "answer": "Pinned the surcharge at the threshold itself and one gram below it. The input that breaks it is a parcel weighing exactly 20000g: loosening >= to > drops its surcharge and nothing else moves.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 14
+  },
+  "test_files": [
+    "tests_generated/test_heavy_surcharge.py"
+  ],
+  "tests_added": 7
+}

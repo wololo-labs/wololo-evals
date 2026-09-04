@@ -1,0 +1,43 @@
+# qe-review rubric (Slice C). This file's sha256 IS rubric_version: any edit
+# here is a deliberate segmentation event for every QE comparison that came
+# before it.
+#
+# Every dimension is rule-based. A rubric that asks an LLM "are these tests
+# good?" grades prose about tests; these four grade the tests by running them
+# and reading their syntax tree, so the number survives a hostile reviewer and
+# costs nothing to produce. The LLM judge still has a slot in the
+# skill_behaviour gate family - it just does not decide QE quality.
+suite: qe-review
+judge:
+  k: 5
+  temperature: 0
+dimensions:
+  assertion_strength:
+    weight: 0.30
+    scorer: static-analysis
+    criterion: >
+      Fraction of test functions that assert on a value the code under test
+      actually produced, rather than only asserting that a call did not raise.
+      An expectation that never touches the target package cannot fail when the
+      target regresses.
+  flake_resistance:
+    weight: 0.25
+    scorer: repeated-execution
+    criterion: >
+      Fraction of tests whose pass/fail outcome is identical across repeated
+      runs under different hash seeds. A test that changes its mind between
+      runs cannot gate anything, so instability is scored, never averaged away.
+  changed_line_coverage:
+    weight: 0.30
+    scorer: coverage
+    criterion: >
+      Fraction of the declared changed lines of the code under test that the
+      suite executes. Whole-file coverage hides an untested change inside a
+      well-covered module; only the changed lines are scored.
+  no_tautological_assertions:
+    weight: 0.15
+    scorer: static-analysis
+    criterion: >
+      Fraction of assertions that are not vacuous. `assert True`,
+      `assert x == x`, and an assertion whose operands never reference the
+      target package all pass unconditionally and inflate every other measure.

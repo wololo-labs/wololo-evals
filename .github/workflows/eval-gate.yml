@@ -1,0 +1,191 @@
+name: Eval gate
+
+# The gate the repository holds itself to, run the way an operator runs it.
+#
+# Three steps, in order of how much they prove:
+#
+# 1. `pytest` - the unit and integration suites, including the mutation-marked
+#    ones that drive the real mutmut-backed scorer against
+#    examples/fixtures/quoting-service.
+# 2. the skill-behaviour benchmark - `gate` over the committed
+#    examples/runs/dropdowns-synthetic corpus, which records a skill upgrade
+#    that made things worse. This one MUST exit 1: a gate that cannot fail is
+#    not a gate, so a green verdict here is the failure condition.
+# 3. the QE gate - both arms of examples/runs/qe-quoting-synthetic replayed
+#    from their archives and compared. The archived engine streams are
+#    hand-authored fixtures; every QE number is recomputed here from the tests
+#    each recorded run left behind. This one must exit 0, and the job fails on
+#    exit 1
+#    (a regression, including a guarded signal that slipped) or exit 2 (a
+#    refusal: a judge-disabled input, an uncalibrated judge, or a guard whose
+#    signal did not score in both runs).
+#
+# Everything here is offline and costs nothing: the replay engine re-emits
+# archived streams, WOLOLO_EVALS_JUDGE=off keeps the judge unconfigured, and
+# every QE number is recomputed from the recorded workspaces rather than read
+# back from them.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # No model is called anywhere in this workflow. The judge is off by default
+  # and is not inferred from an API key being present, so this is belt and
+  # braces rather than the only thing holding spend at zero.
+  WOLOLO_EVALS_JUDGE: "off"
+
+jobs:
+  eval-gate:
+    name: Eval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Ensure PostgreSQL server binaries are present
+        run: |
+          set -euo pipefail
+          if ! ls /usr/lib/postgresql/*/bin/initdb >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends postgresql
+          fi
+          pgbin="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)"
+          echo "$pgbin" >> "$GITHUB_PATH"
+
+      - name: Install the package with its dev extras
+        run: uv pip install --system -e '.[dev]'
+
+      # ---- 1. the test suite -------------------------------------------
+      - name: Run the test suite
+        run: pytest -q -rs --durations=10
+
+      # ---- 2. the casebooks compile to what is committed ---------------
+      - name: Check the committed casebooks are in sync
+        run: |
+          set -euo pipefail
+          wololo-evals-cli cases compile --check benchmarks/qe-skill/cases.toml
+          wololo-evals-cli cases compile --check benchmarks/dropdowns-skill/cases.toml
+
+      # ---- 3. the skill-behaviour benchmark: this one must FAIL ---------
+      - name: Skill-behaviour gate detects the recorded regression
+        run: |
+          set -euo pipefail
+          set +e
+          wololo-evals-cli gate \
+            --run      examples/runs/dropdowns-synthetic/candidate-v2 \
+            --baseline examples/runs/dropdowns-synthetic/baseline-v1 \
+            --benchmark examples/runs/dropdowns-synthetic/benchmark \
+            --golden-agreement 1.0 \
+            -o "$RUNNER_TEMP/dropdowns-verdict.json"
+          status=$?
+          set -e
+          if [ "$status" -ne 1 ]; then
+            echo "::error::skill-behaviour gate exited $status, expected 1."
+            echo "The dropdowns corpus records a regression; a gate that passes it cannot fail."
+            exit 1
+          fi
+          echo "skill-behaviour gate correctly reported a regression (exit 1)"
+
+      # ---- 4. the QE gate: replay both arms, then compare ---------------
+      - name: Replay the QE benchmark arms
+        run: |
+          set -euo pipefail
+          wololo-evals-cli matrix --config examples/runs/qe-quoting-synthetic/matrix-baseline.toml
+          wololo-evals-cli matrix --config examples/runs/qe-quoting-synthetic/matrix-candidate.toml
+          {
+            echo "QE_BASELINE=$(ls -d examples/runs/qe-quoting-synthetic/out/baseline/iterations/001/matrix-*)"
+            echo "QE_CANDIDATE=$(ls -d examples/runs/qe-quoting-synthetic/out/candidate/iterations/001/matrix-*)"
+          } >> "$GITHUB_ENV"
+
+      - name: QE gate
+        run: |
+          set -euo pipefail
+          wololo-evals-cli gate \
+            --run      "$QE_CANDIDATE" \
+            --baseline "$QE_BASELINE" \
+            --signal-guard mutation_kill_rate \
+            --signal-guard seeded_defects_caught \
+            --signal-guard qe_flake_resistance \
+            -o "$RUNNER_TEMP/qe-verdict.json" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: QE gate on the committed pair
+        run: |
+          set -euo pipefail
+          wololo-evals-cli gate \
+            --run      examples/runs/qe-quoting-synthetic/recorded/candidate \
+            --baseline examples/runs/qe-quoting-synthetic/recorded/baseline \
+            --signal-guard mutation_kill_rate \
+            --signal-guard seeded_defects_caught \
+            --signal-guard qe_flake_resistance \
+            -o "$RUNNER_TEMP/qe-verdict-recorded.json" > /dev/null
+
+      - name: Assert the QE numbers moved the right way
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/qe-verdict.json" <<'PY'
+          import json, sys
+
+          verdict = json.load(open(sys.argv[1]))
+          signals = {s["evaluator_id"]: s for s in verdict["signals"]}
+          problems = []
+
+          if verdict["verdict"] != "pass":
+              problems.append(f"gate verdict is {verdict['verdict']}: {verdict['reason']}")
+          if not verdict["stats"]["significant_improvement"]:
+              problems.append("the candidate arm is not a significant improvement")
+          for name in ("mutation_kill_rate", "seeded_defects_caught"):
+              if signals[name]["delta"] <= 0:
+                  problems.append(
+                      f"{name} did not improve: {signals[name]['baseline_mean']:.4f} "
+                      f"-> {signals[name]['candidate_mean']:.4f}"
+                  )
+          if signals["qe_flake_resistance"]["regressed"]:
+              problems.append("qe_flake_resistance regressed")
+
+          for line in problems:
+              print(f"::error::{line}")
+          if problems:
+              sys.exit(1)
+
+          print(
+              "QE gate green: kill rate "
+              f"{signals['mutation_kill_rate']['baseline_mean']:.4f} -> "
+              f"{signals['mutation_kill_rate']['candidate_mean']:.4f}, "
+              "seeded defects "
+              f"{signals['seeded_defects_caught']['baseline_mean']:.4f} -> "
+              f"{signals['seeded_defects_caught']['candidate_mean']:.4f}, "
+              "flake resistance held at "
+              f"{signals['qe_flake_resistance']['candidate_mean']:.4f}"
+          )
+          PY
+
+      - name: Upload the gate verdicts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-verdicts
+          path: ${{ runner.temp }}/*verdict*.json
+          if-no-files-found: warn

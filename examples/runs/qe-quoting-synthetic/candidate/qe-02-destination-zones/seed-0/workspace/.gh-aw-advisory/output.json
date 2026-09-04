@@ -1,0 +1,12 @@
+{
+  "answer": "Priced a 1kg parcel in every zone straight from the DESTINATIONS table rather than from literals, so a rate change fails one assertion. The input that breaks it is a zone whose base or per-kg rate moves, or a near-miss destination like 'UK' or 'uk '.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 16
+  },
+  "test_files": [
+    "tests_generated/test_destination_zones.py"
+  ],
+  "tests_added": 9
+}

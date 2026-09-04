@@ -6,6 +6,15 @@ Unix-socket, trust-auth, session-scoped; the schema is applied once and each
 test runs against real RLS with the real roles (`wololo_evals_app`,
 `wololo_evals_worker`) — tenancy tests that "pass" against a mock RLS layer
 prove nothing.
+
+The data directory lives under pytest's ``tmp_path_factory``, but the unix
+socket directory deliberately does not: ``sockaddr_un.sun_path`` is 104 bytes
+on macOS and 108 on Linux, and the default macOS ``TMPDIR``
+(``/var/folders/<hash>/<hash>/T/``) already spends ~50 of them, so
+``<tmp>/pytest-of-<user>/pytest-<n>/pg0/sock/.s.PGSQL.<port>`` overflows and
+``postgres`` exits before it can listen. :func:`_socket_dir` puts the socket
+under a short root instead, so a plain ``pytest -q`` works on both platforms
+with no ``TMPDIR`` workaround.
 """
 from __future__ import annotations
 
@@ -15,6 +24,7 @@ import pathlib
 import shutil
 import socket
 import subprocess
+import tempfile
 import time
 
 import pytest
@@ -43,6 +53,35 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
+#: Longest ``sun_path`` any supported platform accepts, minus the
+#: ``/.s.PGSQL.<5-digit port>`` postgres appends to the directory we hand it.
+_MAX_SOCKET_DIR_LEN = 104 - len("/.s.PGSQL.65535") - 1
+
+
+def _socket_dir() -> pathlib.Path:
+    """A short-enough directory for the postgres unix socket.
+
+    Honours ``WOLOLO_EVALS_PG_SOCKET_ROOT`` when set (CI/sandboxes that forbid
+    ``/tmp``), else the shortest of ``/tmp`` and the platform temp dir. Fails
+    loudly rather than handing postgres a path it will silently truncate.
+    """
+    roots = [os.environ.get("WOLOLO_EVALS_PG_SOCKET_ROOT"), "/tmp", tempfile.gettempdir()]
+    for root in roots:
+        if not root:
+            continue
+        base = pathlib.Path(root)
+        if not base.is_dir():
+            continue
+        candidate = pathlib.Path(tempfile.mkdtemp(prefix="we-pg-", dir=str(base)))
+        if len(str(candidate)) <= _MAX_SOCKET_DIR_LEN:
+            return candidate
+        shutil.rmtree(candidate, ignore_errors=True)
+    raise RuntimeError(
+        f"no temp root yields a unix socket path under {_MAX_SOCKET_DIR_LEN} chars "
+        f"(tried {roots}); set WOLOLO_EVALS_PG_SOCKET_ROOT to a short directory"
+    )
+
+
 @pytest.fixture(scope="session")
 def pg(tmp_path_factory):
     pg_bin = _find_pg_bin()
@@ -55,8 +94,7 @@ def pg(tmp_path_factory):
         )
     base = tmp_path_factory.mktemp("pg")
     datadir = base / "data"
-    sockdir = base / "sock"
-    sockdir.mkdir()
+    sockdir = _socket_dir()
     port = _free_port()
     superuser = getpass.getuser()
 
@@ -143,6 +181,7 @@ def pg(tmp_path_factory):
         proc.wait(timeout=15)
     except subprocess.TimeoutExpired:
         proc.kill()
+    shutil.rmtree(sockdir, ignore_errors=True)
 
 
 @pytest.fixture(scope="session")
