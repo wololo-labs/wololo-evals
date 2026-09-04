@@ -1,0 +1,12 @@
+{
+  "answer": "Pinned that every non-object body answers 400 with field 'body' rather than raising out of the handler. The inputs that break it are an empty body, a bare JSON scalar, and invalid UTF-8.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 16
+  },
+  "test_files": [
+    "tests_generated/test_malformed_body.py"
+  ],
+  "tests_added": 9
+}

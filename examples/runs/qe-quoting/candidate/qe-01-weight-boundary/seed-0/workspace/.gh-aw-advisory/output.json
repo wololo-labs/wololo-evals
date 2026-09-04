@@ -1,0 +1,12 @@
+{
+  "answer": "Pinned both ends of the accepted weight range. A parcel of 0g or any negative weight must be rejected with field weight_grams; 1g is the smallest priced parcel at 515p; 30000g is accepted and 30001g is not. The input that breaks it is weight_grams=0, which the shipped suite never sends.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 14
+  },
+  "test_files": [
+    "tests_generated/test_weight_boundary.py"
+  ],
+  "tests_added": 7
+}

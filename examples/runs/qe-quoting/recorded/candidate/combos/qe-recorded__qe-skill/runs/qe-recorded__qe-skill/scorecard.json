@@ -1,0 +1,3746 @@
+{
+  "schema_version": "2.1.0",
+  "benchmark_id": "qe-skill",
+  "combo": {
+    "combo_id": "qe-recorded__qe-skill",
+    "engine_id": "replay",
+    "model_id": "qe-recorded",
+    "prompt_id": "qe-skill",
+    "asset_id": null,
+    "role": "treatment"
+  },
+  "summary": {
+    "benchmark_score": 0.9021843918006744,
+    "pass_rate": 1.0,
+    "invalid_rate": 0.0,
+    "infra_rate": 0.0,
+    "runtime_seconds": 0.0,
+    "cost_usd": 0.0,
+    "tokens_in": 65080,
+    "tokens_out": 13620,
+    "pass_at_k": {
+      "1": 1.0
+    },
+    "pass_hat_k": {
+      "1": 1.0
+    },
+    "seeds": 1
+  },
+  "judge_disabled": false,
+  "self_judged": false,
+  "cases": [
+    {
+      "case_id": "qe-01-weight-boundary",
+      "status": "ok",
+      "score": 0.9275634818033937,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 2.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 15,
+        "fail": 0,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-01-weight-boundary.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "catches_the_weight_defect",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "'non-positive-weight-accepted' in qe.defects.caught",
+            "value": "True"
+          },
+          "evidence": "'non-positive-weight-accepted' in qe.defects.caught -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.3432203389830508,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 81,
+            "survived": 53,
+            "no_tests": 102,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 134,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.3432203389830508,
+            "kill_rate_executed": 0.6044776119402985,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 81/236 mutants (kill rate 0.343, threshold 0.24; 102 never reached, 0.604 over the 134 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.5,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "non-positive-weight-accepted",
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "heavy-surcharge-off-by-one",
+              "express-multiplier-before-surcharge"
+            ],
+            "total": 4,
+            "catch_rate": 0.5,
+            "threshold": 0.5
+          },
+          "evidence": "caught 2/4 seeded defects (catch rate 0.500, threshold 0.50); missed: heavy-surcharge-off-by-one, express-multiplier-before-surcharge"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.9090909090909091,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 11,
+            "with_target_assertion": 10,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.909"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.8421052631578947,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 16,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:58",
+              "quoting/pricing.py:64",
+              "quoting/pricing.py:82"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.842"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 14,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED",
+              "tests/test_weight_boundary.py::test_non_positive_weight_is_rejected[-30000]": "PASSED",
+              "tests/test_weight_boundary.py::test_non_positive_weight_is_rejected[-1000]": "PASSED",
+              "tests/test_weight_boundary.py::test_non_positive_weight_is_rejected[-1]": "PASSED",
+              "tests/test_weight_boundary.py::test_non_positive_weight_is_rejected[0]": "PASSED",
+              "tests/test_weight_boundary.py::test_one_gram_is_the_smallest_priced_parcel": "PASSED",
+              "tests/test_weight_boundary.py::test_the_ceiling_itself_is_accepted": "PASSED",
+              "tests/test_weight_boundary.py::test_one_gram_over_the_ceiling_is_rejected": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 21,
+            "tautological": [],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 1.000"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.925358851674641,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.9090909090909091,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.8421052631578947,
+              "no_tautological_assertions": 1.0
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 11,
+                "with_target_assertion": 10,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 14,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED",
+                  "tests/test_weight_boundary.py::test_non_positive_weight_is_rejected[-30000]": "PASSED",
+                  "tests/test_weight_boundary.py::test_non_positive_weight_is_rejected[-1000]": "PASSED",
+                  "tests/test_weight_boundary.py::test_non_positive_weight_is_rejected[-1]": "PASSED",
+                  "tests/test_weight_boundary.py::test_non_positive_weight_is_rejected[0]": "PASSED",
+                  "tests/test_weight_boundary.py::test_one_gram_is_the_smallest_priced_parcel": "PASSED",
+                  "tests/test_weight_boundary.py::test_the_ceiling_itself_is_accepted": "PASSED",
+                  "tests/test_weight_boundary.py::test_one_gram_over_the_ceiling_is_rejected": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 16,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:58",
+                  "quoting/pricing.py:64",
+                  "quoting/pricing.py:82"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 21,
+                "tautological": []
+              }
+            },
+            "composite": 0.925358851674641,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.925 (threshold 0.70) over assertion_strength=0.91, changed_line_coverage=0.84, flake_resistance=1.00, no_tautological_assertions=1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-02-destination-zones",
+      "status": "ok",
+      "score": 0.8740219532789193,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 1.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 13,
+        "fail": 1,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-02-destination-zones.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.25,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 59,
+            "survived": 75,
+            "no_tests": 102,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 134,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.25,
+            "kill_rate_executed": 0.44029850746268656,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 59/236 mutants (kill rate 0.250, threshold 0.24; 102 never reached, 0.440 over the 134 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.25,
+          "weight": 1.0,
+          "verdict": "fail",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "non-positive-weight-accepted",
+              "heavy-surcharge-off-by-one",
+              "express-multiplier-before-surcharge"
+            ],
+            "total": 4,
+            "catch_rate": 0.25,
+            "threshold": 0.5
+          },
+          "evidence": "caught 1/4 seeded defects (catch rate 0.250, threshold 0.50); missed: non-positive-weight-accepted, heavy-surcharge-off-by-one, express-multiplier-before-surcharge"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.9090909090909091,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 11,
+            "with_target_assertion": 10,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.909"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.7368421052631579,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 14,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:58",
+              "quoting/pricing.py:64",
+              "quoting/pricing.py:66",
+              "quoting/pricing.py:82",
+              "quoting/pricing.py:95"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.737"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 16,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_destination_zones.py::test_every_zone_prices_a_one_kilogram_parcel[eu]": "PASSED",
+              "tests/test_destination_zones.py::test_every_zone_prices_a_one_kilogram_parcel[row]": "PASSED",
+              "tests/test_destination_zones.py::test_every_zone_prices_a_one_kilogram_parcel[uk]": "PASSED",
+              "tests/test_destination_zones.py::test_zones_are_ordered_uk_then_eu_then_row": "PASSED",
+              "tests/test_destination_zones.py::test_an_unknown_zone_is_rejected[mars]": "PASSED",
+              "tests/test_destination_zones.py::test_an_unknown_zone_is_rejected[UK]": "PASSED",
+              "tests/test_destination_zones.py::test_an_unknown_zone_is_rejected[]": "PASSED",
+              "tests/test_destination_zones.py::test_an_unknown_zone_is_rejected[uk": "PASSED",
+              "tests/test_destination_zones.py::test_a_missing_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 20,
+            "tautological": [],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 1.000"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.8937799043062201,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.9090909090909091,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.7368421052631579,
+              "no_tautological_assertions": 1.0
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 11,
+                "with_target_assertion": 10,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 16,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_destination_zones.py::test_every_zone_prices_a_one_kilogram_parcel[eu]": "PASSED",
+                  "tests/test_destination_zones.py::test_every_zone_prices_a_one_kilogram_parcel[row]": "PASSED",
+                  "tests/test_destination_zones.py::test_every_zone_prices_a_one_kilogram_parcel[uk]": "PASSED",
+                  "tests/test_destination_zones.py::test_zones_are_ordered_uk_then_eu_then_row": "PASSED",
+                  "tests/test_destination_zones.py::test_an_unknown_zone_is_rejected[mars]": "PASSED",
+                  "tests/test_destination_zones.py::test_an_unknown_zone_is_rejected[UK]": "PASSED",
+                  "tests/test_destination_zones.py::test_an_unknown_zone_is_rejected[]": "PASSED",
+                  "tests/test_destination_zones.py::test_an_unknown_zone_is_rejected[uk": "PASSED",
+                  "tests/test_destination_zones.py::test_a_missing_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 14,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:58",
+                  "quoting/pricing.py:64",
+                  "quoting/pricing.py:66",
+                  "quoting/pricing.py:82",
+                  "quoting/pricing.py:95"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 20,
+                "tautological": []
+              }
+            },
+            "composite": 0.8937799043062201,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.894 (threshold 0.70) over assertion_strength=0.91, changed_line_coverage=0.74, flake_resistance=1.00, no_tautological_assertions=1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-03-express-multiplier",
+      "status": "ok",
+      "score": 0.8965298681308547,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 1.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 14,
+        "fail": 0,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-03-express-multiplier.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.2711864406779661,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 64,
+            "survived": 70,
+            "no_tests": 102,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 134,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.2711864406779661,
+            "kill_rate_executed": 0.47761194029850745,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 64/236 mutants (kill rate 0.271, threshold 0.24; 102 never reached, 0.478 over the 134 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.5,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "express-multiplier-before-surcharge",
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "non-positive-weight-accepted",
+              "heavy-surcharge-off-by-one"
+            ],
+            "total": 4,
+            "catch_rate": 0.5,
+            "threshold": 0.5
+          },
+          "evidence": "caught 2/4 seeded defects (catch rate 0.500, threshold 0.50); missed: non-positive-weight-accepted, heavy-surcharge-off-by-one"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.9090909090909091,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 11,
+            "with_target_assertion": 10,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.909"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.7894736842105263,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 15,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:58",
+              "quoting/pricing.py:64",
+              "quoting/pricing.py:66",
+              "quoting/pricing.py:82"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.789"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 13,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_express_multiplier.py::test_express_multiplies_the_whole_quote[uk]": "PASSED",
+              "tests/test_express_multiplier.py::test_express_multiplies_the_whole_quote[eu]": "PASSED",
+              "tests/test_express_multiplier.py::test_express_multiplies_the_whole_quote[row]": "PASSED",
+              "tests/test_express_multiplier.py::test_express_applies_after_the_heavy_surcharge": "PASSED",
+              "tests/test_express_multiplier.py::test_the_response_echoes_the_express_flag": "PASSED",
+              "tests/test_express_multiplier.py::test_omitting_express_defaults_to_standard": "PASSED",
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 19,
+            "tautological": [],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 1.000"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.9095693779904306,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.9090909090909091,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.7894736842105263,
+              "no_tautological_assertions": 1.0
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 11,
+                "with_target_assertion": 10,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 13,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_express_multiplier.py::test_express_multiplies_the_whole_quote[uk]": "PASSED",
+                  "tests/test_express_multiplier.py::test_express_multiplies_the_whole_quote[eu]": "PASSED",
+                  "tests/test_express_multiplier.py::test_express_multiplies_the_whole_quote[row]": "PASSED",
+                  "tests/test_express_multiplier.py::test_express_applies_after_the_heavy_surcharge": "PASSED",
+                  "tests/test_express_multiplier.py::test_the_response_echoes_the_express_flag": "PASSED",
+                  "tests/test_express_multiplier.py::test_omitting_express_defaults_to_standard": "PASSED",
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 15,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:58",
+                  "quoting/pricing.py:64",
+                  "quoting/pricing.py:66",
+                  "quoting/pricing.py:82"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 19,
+                "tautological": []
+              }
+            },
+            "composite": 0.9095693779904306,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.910 (threshold 0.70) over assertion_strength=0.91, changed_line_coverage=0.79, flake_resistance=1.00, no_tautological_assertions=1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-04-heavy-surcharge",
+      "status": "ok",
+      "score": 0.8955328591577739,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 1.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 14,
+        "fail": 0,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-04-heavy-surcharge.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.2584745762711864,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 61,
+            "survived": 73,
+            "no_tests": 102,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 134,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.2584745762711864,
+            "kill_rate_executed": 0.4552238805970149,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 61/236 mutants (kill rate 0.258, threshold 0.24; 102 never reached, 0.455 over the 134 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.5,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "heavy-surcharge-off-by-one",
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "non-positive-weight-accepted",
+              "express-multiplier-before-surcharge"
+            ],
+            "total": 4,
+            "catch_rate": 0.5,
+            "threshold": 0.5
+          },
+          "evidence": "caught 2/4 seeded defects (catch rate 0.500, threshold 0.50); missed: non-positive-weight-accepted, express-multiplier-before-surcharge"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.9090909090909091,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 11,
+            "with_target_assertion": 10,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.909"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.7894736842105263,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 15,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:58",
+              "quoting/pricing.py:64",
+              "quoting/pricing.py:66",
+              "quoting/pricing.py:82"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.789"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 14,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_heavy_surcharge.py::test_the_threshold_itself_pays_the_surcharge": "PASSED",
+              "tests/test_heavy_surcharge.py::test_just_under_the_threshold_pays_no_surcharge": "PASSED",
+              "tests/test_heavy_surcharge.py::test_light_parcels_never_pay_the_surcharge[1]": "PASSED",
+              "tests/test_heavy_surcharge.py::test_light_parcels_never_pay_the_surcharge[1000]": "PASSED",
+              "tests/test_heavy_surcharge.py::test_light_parcels_never_pay_the_surcharge[10000]": "PASSED",
+              "tests/test_heavy_surcharge.py::test_light_parcels_never_pay_the_surcharge[19999]": "PASSED",
+              "tests/test_heavy_surcharge.py::test_the_surcharge_is_flat_not_proportional": "PASSED",
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 16,
+            "tautological": [],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 1.000"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.9095693779904306,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.9090909090909091,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.7894736842105263,
+              "no_tautological_assertions": 1.0
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 11,
+                "with_target_assertion": 10,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 14,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_heavy_surcharge.py::test_the_threshold_itself_pays_the_surcharge": "PASSED",
+                  "tests/test_heavy_surcharge.py::test_just_under_the_threshold_pays_no_surcharge": "PASSED",
+                  "tests/test_heavy_surcharge.py::test_light_parcels_never_pay_the_surcharge[1]": "PASSED",
+                  "tests/test_heavy_surcharge.py::test_light_parcels_never_pay_the_surcharge[1000]": "PASSED",
+                  "tests/test_heavy_surcharge.py::test_light_parcels_never_pay_the_surcharge[10000]": "PASSED",
+                  "tests/test_heavy_surcharge.py::test_light_parcels_never_pay_the_surcharge[19999]": "PASSED",
+                  "tests/test_heavy_surcharge.py::test_the_surcharge_is_flat_not_proportional": "PASSED",
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 15,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:58",
+                  "quoting/pricing.py:64",
+                  "quoting/pricing.py:66",
+                  "quoting/pricing.py:82"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 16,
+                "tautological": []
+              }
+            },
+            "composite": 0.9095693779904306,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.910 (threshold 0.70) over assertion_strength=0.91, changed_line_coverage=0.79, flake_resistance=1.00, no_tautological_assertions=1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-05-kilogram-rounding",
+      "status": "ok",
+      "score": 0.8734757132112435,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 1.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 13,
+        "fail": 1,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-05-kilogram-rounding.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.2457627118644068,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 58,
+            "survived": 76,
+            "no_tests": 102,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 134,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.2457627118644068,
+            "kill_rate_executed": 0.43283582089552236,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 58/236 mutants (kill rate 0.246, threshold 0.24; 102 never reached, 0.433 over the 134 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.25,
+          "weight": 1.0,
+          "verdict": "fail",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "non-positive-weight-accepted",
+              "heavy-surcharge-off-by-one",
+              "express-multiplier-before-surcharge"
+            ],
+            "total": 4,
+            "catch_rate": 0.25,
+            "threshold": 0.5
+          },
+          "evidence": "caught 1/4 seeded defects (catch rate 0.250, threshold 0.50); missed: non-positive-weight-accepted, heavy-surcharge-off-by-one, express-multiplier-before-surcharge"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.9,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 10,
+            "with_target_assertion": 9,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.900"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.7368421052631579,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 14,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:58",
+              "quoting/pricing.py:64",
+              "quoting/pricing.py:66",
+              "quoting/pricing.py:82",
+              "quoting/pricing.py:95"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.737"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 16,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[1-1]": "PASSED",
+              "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[999-1]": "PASSED",
+              "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[1000-1]": "PASSED",
+              "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[1001-2]": "PASSED",
+              "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[1999-2]": "PASSED",
+              "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[2000-2]": "PASSED",
+              "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[2001-3]": "PASSED",
+              "tests/test_kilogram_rounding.py::test_a_sub_kilogram_parcel_is_never_priced_at_the_bare_base_rate": "PASSED",
+              "tests/test_kilogram_rounding.py::test_rounding_is_applied_per_zone_rate": "PASSED",
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 15,
+            "tautological": [],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 1.000"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.8910526315789474,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.9,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.7368421052631579,
+              "no_tautological_assertions": 1.0
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 10,
+                "with_target_assertion": 9,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 16,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[1-1]": "PASSED",
+                  "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[999-1]": "PASSED",
+                  "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[1000-1]": "PASSED",
+                  "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[1001-2]": "PASSED",
+                  "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[1999-2]": "PASSED",
+                  "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[2000-2]": "PASSED",
+                  "tests/test_kilogram_rounding.py::test_part_kilograms_round_up[2001-3]": "PASSED",
+                  "tests/test_kilogram_rounding.py::test_a_sub_kilogram_parcel_is_never_priced_at_the_bare_base_rate": "PASSED",
+                  "tests/test_kilogram_rounding.py::test_rounding_is_applied_per_zone_rate": "PASSED",
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 14,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:58",
+                  "quoting/pricing.py:64",
+                  "quoting/pricing.py:66",
+                  "quoting/pricing.py:82",
+                  "quoting/pricing.py:95"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 15,
+                "tautological": []
+              }
+            },
+            "composite": 0.8910526315789474,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.891 (threshold 0.70) over assertion_strength=0.90, changed_line_coverage=0.74, flake_resistance=1.00, no_tautological_assertions=1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-06-malformed-body",
+      "status": "ok",
+      "score": 0.8773727938990048,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 1.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 13,
+        "fail": 1,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-06-malformed-body.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.2796610169491525,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 66,
+            "survived": 68,
+            "no_tests": 102,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 134,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.2796610169491525,
+            "kill_rate_executed": 0.4925373134328358,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 66/236 mutants (kill rate 0.280, threshold 0.24; 102 never reached, 0.493 over the 134 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.25,
+          "weight": 1.0,
+          "verdict": "fail",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "non-positive-weight-accepted",
+              "heavy-surcharge-off-by-one",
+              "express-multiplier-before-surcharge"
+            ],
+            "total": 4,
+            "catch_rate": 0.25,
+            "threshold": 0.5
+          },
+          "evidence": "caught 1/4 seeded defects (catch rate 0.250, threshold 0.50); missed: non-positive-weight-accepted, heavy-surcharge-off-by-one, express-multiplier-before-surcharge"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.9,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 10,
+            "with_target_assertion": 9,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.900"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.7894736842105263,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 15,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:64",
+              "quoting/pricing.py:66",
+              "quoting/pricing.py:82",
+              "quoting/pricing.py:95"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.789"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 16,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[]": "PASSED",
+              "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[not": "PASSED",
+              "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[{]": "PASSED",
+              "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[[]]": "PASSED",
+              "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[\"a": "PASSED",
+              "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[42]": "PASSED",
+              "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[null]": "PASSED",
+              "tests/test_malformed_body.py::test_invalid_utf8_is_rejected_rather_than_raising": "PASSED",
+              "tests/test_malformed_body.py::test_an_empty_json_object_reports_the_first_missing_field": "PASSED",
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 18,
+            "tautological": [],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 1.000"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.9068421052631579,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.9,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.7894736842105263,
+              "no_tautological_assertions": 1.0
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 10,
+                "with_target_assertion": 9,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 16,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[]": "PASSED",
+                  "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[not": "PASSED",
+                  "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[{]": "PASSED",
+                  "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[[]]": "PASSED",
+                  "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[\"a": "PASSED",
+                  "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[42]": "PASSED",
+                  "tests/test_malformed_body.py::test_a_body_that_is_not_a_json_object_is_rejected[null]": "PASSED",
+                  "tests/test_malformed_body.py::test_invalid_utf8_is_rejected_rather_than_raising": "PASSED",
+                  "tests/test_malformed_body.py::test_an_empty_json_object_reports_the_first_missing_field": "PASSED",
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 15,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:64",
+                  "quoting/pricing.py:66",
+                  "quoting/pricing.py:82",
+                  "quoting/pricing.py:95"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 18,
+                "tautological": []
+              }
+            },
+            "composite": 0.9068421052631579,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.907 (threshold 0.70) over assertion_strength=0.90, changed_line_coverage=0.79, flake_resistance=1.00, no_tautological_assertions=1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-07-weight-type-validation",
+      "status": "ok",
+      "score": 0.8773727938990048,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 1.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 13,
+        "fail": 1,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-07-weight-type-validation.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.2796610169491525,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 66,
+            "survived": 68,
+            "no_tests": 102,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 134,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.2796610169491525,
+            "kill_rate_executed": 0.4925373134328358,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 66/236 mutants (kill rate 0.280, threshold 0.24; 102 never reached, 0.493 over the 134 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.25,
+          "weight": 1.0,
+          "verdict": "fail",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "non-positive-weight-accepted",
+              "heavy-surcharge-off-by-one",
+              "express-multiplier-before-surcharge"
+            ],
+            "total": 4,
+            "catch_rate": 0.25,
+            "threshold": 0.5
+          },
+          "evidence": "caught 1/4 seeded defects (catch rate 0.250, threshold 0.50); missed: non-positive-weight-accepted, heavy-surcharge-off-by-one, express-multiplier-before-surcharge"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.9,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 10,
+            "with_target_assertion": 9,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.900"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.7894736842105263,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 15,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:58",
+              "quoting/pricing.py:66",
+              "quoting/pricing.py:82",
+              "quoting/pricing.py:95"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.789"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 16,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED",
+              "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[True]": "PASSED",
+              "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[False]": "PASSED",
+              "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[1.5]": "PASSED",
+              "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[500]": "PASSED",
+              "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[None]": "PASSED",
+              "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[weight5]": "PASSED",
+              "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[weight6]": "PASSED",
+              "tests/test_weight_types.py::test_a_bool_is_not_accepted_as_an_integer_weight": "PASSED",
+              "tests/test_weight_types.py::test_a_plain_integer_is_accepted": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 15,
+            "tautological": [],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 1.000"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.9068421052631579,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.9,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.7894736842105263,
+              "no_tautological_assertions": 1.0
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 10,
+                "with_target_assertion": 9,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 16,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED",
+                  "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[True]": "PASSED",
+                  "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[False]": "PASSED",
+                  "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[1.5]": "PASSED",
+                  "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[500]": "PASSED",
+                  "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[None]": "PASSED",
+                  "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[weight5]": "PASSED",
+                  "tests/test_weight_types.py::test_a_non_integer_weight_is_rejected[weight6]": "PASSED",
+                  "tests/test_weight_types.py::test_a_bool_is_not_accepted_as_an_integer_weight": "PASSED",
+                  "tests/test_weight_types.py::test_a_plain_integer_is_accepted": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 15,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:58",
+                  "quoting/pricing.py:66",
+                  "quoting/pricing.py:82",
+                  "quoting/pricing.py:95"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 15,
+                "tautological": []
+              }
+            },
+            "composite": 0.9068421052631579,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.907 (threshold 0.70) over assertion_strength=0.90, changed_line_coverage=0.79, flake_resistance=1.00, no_tautological_assertions=1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-08-http-routing",
+      "status": "ok",
+      "score": 0.8929651237674536,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 1.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 13,
+        "fail": 1,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-08-http-routing.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.4915254237288136,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 116,
+            "survived": 114,
+            "no_tests": 6,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 230,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.4915254237288136,
+            "kill_rate_executed": 0.5043478260869565,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 116/236 mutants (kill rate 0.492, threshold 0.24; 6 never reached, 0.504 over the 230 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.25,
+          "weight": 1.0,
+          "verdict": "fail",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "non-positive-weight-accepted",
+              "heavy-surcharge-off-by-one",
+              "express-multiplier-before-surcharge"
+            ],
+            "total": 4,
+            "catch_rate": 0.25,
+            "threshold": 0.5
+          },
+          "evidence": "caught 1/4 seeded defects (catch rate 0.250, threshold 0.50); missed: non-positive-weight-accepted, heavy-surcharge-off-by-one, express-multiplier-before-surcharge"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.9090909090909091,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 11,
+            "with_target_assertion": 10,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.909"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.7368421052631579,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 14,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:58",
+              "quoting/pricing.py:64",
+              "quoting/pricing.py:66",
+              "quoting/pricing.py:82",
+              "quoting/pricing.py:95"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.737"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 11,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_http_routing.py::test_health_reports_ok": "PASSED",
+              "tests/test_http_routing.py::test_quotes_prices_over_http": "PASSED",
+              "tests/test_http_routing.py::test_an_unknown_path_is_404": "PASSED",
+              "tests/test_http_routing.py::test_posting_to_an_unknown_path_is_404": "PASSED",
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 20,
+            "tautological": [],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 1.000"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.8937799043062201,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.9090909090909091,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.7368421052631579,
+              "no_tautological_assertions": 1.0
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 11,
+                "with_target_assertion": 10,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 11,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_http_routing.py::test_health_reports_ok": "PASSED",
+                  "tests/test_http_routing.py::test_quotes_prices_over_http": "PASSED",
+                  "tests/test_http_routing.py::test_an_unknown_path_is_404": "PASSED",
+                  "tests/test_http_routing.py::test_posting_to_an_unknown_path_is_404": "PASSED",
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 14,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:58",
+                  "quoting/pricing.py:64",
+                  "quoting/pricing.py:66",
+                  "quoting/pricing.py:82",
+                  "quoting/pricing.py:95"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 20,
+                "tautological": []
+              }
+            },
+            "composite": 0.8937799043062201,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.894 (threshold 0.70) over assertion_strength=0.91, changed_line_coverage=0.74, flake_resistance=1.00, no_tautological_assertions=1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-09-weight-ceiling",
+      "status": "ok",
+      "score": 0.8811514420057212,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 1.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 13,
+        "fail": 1,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-09-weight-ceiling.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.3093220338983051,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 73,
+            "survived": 61,
+            "no_tests": 102,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 134,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.3093220338983051,
+            "kill_rate_executed": 0.5447761194029851,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 73/236 mutants (kill rate 0.309, threshold 0.24; 102 never reached, 0.545 over the 134 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.25,
+          "weight": 1.0,
+          "verdict": "fail",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "non-positive-weight-accepted",
+              "heavy-surcharge-off-by-one",
+              "express-multiplier-before-surcharge"
+            ],
+            "total": 4,
+            "catch_rate": 0.25,
+            "threshold": 0.5
+          },
+          "evidence": "caught 1/4 seeded defects (catch rate 0.250, threshold 0.50); missed: non-positive-weight-accepted, heavy-surcharge-off-by-one, express-multiplier-before-surcharge"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.9090909090909091,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 11,
+            "with_target_assertion": 10,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.909"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.8421052631578947,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 16,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:58",
+              "quoting/pricing.py:66",
+              "quoting/pricing.py:82"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.842"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 13,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED",
+              "tests/test_weight_ceiling.py::test_the_ceiling_is_inclusive": "PASSED",
+              "tests/test_weight_ceiling.py::test_anything_over_the_ceiling_is_rejected[1]": "PASSED",
+              "tests/test_weight_ceiling.py::test_anything_over_the_ceiling_is_rejected[1000]": "PASSED",
+              "tests/test_weight_ceiling.py::test_anything_over_the_ceiling_is_rejected[100000]": "PASSED",
+              "tests/test_weight_ceiling.py::test_the_ceiling_message_names_the_limit": "PASSED",
+              "tests/test_weight_ceiling.py::test_the_ceiling_is_checked_after_the_type": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 18,
+            "tautological": [],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 1.000"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.925358851674641,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.9090909090909091,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.8421052631578947,
+              "no_tautological_assertions": 1.0
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 11,
+                "with_target_assertion": 10,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 13,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED",
+                  "tests/test_weight_ceiling.py::test_the_ceiling_is_inclusive": "PASSED",
+                  "tests/test_weight_ceiling.py::test_anything_over_the_ceiling_is_rejected[1]": "PASSED",
+                  "tests/test_weight_ceiling.py::test_anything_over_the_ceiling_is_rejected[1000]": "PASSED",
+                  "tests/test_weight_ceiling.py::test_anything_over_the_ceiling_is_rejected[100000]": "PASSED",
+                  "tests/test_weight_ceiling.py::test_the_ceiling_message_names_the_limit": "PASSED",
+                  "tests/test_weight_ceiling.py::test_the_ceiling_is_checked_after_the_type": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 16,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:58",
+                  "quoting/pricing.py:66",
+                  "quoting/pricing.py:82"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 18,
+                "tautological": []
+              }
+            },
+            "composite": 0.925358851674641,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.925 (threshold 0.70) over assertion_strength=0.91, changed_line_coverage=0.84, flake_resistance=1.00, no_tautological_assertions=1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-10-express-flag-validation",
+      "status": "ok",
+      "score": 0.8787021391964458,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 1.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 13,
+        "fail": 1,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-10-express-flag-validation.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.2966101694915254,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 70,
+            "survived": 64,
+            "no_tests": 102,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 134,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.2966101694915254,
+            "kill_rate_executed": 0.5223880597014925,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 70/236 mutants (kill rate 0.297, threshold 0.24; 102 never reached, 0.522 over the 134 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.25,
+          "weight": 1.0,
+          "verdict": "fail",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "non-positive-weight-accepted",
+              "heavy-surcharge-off-by-one",
+              "express-multiplier-before-surcharge"
+            ],
+            "total": 4,
+            "catch_rate": 0.25,
+            "threshold": 0.5
+          },
+          "evidence": "caught 1/4 seeded defects (catch rate 0.250, threshold 0.50); missed: non-positive-weight-accepted, heavy-surcharge-off-by-one, express-multiplier-before-surcharge"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.9,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 10,
+            "with_target_assertion": 9,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.900"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.7894736842105263,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 15,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:58",
+              "quoting/pricing.py:64",
+              "quoting/pricing.py:66",
+              "quoting/pricing.py:95"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.789"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 17,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[yes]": "PASSED",
+              "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[true]": "PASSED",
+              "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[1]": "PASSED",
+              "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[0]": "PASSED",
+              "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[None]": "PASSED",
+              "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[express5]": "PASSED",
+              "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[express6]": "PASSED",
+              "tests/test_express_flag.py::test_both_boolean_values_are_accepted[True]": "PASSED",
+              "tests/test_express_flag.py::test_both_boolean_values_are_accepted[False]": "PASSED",
+              "tests/test_express_flag.py::test_the_http_layer_reports_the_offending_field": "PASSED",
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 17,
+            "tautological": [],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 1.000"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.9068421052631579,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.9,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.7894736842105263,
+              "no_tautological_assertions": 1.0
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 10,
+                "with_target_assertion": 9,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 17,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[yes]": "PASSED",
+                  "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[true]": "PASSED",
+                  "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[1]": "PASSED",
+                  "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[0]": "PASSED",
+                  "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[None]": "PASSED",
+                  "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[express5]": "PASSED",
+                  "tests/test_express_flag.py::test_a_non_boolean_express_flag_is_rejected[express6]": "PASSED",
+                  "tests/test_express_flag.py::test_both_boolean_values_are_accepted[True]": "PASSED",
+                  "tests/test_express_flag.py::test_both_boolean_values_are_accepted[False]": "PASSED",
+                  "tests/test_express_flag.py::test_the_http_layer_reports_the_offending_field": "PASSED",
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 15,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:58",
+                  "quoting/pricing.py:64",
+                  "quoting/pricing.py:66",
+                  "quoting/pricing.py:95"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 17,
+                "tautological": []
+              }
+            },
+            "composite": 0.9068421052631579,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.907 (threshold 0.70) over assertion_strength=0.90, changed_line_coverage=0.79, flake_resistance=1.00, no_tautological_assertions=1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-11-regression-sweep",
+      "status": "ok",
+      "score": 0.9141649175281173,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 2.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 14,
+        "fail": 0,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-11-regression-sweep.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [
+              "qe-test-authoring"
+            ],
+            "expect_activation": true
+          },
+          "evidence": "skill 'qe-test-authoring' activated"
+        },
+        {
+          "evaluator_id": "read_before_writing_tests",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "read",
+            "after": "write",
+            "violations": 0
+          },
+          "evidence": "every 'write' preceded by 'read'"
+        },
+        {
+          "evaluator_id": "ran_what_it_wrote",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "before": "write",
+            "after": "bash",
+            "violations": 0
+          },
+          "evidence": "every 'bash' preceded by 'write'"
+        },
+        {
+          "evaluator_id": "left_the_code_under_test_alone",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 2.0,
+          "verdict": "pass",
+          "slot": "trace_conformance",
+          "details": {
+            "denied": [
+              "edit:quoting/*",
+              "write:quoting/*"
+            ],
+            "offenders": []
+          },
+          "evidence": "no denied tool called"
+        },
+        {
+          "evaluator_id": "suite_is_green",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "output.pytest.failed == 0 and output.pytest.passed > 0",
+            "value": "True"
+          },
+          "evidence": "output.pytest.failed == 0 and output.pytest.passed > 0 -> True"
+        },
+        {
+          "evaluator_id": "suite_is_stable",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.flake_resistance == 1.0",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.flake_resistance == 1.0 -> True"
+        },
+        {
+          "evaluator_id": "no_vacuous_assertions",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "expression": "qe.rubric.no_tautological_assertions >= 0.75",
+            "value": "True"
+          },
+          "evidence": "qe.rubric.no_tautological_assertions >= 0.75 -> True"
+        },
+        {
+          "evaluator_id": "explains_what_the_tests_pin",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        },
+        {
+          "evaluator_id": "mutation_kill_rate",
+          "kind": "assertion",
+          "score": 0.288135593220339,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "killed": 68,
+            "survived": 66,
+            "no_tests": 102,
+            "timeout": 0,
+            "suspicious": 0,
+            "skipped": 0,
+            "segfault": 0,
+            "decided": 236,
+            "executed": 134,
+            "undecided": 0,
+            "total": 236,
+            "kill_rate": 0.288135593220339,
+            "kill_rate_executed": 0.5074626865671642,
+            "target": "quoting",
+            "tests": "tests,tests_generated",
+            "threshold": 0.24
+          },
+          "evidence": "killed 68/236 mutants (kill rate 0.288, threshold 0.24; 102 never reached, 0.507 over the 134 reached)"
+        },
+        {
+          "evaluator_id": "seeded_defects_caught",
+          "kind": "assertion",
+          "score": 0.75,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "caught": [
+              "heavy-surcharge-off-by-one",
+              "express-multiplier-before-surcharge",
+              "rounding-truncates-instead-of-ceiling"
+            ],
+            "missed": [
+              "non-positive-weight-accepted"
+            ],
+            "total": 4,
+            "catch_rate": 0.75,
+            "threshold": 0.5
+          },
+          "evidence": "caught 3/4 seeded defects (catch rate 0.750, threshold 0.50); missed: non-positive-weight-accepted"
+        },
+        {
+          "evaluator_id": "qe_assertion_strength",
+          "kind": "assertion",
+          "score": 0.8,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "test_functions": 10,
+            "with_target_assertion": 8,
+            "weak": [
+              "test_quotes.py::test_health_endpoint_shape",
+              "test_regression_sweep.py::test_the_rate_card_covers_every_zone"
+            ],
+            "dimension": "assertion_strength"
+          },
+          "evidence": "assertion_strength = 0.800"
+        },
+        {
+          "evaluator_id": "qe_changed_line_coverage",
+          "kind": "assertion",
+          "score": 0.7894736842105263,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "covered": 15,
+            "considered": 19,
+            "missed": [
+              "quoting/pricing.py:58",
+              "quoting/pricing.py:64",
+              "quoting/pricing.py:66",
+              "quoting/pricing.py:82"
+            ],
+            "dimension": "changed_line_coverage"
+          },
+          "evidence": "changed_line_coverage = 0.789"
+        },
+        {
+          "evaluator_id": "qe_flake_resistance",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "repeats": 3,
+            "tests": 38,
+            "unstable": [],
+            "outcomes": {
+              "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+              "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+              "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+              "tests/test_quotes.py::test_health_endpoint_shape": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[1-uk-False-515]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[999-uk-False-515]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[1000-uk-False-515]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[1001-uk-False-635]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[5000-uk-False-995]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[5000-uk-True-1990]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[1000-eu-False-1009]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[2500-eu-False-1529]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[2500-eu-True-3058]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[1000-row-False-1605]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[7500-row-False-4475]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[20000-uk-False-3645]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[20000-uk-True-7290]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[30000-row-False-14345]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_holds[19999-uk-False-2795]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[1-uk-False-515]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[999-uk-False-515]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[1000-uk-False-515]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[1001-uk-False-635]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[5000-uk-False-995]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[5000-uk-True-1990]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[1000-eu-False-1009]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[2500-eu-False-1529]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[2500-eu-True-3058]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[1000-row-False-1605]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[7500-row-False-4475]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[20000-uk-False-3645]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[20000-uk-True-7290]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[30000-row-False-14345]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[19999-uk-False-2795]": "PASSED",
+              "tests/test_regression_sweep.py::test_the_rate_card_covers_every_zone": "PASSED"
+            },
+            "dimension": "flake_resistance"
+          },
+          "evidence": "flake_resistance = 1.000"
+        },
+        {
+          "evaluator_id": "qe_no_tautological_assertions",
+          "kind": "assertion",
+          "score": 0.9375,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": null,
+          "details": {
+            "assertions": 16,
+            "tautological": [
+              "test_regression_sweep.py:57"
+            ],
+            "dimension": "no_tautological_assertions"
+          },
+          "evidence": "no_tautological_assertions = 0.938"
+        },
+        {
+          "evaluator_id": "qe_rubric",
+          "kind": "assertion",
+          "score": 0.8674671052631578,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "task_outcome",
+          "details": {
+            "dimensions": {
+              "assertion_strength": 0.8,
+              "flake_resistance": 1.0,
+              "changed_line_coverage": 0.7894736842105263,
+              "no_tautological_assertions": 0.9375
+            },
+            "details": {
+              "assertion_strength": {
+                "test_functions": 10,
+                "with_target_assertion": 8,
+                "weak": [
+                  "test_quotes.py::test_health_endpoint_shape",
+                  "test_regression_sweep.py::test_the_rate_card_covers_every_zone"
+                ]
+              },
+              "flake_resistance": {
+                "repeats": 3,
+                "tests": 38,
+                "unstable": [],
+                "outcomes": {
+                  "tests/test_quotes.py::test_uk_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_eu_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_rest_of_world_parcel_is_priced": "PASSED",
+                  "tests/test_quotes.py::test_express_doubles_the_quote": "PASSED",
+                  "tests/test_quotes.py::test_unknown_destination_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_missing_weight_is_rejected": "PASSED",
+                  "tests/test_quotes.py::test_health_endpoint_shape": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[1-uk-False-515]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[999-uk-False-515]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[1000-uk-False-515]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[1001-uk-False-635]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[5000-uk-False-995]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[5000-uk-True-1990]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[1000-eu-False-1009]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[2500-eu-False-1529]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[2500-eu-True-3058]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[1000-row-False-1605]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[7500-row-False-4475]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[20000-uk-False-3645]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[20000-uk-True-7290]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[30000-row-False-14345]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_holds[19999-uk-False-2795]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[1-uk-False-515]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[999-uk-False-515]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[1000-uk-False-515]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[1001-uk-False-635]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[5000-uk-False-995]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[5000-uk-True-1990]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[1000-eu-False-1009]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[2500-eu-False-1529]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[2500-eu-True-3058]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[1000-row-False-1605]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[7500-row-False-4475]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[20000-uk-False-3645]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[20000-uk-True-7290]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[30000-row-False-14345]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_http_layer_returns_the_same_prices[19999-uk-False-2795]": "PASSED",
+                  "tests/test_regression_sweep.py::test_the_rate_card_covers_every_zone": "PASSED"
+                }
+              },
+              "changed_line_coverage": {
+                "covered": 15,
+                "considered": 19,
+                "missed": [
+                  "quoting/pricing.py:58",
+                  "quoting/pricing.py:64",
+                  "quoting/pricing.py:66",
+                  "quoting/pricing.py:82"
+                ]
+              },
+              "no_tautological_assertions": {
+                "assertions": 16,
+                "tautological": [
+                  "test_regression_sweep.py:57"
+                ]
+              }
+            },
+            "composite": 0.8674671052631578,
+            "threshold": 0.7,
+            "rubric_version": "a83e12a4967e616c0d3295cade4f974555608508bdd7515ce09f63dfb29ae8c5"
+          },
+          "evidence": "qe-review composite 0.867 (threshold 0.70) over assertion_strength=0.80, changed_line_coverage=0.79, flake_resistance=1.00, no_tautological_assertions=0.94"
+        }
+      ]
+    },
+    {
+      "case_id": "qe-12-distractor-licence",
+      "status": "ok",
+      "score": 1.0,
+      "pass_rate": 1.0,
+      "invalid_rate": 0.0,
+      "infra_rate": 0.0,
+      "attempts": 1,
+      "case_weight": 1.0,
+      "quarantined": false,
+      "assertion_counts": {
+        "pass": 1,
+        "fail": 0,
+        "skipped": 1,
+        "evaluator_error": 0
+      },
+      "artefact_ref": "cases/qe-12-distractor-licence.json",
+      "signals": [
+        {
+          "evaluator_id": "used_qe_skill",
+          "kind": "assertion",
+          "score": 1.0,
+          "weight": 1.0,
+          "verdict": "pass",
+          "slot": "activation_correct",
+          "details": {
+            "skill": "qe-test-authoring",
+            "activations": [],
+            "expect_activation": false
+          },
+          "evidence": "distractor: skill 'qe-test-authoring' never activated (saw: []) (correctly silent)"
+        },
+        {
+          "evaluator_id": "answers_the_licence_question",
+          "kind": "judge",
+          "score": 0.0,
+          "weight": 1.0,
+          "verdict": "skipped",
+          "slot": "llm_judge_overall",
+          "details": {
+            "reason": "no judge backend configured"
+          },
+          "evidence": "judge disabled: no backend configured for this run"
+        }
+      ]
+    }
+  ]
+}

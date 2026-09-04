@@ -1,0 +1,12 @@
+{
+  "answer": "Pinned that weight_grams must be a plain integer. The input that breaks it is True: bool is a subclass of int in Python, so a naive isinstance check prices a parcel weighing one gram.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 16
+  },
+  "test_files": [
+    "tests_generated/test_weight_types.py"
+  ],
+  "tests_added": 9
+}

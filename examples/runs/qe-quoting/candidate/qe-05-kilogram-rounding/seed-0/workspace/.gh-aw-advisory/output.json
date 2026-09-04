@@ -1,0 +1,12 @@
+{
+  "answer": "Pinned that part kilograms round up, across 1g, 999g, 1000g and 1001g. The input that breaks it is any sub-kilogram parcel: truncating instead of ceiling prices a 50g parcel at the bare base rate.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 16
+  },
+  "test_files": [
+    "tests_generated/test_kilogram_rounding.py"
+  ],
+  "tests_added": 9
+}

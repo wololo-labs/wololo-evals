@@ -1,0 +1,12 @@
+{
+  "answer": "Pinned that express multiplies the whole quote including the heavy surcharge, not just the zone rate. The input that breaks it is a parcel that is both at least 20000g and express: reorder the two steps and only that combination changes price.",
+  "pytest": {
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 13
+  },
+  "test_files": [
+    "tests_generated/test_express_multiplier.py"
+  ],
+  "tests_added": 6
+}

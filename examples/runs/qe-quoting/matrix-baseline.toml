@@ -1,0 +1,24 @@
+# The no-agent control arm of the QE benchmark, replayed offline.
+#
+# `[engines.replay] runs_dir` points at the recorded archive; the replay engine
+# re-emits each case's raw stream and re-materialises the workspace it left
+# behind, so the grader sees exactly what a live run would have. Zero model
+# spend, no network, no database.
+#
+#   wololo-evals-cli matrix --config examples/runs/qe-quoting/matrix-baseline.toml
+schema_version = "2.0.0"
+benchmark = "../../../benchmarks/qe-skill"
+output_dir = "out/baseline"
+seeds = 1
+
+[engines.replay]
+version_range = "*"
+runs_dir = "baseline-noagent"
+
+[[models]]
+id = "qe-recorded"
+engine = "replay"
+model = "claude-sonnet-4-5"
+
+[[prompts]]
+id = "qe-skill"
