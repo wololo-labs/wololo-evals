@@ -36,9 +36,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # No model is called anywhere in this workflow. Stated explicitly so a key
-  # arriving in the environment later cannot quietly turn the judge on and
-  # start spending against a CI run.
+  # No model is called anywhere in this workflow. The judge is off by default
+  # and is not inferred from an API key being present, so this is belt and
+  # braces rather than the only thing holding spend at zero.
   WOLOLO_EVALS_JUDGE: "off"
 
 jobs:

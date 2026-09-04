@@ -47,12 +47,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_matrix.add_argument("--max-cost-usd", type=float, default=None)
     p_matrix.add_argument("--allow-engine-drift", action="store_true")
     p_matrix.add_argument("--iteration", type=int, default=1)
+    p_matrix.add_argument(
+        "--judge", choices=("on", "off"), default=None,
+        help=(
+            "run the LLM judge for plain-text assertions. Off by default and "
+            "off unless asked: this is the only flag here that spends money. "
+            "Overrides WOLOLO_EVALS_JUDGE."
+        ),
+    )
 
     p_bench = sub.add_parser("bench", help="run one benchmark as a single combo")
     p_bench.add_argument("--config", required=True)
     p_bench.add_argument("--engine", default=None)
     p_bench.add_argument("--model", default=None)
     p_bench.add_argument("--out", default=None)
+    p_bench.add_argument(
+        "--judge", choices=("on", "off"), default=None,
+        help=(
+            "run the LLM judge for plain-text assertions. Off by default and "
+            "off unless asked: this is the only flag here that spends money. "
+            "Overrides WOLOLO_EVALS_JUDGE."
+        ),
+    )
 
     p_replay = sub.add_parser("replay", help="re-score an archived matrix run (zero spend)")
     p_replay.add_argument("archive_dir")
@@ -92,7 +108,7 @@ def _replay_runs_dir(config) -> Optional[str]:  # noqa: ANN001 - MatrixConfig
     return str((config.base_dir / str(runs_dir)).resolve())
 
 
-def _live_seams(config):  # noqa: ANN001 - MatrixConfig
+def _live_seams(config, args):  # noqa: ANN001 - MatrixConfig, argparse namespace
     """Build the (adapter_factory, normaliser_factory, grader) triple from the
     real engine/trace/scoring packages.
 
@@ -101,6 +117,9 @@ def _live_seams(config):  # noqa: ANN001 - MatrixConfig
     engine that can settle it and runs the standing mechanical scorers. There
     is no scoreless default - a matrix that cannot grade must fail loudly, not
     report zeros that look like a bad candidate.
+
+    The judge is off unless this invocation opted in (see
+    :func:`_judge_enabled`), so the default path spends nothing.
     """
     from .. import engines as engines_pkg
     from ..scoring import build_grader
@@ -121,26 +140,49 @@ def _live_seams(config):  # noqa: ANN001 - MatrixConfig
         adapter_factory,
         normaliser_factory,
         build_grader(
-            judge_backend=_judge_backend(),
+            judge_backend=_judge_backend(args),
             benchmark_dir=config.benchmark_dir,
         ),
     )
 
 
-def _judge_backend():
-    """The LLM judge, when the environment supplies one.
+def _judge_enabled(args: argparse.Namespace) -> bool:
+    """Whether this invocation may spend money on the LLM judge.
 
-    ``WOLOLO_EVALS_JUDGE=off`` (or simply no ``ANTHROPIC_API_KEY``) leaves the
-    judge unconfigured, and the grader then emits ``skipped`` judge signals -
-    the documented zero-spend path. Nothing here calls a model at import time.
+    **Off unless asked.** The judge is the only part of ``matrix``/``bench``
+    that bills, so it is opted into explicitly with ``--judge on`` or
+    ``WOLOLO_EVALS_JUDGE=on``, never inferred from an API key being present in
+    the environment. Keying it on the key would mean every existing caller who
+    happens to export ``ANTHROPIC_API_KEY`` for something else silently flipped
+    from free to billing on their next run.
+
+    ``--judge`` beats the environment, so a shell that exports ``on`` can still
+    be overridden per invocation.
     """
     import os
 
-    if os.environ.get("WOLOLO_EVALS_JUDGE", "").lower() in ("off", "0", "false"):
+    choice = getattr(args, "judge", None) or os.environ.get("WOLOLO_EVALS_JUDGE", "off")
+    return str(choice).strip().lower() in ("on", "1", "true", "yes")
+
+
+def _judge_backend(args: argparse.Namespace):
+    """The LLM judge, when this invocation has opted in and can reach one.
+
+    Returns ``None`` on the default path, and the grader then emits ``skipped``
+    judge signals: visibly skipped, excluded from the slot denominators, and
+    zero spend. Nothing here calls a model at import time.
+    """
+    import os
+
+    if not _judge_enabled(args):
         return None
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        return None
+        raise SystemExit(
+            "the judge was enabled (--judge on / WOLOLO_EVALS_JUDGE=on) but "
+            "ANTHROPIC_API_KEY is not set. Refusing to run: silently scoring "
+            "every judge assertion as skipped would look like a cheap pass."
+        )
 
     from ..judge import http_call_model, run_judge
 
@@ -182,7 +224,7 @@ def _cmd_matrix(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(_matrix.render_plan(_matrix.plan(config)), end="")
         return 0
-    adapter_factory, normaliser_factory, grader = _live_seams(config)
+    adapter_factory, normaliser_factory, grader = _live_seams(config, args)
     matrix_dir = _matrix.run_matrix(
         config,
         adapter_factory,
@@ -200,7 +242,7 @@ def _cmd_matrix(args: argparse.Namespace) -> int:
 
 def _cmd_bench(args: argparse.Namespace) -> int:
     config = load_matrix_config(args.config)
-    adapter_factory, normaliser_factory, grader = _live_seams(config)
+    adapter_factory, normaliser_factory, grader = _live_seams(config, args)
     scorecard = _bench.run_bench(
         config,
         adapter_factory,

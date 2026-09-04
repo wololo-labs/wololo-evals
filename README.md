@@ -232,8 +232,8 @@ worker, an OTEL collector on `4318`, and the wololo-deploy canary stub on `8090`
 | Command | Purpose |
 |---|---|
 | `cases compile` | `cases.toml` to canonical `cases.jsonl`, with `--check` for drift |
-| `matrix` | Expand and run the engine-by-model matrix; `--dry-run`, `--smoke`, `--max-cost-usd` |
-| `bench` | Run one benchmark as a single combo |
+| `matrix` | Expand and run the engine-by-model matrix; `--dry-run`, `--smoke`, `--max-cost-usd`, `--judge on` |
+| `bench` | Run one benchmark as a single combo; `--judge on` |
 | `replay` | Re-score an archived matrix run at zero spend |
 | `gate` | Candidate-versus-baseline regression verdict for CI; `--signal-guard <id>` fails on a named signal regressing |
 | `label` | Record a human verdict into `labels.jsonl` |
@@ -340,7 +340,15 @@ refuses (exit 2) rather than reporting a guard that measured nothing.
 ### Which paths are live and which are fixture
 
 Nothing in the table above calls a model. Being explicit about that matters more
-than the numbers:
+than the numbers.
+
+The judge is the only part of `matrix` and `bench` that spends anything, and it
+is **off unless asked**: `--judge on`, or `WOLOLO_EVALS_JUDGE=on`. It is
+deliberately not keyed on `ANTHROPIC_API_KEY` being present, because that would
+flip every caller who exports a key for some other reason from free to billing
+on their next run. With the judge on and no key set, the run refuses rather than
+scoring every judge assertion `skipped`, which would look like a cheap pass on
+the one run someone asked to be judged.
 
 | Path | State | Why |
 |---|---|---|
@@ -349,7 +357,7 @@ than the numbers:
 | `mutation_kill_rate` | **Live** | `mutmut` really mutates `quoting/` and really runs the suite, on every gate run |
 | `seeded_defects_caught` | **Live** | Each declared defect is planted into a staged copy and the suite is re-run |
 | `qe-review` rubric | **Live** | Two AST dimensions, two that run the suite (repeated execution, `coverage`) |
-| LLM judge | **Fixture** | No `ANTHROPIC_API_KEY` in CI, so judge assertions score `skipped` and are excluded from the slot denominators. Set the key (and leave `WOLOLO_EVALS_JUDGE` unset) to enable it |
+| LLM judge | **Fixture** | Off by default, so judge assertions score `skipped` and are excluded from the slot denominators. Opt in with `--judge on` or `WOLOLO_EVALS_JUDGE=on`, which then requires `ANTHROPIC_API_KEY` |
 | Judge calibration (kappa) | **Not run** | No golden-set agreement record is committed for `qe-skill`. The judge does not participate, so the gate does not refuse; enabling the judge requires `judge calibrate` first |
 | Engine adapters (`claude`, `codex`) | **Fixture** | Both arms replay recorded streams; no engine subprocess runs |
 | Copilot adapter | **Fixture** | Replay only. A live smoke needs a Copilot token in the environment; without one the recorded path is used and labelled here |

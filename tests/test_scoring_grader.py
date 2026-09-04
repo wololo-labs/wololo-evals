@@ -362,3 +362,47 @@ def test_the_grader_emits_an_evaluator_error_the_composer_then_ignores(tmp_path)
     composed = compose_case(signals, "skill_behaviour", pass_threshold=0.7)
     assert composed.evaluator_errors == 1
     assert composed.slot_scores["task_outcome"] == pytest.approx(1.0)
+
+
+# --------------------------------------------------------------------------
+# the judge is the only part of matrix/bench that bills, so it is opt-in
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "flag,env,expected",
+    [
+        (None, {}, False),                       # the default: no spend
+        (None, {"ANTHROPIC_API_KEY": "sk-x"}, False),  # a key alone must not enable it
+        (None, {"WOLOLO_EVALS_JUDGE": "on"}, True),
+        ("on", {}, True),
+        ("off", {"WOLOLO_EVALS_JUDGE": "on"}, False),  # the flag beats the environment
+    ],
+)
+def test_the_judge_is_off_unless_asked(flag, env, expected, monkeypatch):
+    from wololo_evals.cli.main import _judge_enabled, build_parser
+
+    for name in ("WOLOLO_EVALS_JUDGE", "ANTHROPIC_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+
+    argv = ["matrix", "--config", "x"] + (["--judge", flag] if flag else [])
+    assert _judge_enabled(build_parser().parse_args(argv)) is expected
+
+
+def test_enabling_the_judge_without_a_key_refuses_rather_than_scoring_skipped(monkeypatch):
+    """Quietly emitting skipped signals here would look like a cheap pass on
+    exactly the run an operator asked to be judged."""
+    from wololo_evals.cli.main import _judge_backend, build_parser
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("WOLOLO_EVALS_JUDGE", "on")
+    with pytest.raises(SystemExit, match="ANTHROPIC_API_KEY"):
+        _judge_backend(build_parser().parse_args(["matrix", "--config", "x"]))
+
+
+def test_the_default_path_builds_no_judge_backend(monkeypatch):
+    from wololo_evals.cli.main import _judge_backend, build_parser
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-not-used")
+    monkeypatch.delenv("WOLOLO_EVALS_JUDGE", raising=False)
+    assert _judge_backend(build_parser().parse_args(["matrix", "--config", "x"])) is None
