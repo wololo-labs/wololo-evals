@@ -1,0 +1,6 @@
+{
+  "engine_id": "claude",
+  "model_id": "synthetic:hand-authored",
+  "recorded": "hand-authored fixture",
+  "note": "This raw stream is hand-authored to the Claude Code stream-json shape, not captured from a model run: it carries no timestamps, no session id, and placeholder tool results. It exists to drive the replay engine and the trace assertions deterministically. The mechanical signals in the gate report (mutation kill rate, seeded-defect catch rate, qe-review rubric) are NOT recorded here and are recomputed at gate time from the fixture's own shipped suite."
+}

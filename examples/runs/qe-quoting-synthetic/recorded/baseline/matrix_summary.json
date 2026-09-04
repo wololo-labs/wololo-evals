@@ -1,0 +1,59 @@
+{
+  "schema_version": "2.0.0",
+  "matrix_id": "matrix-baseline",
+  "generated_at": "20260904T164003Z",
+  "benchmark": "../../../benchmarks/qe-skill",
+  "benchmark_id": "qe-skill",
+  "evaluation_type": "skill_behaviour",
+  "pass_threshold": 0.7,
+  "workflow": {},
+  "iteration": 1,
+  "snapshot_dir": null,
+  "engines": {
+    "replay": "replay-1.0"
+  },
+  "models": [
+    {
+      "id": "qe-recorded",
+      "engine": "replay",
+      "model": "synthetic-hand-authored"
+    }
+  ],
+  "prompts": [
+    "qe-skill"
+  ],
+  "baselines": [],
+  "seeds": 1,
+  "concurrency": 1,
+  "cache_mode": "off",
+  "budget_usd": null,
+  "cumulative_spend_usd": 0.0,
+  "provenance": {
+    "harness_version": "0.1.0",
+    "engine_cli_versions": {
+      "replay": "replay-1.0"
+    },
+    "judge": {
+      "engine": null,
+      "model": null,
+      "config_digest": null,
+      "disabled": false
+    },
+    "fixture_digests": {},
+    "hermetic": true,
+    "exfiltration_scan_scope": "advisory",
+    "repro_command": "wololo-evals-cli matrix --config matrix-baseline.toml"
+  },
+  "combos": [
+    {
+      "combo_id": "qe-recorded__qe-skill",
+      "engine_id": "replay",
+      "model_id": "qe-recorded",
+      "prompt_id": "qe-skill",
+      "asset_id": null,
+      "role": "treatment",
+      "scorecard_path": "combos/qe-recorded__qe-skill/runs/qe-recorded__qe-skill/scorecard.json",
+      "combo_dir": "combos/qe-recorded__qe-skill/runs/qe-recorded__qe-skill"
+    }
+  ]
+}

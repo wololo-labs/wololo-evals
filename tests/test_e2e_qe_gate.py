@@ -1,7 +1,7 @@
 """End-to-end QE gate proof: the Slice C success metric in one test.
 
 With **zero model spend**, drive the whole spine over the committed
-``examples/runs/qe-quoting`` corpus and the ``examples/fixtures/quoting-service``
+``examples/runs/qe-quoting-synthetic`` corpus and the ``examples/fixtures/quoting-service``
 fixture:
 
 1. **compile** ``benchmarks/qe-skill/cases.toml`` and confirm the committed
@@ -17,7 +17,8 @@ fixture:
 4. **gate**: candidate-vs-baseline exits 0, and a guard on a signal that did
    regress turns the same pair into exit 1;
 5. the committed ``recorded/`` pair reproduces that verdict with no
-   recomputation, which is what a fresh clone runs.
+   recomputation, which is what a fresh clone runs;
+6. the corpus does not claim a model produced its hand-authored streams.
 
 Marked ``mutation``: this drives the real mutmut-backed scorer over twelve
 cases and takes about two minutes, which is the price of proving the numbers
@@ -42,7 +43,7 @@ from wololo_evals.scoring.qe_rubric import QE_RUBRIC_EVALUATOR_ID
 
 _REPO = pathlib.Path(__file__).resolve().parents[1]
 _BENCH = _REPO / "benchmarks" / "qe-skill"
-_CORPUS = _REPO / "examples" / "runs" / "qe-quoting"
+_CORPUS = _REPO / "examples" / "runs" / "qe-quoting-synthetic"
 _RECORDED = _CORPUS / "recorded"
 
 _N_CASES = 12
@@ -252,6 +253,23 @@ def test_the_recorded_pair_gates_green_from_a_fresh_clone(tmp_path):
     assert signals[QE_RUBRIC_EVALUATOR_ID]["delta"] > 0
     assert signals[MUTATION_EVALUATOR_ID] is not signals[QE_RUBRIC_EVALUATOR_ID]
     assert not signals["qe_flake_resistance"]["regressed"]
+
+
+def test_the_corpus_does_not_claim_a_model_produced_it():
+    """The raw streams are hand-authored to the Claude Code stream-json shape.
+    Naming a real model in their provenance, with token counts to match, would
+    be a claim the artefacts cannot support, and the QE numbers are recomputed
+    rather than recorded anyway."""
+    provenance = sorted(_CORPUS.rglob("provenance.json"))
+    assert len(provenance) == _N_CASES * 2  # both arms, every case
+    for path in provenance:
+        record = json.loads(path.read_text(encoding="utf-8"))
+        assert record["model_id"].startswith("synthetic:"), path
+        assert record["recorded"] == "hand-authored fixture", path
+        assert "hand-authored" in record["note"], path
+        # No invented usage: a hand-authored stream has no token counts.
+        assert "tokens_in" not in record, path
+        assert "tokens_out" not in record, path
 
 
 def test_the_recorded_pair_carries_no_absolute_paths():

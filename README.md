@@ -267,7 +267,7 @@ wave through.
 ```
 ┌─────────────────┐   ┌──────────────────┐   ┌───────────────────┐
 │ recorded run    │──▶│ ReplayAdapter    │──▶│ production grader │
-│ raw stream      │   │ re-emit stream   │   │                   │
+│ raw stream (fx) │   │ re-emit stream   │   │                   │
 │ generated tests │   │ restore workspace│   │ trace: ──▶ trace  │
 └─────────────────┘   └──────────────────┘   │ code:  ──▶ accept │
                                              │ text   ──▶ judge  │
@@ -304,6 +304,18 @@ Every one of those numbers is **recomputed at gate time** from the tests the
 recorded run left in its workspace - the corpus records what each run *did*, not
 what it *scored*, so changing a scorer or a rubric weight moves the number.
 
+**The recorded streams are hand-authored fixtures.** `examples/runs/qe-quoting-synthetic/`
+holds trajectories written to the Claude Code `stream-json` shape, not captured
+from a model run: their `provenance.json` says `model_id:
+synthetic:hand-authored` and carries no token counts, timestamps or session ids,
+because no model produced them. They settle the *trajectory* questions (did the
+skill activate, did it read before writing, did it leave the code under test
+alone) and should be read as authored answers to those. Every *quality* number
+in the table above is absent from the archive and is computed by running code:
+`mutmut` really mutates `quoting/`, each seeded defect is really planted, and
+the suites really run. The test modules the candidate arm "wrote" are real code
+that really executes, and are what all of it is computed from.
+
 `qe_no_tautological_assertions` slipping by 0.0057 is real and is reported
 rather than smoothed away: one candidate case asserts a property of its own rate
 table, which pins nothing about the service. That is what the per-signal table
@@ -313,7 +325,7 @@ is for.
 
 ```console
 $ pip install -e '.[dev]'            # or '.[mutation]' for just the QE scorers
-$ wololo-evals-cli gate     --run      examples/runs/qe-quoting/recorded/candidate     --baseline examples/runs/qe-quoting/recorded/baseline     --signal-guard mutation_kill_rate     --signal-guard seeded_defects_caught     --signal-guard qe_flake_resistance
+$ wololo-evals-cli gate     --run      examples/runs/qe-quoting-synthetic/recorded/candidate     --baseline examples/runs/qe-quoting-synthetic/recorded/baseline     --signal-guard mutation_kill_rate     --signal-guard seeded_defects_caught     --signal-guard qe_flake_resistance
 # Gate verdict: PASS
 ...
 | signal                    | slot         | baseline | candidate |   delta |          |
@@ -328,8 +340,8 @@ To recompute the pair from the archives rather than reading the committed one
 (about 100 seconds, nearly all of it mutation analysis):
 
 ```console
-$ wololo-evals-cli matrix --config examples/runs/qe-quoting/matrix-baseline.toml
-$ wololo-evals-cli matrix --config examples/runs/qe-quoting/matrix-candidate.toml
+$ wololo-evals-cli matrix --config examples/runs/qe-quoting-synthetic/matrix-baseline.toml
+$ wololo-evals-cli matrix --config examples/runs/qe-quoting-synthetic/matrix-candidate.toml
 ```
 
 `--signal-guard <id>` fails the gate when that signal's mean regressed. A rising
@@ -354,12 +366,13 @@ the one run someone asked to be judged.
 |---|---|---|
 | `trace:` assertions | **Live** | Pure functions over the normalised trace |
 | `code:` assertions | **Live** | AST-allow-listed expressions over the run's outputs and the QE scorers' live results |
+| Recorded engine streams | **Fixture** | Hand-authored to the Claude Code `stream-json` shape and labelled as such in every `provenance.json`; they drive the replay engine, and the `trace:` assertions read them |
 | `mutation_kill_rate` | **Live** | `mutmut` really mutates `quoting/` and really runs the suite, on every gate run |
 | `seeded_defects_caught` | **Live** | Each declared defect is planted into a staged copy and the suite is re-run |
 | `qe-review` rubric | **Live** | Two AST dimensions, two that run the suite (repeated execution, `coverage`) |
 | LLM judge | **Fixture** | Off by default, so judge assertions score `skipped` and are excluded from the slot denominators. Opt in with `--judge on` or `WOLOLO_EVALS_JUDGE=on`, which then requires `ANTHROPIC_API_KEY` |
 | Judge calibration (kappa) | **Not run** | No golden-set agreement record is committed for `qe-skill`. The judge does not participate, so the gate does not refuse; enabling the judge requires `judge calibrate` first |
-| Engine adapters (`claude`, `codex`) | **Fixture** | Both arms replay recorded streams; no engine subprocess runs |
+| Engine adapters (`claude`, `codex`) | **Fixture** | Both arms replay hand-authored streams; no engine subprocess runs |
 | Copilot adapter | **Fixture** | Replay only. A live smoke needs a Copilot token in the environment; without one the recorded path is used and labelled here |
 
 The seeded defects live in `seeded_defects.json` rather than in the fixture's
@@ -388,7 +401,7 @@ exit code.
 | File-first CLI (`cases compile`, `matrix --dry-run`, `bench`, `replay`, `gate`, `label`, `judge calibrate`) | **Shipped** | Reproducible offline against the committed example corpus |
 | Eval suites and rubrics | **Shipped** | Six suites, weights validated to sum to 1.0 at load; registry open to out-of-tree suites |
 | Production grader (`trace:`, `code:`, judge dispatch) | **Shipped** | Injected by default into `matrix` and `bench`; proven above zero on a live-shaped run |
-| QE benchmark and mechanical scorers | **Shipped** | 12 cases over `examples/fixtures/quoting-service`; mutation kill rate, seeded-defect catch rate and the `qe-review` rubric recomputed at gate time |
+| QE benchmark and mechanical scorers | **Shipped** | 12 cases over `examples/fixtures/quoting-service`; mutation kill rate, seeded-defect catch rate and the `qe-review` rubric recomputed at gate time. The recorded trajectories are hand-authored fixtures; a live capture is follow-up work |
 | Paired-trial statistics and gate verdict | **Shipped** | Proven end to end by the committed replay archive |
 | Injection-hardened judge and calibration refusal | **Shipped** | |
 | FastAPI service, RLS tenancy, audit chain, envelope encryption | **Shipped** | Exercised against a real throwaway Postgres in the test suite |

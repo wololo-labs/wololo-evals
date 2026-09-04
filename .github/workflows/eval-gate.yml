@@ -11,11 +11,14 @@ name: Eval gate
 #    examples/runs/dropdowns-synthetic corpus, which records a skill upgrade
 #    that made things worse. This one MUST exit 1: a gate that cannot fail is
 #    not a gate, so a green verdict here is the failure condition.
-# 3. the QE gate - both arms of examples/runs/qe-quoting replayed from their
-#    archives and compared. This one must exit 0, and the job fails on exit 1
+# 3. the QE gate - both arms of examples/runs/qe-quoting-synthetic replayed
+#    from their archives and compared. The archived engine streams are
+#    hand-authored fixtures; every QE number is recomputed here from the tests
+#    each recorded run left behind. This one must exit 0, and the job fails on
+#    exit 1
 #    (a regression, including a guarded signal that slipped) or exit 2 (a
-#    refusal: a judge-disabled input, an uncalibrated judge, or a guard naming
-#    a signal that is not in both runs).
+#    refusal: a judge-disabled input, an uncalibrated judge, or a guard whose
+#    signal did not score in both runs).
 #
 # Everything here is offline and costs nothing: the replay engine re-emits
 # archived streams, WOLOLO_EVALS_JUDGE=off keeps the judge unconfigured, and
@@ -109,11 +112,11 @@ jobs:
       - name: Replay the QE benchmark arms
         run: |
           set -euo pipefail
-          wololo-evals-cli matrix --config examples/runs/qe-quoting/matrix-baseline.toml
-          wololo-evals-cli matrix --config examples/runs/qe-quoting/matrix-candidate.toml
+          wololo-evals-cli matrix --config examples/runs/qe-quoting-synthetic/matrix-baseline.toml
+          wololo-evals-cli matrix --config examples/runs/qe-quoting-synthetic/matrix-candidate.toml
           {
-            echo "QE_BASELINE=$(ls -d examples/runs/qe-quoting/out/baseline/iterations/001/matrix-*)"
-            echo "QE_CANDIDATE=$(ls -d examples/runs/qe-quoting/out/candidate/iterations/001/matrix-*)"
+            echo "QE_BASELINE=$(ls -d examples/runs/qe-quoting-synthetic/out/baseline/iterations/001/matrix-*)"
+            echo "QE_CANDIDATE=$(ls -d examples/runs/qe-quoting-synthetic/out/candidate/iterations/001/matrix-*)"
           } >> "$GITHUB_ENV"
 
       - name: QE gate
@@ -132,8 +135,8 @@ jobs:
         run: |
           set -euo pipefail
           wololo-evals-cli gate \
-            --run      examples/runs/qe-quoting/recorded/candidate \
-            --baseline examples/runs/qe-quoting/recorded/baseline \
+            --run      examples/runs/qe-quoting-synthetic/recorded/candidate \
+            --baseline examples/runs/qe-quoting-synthetic/recorded/baseline \
             --signal-guard mutation_kill_rate \
             --signal-guard seeded_defects_caught \
             --signal-guard qe_flake_resistance \
