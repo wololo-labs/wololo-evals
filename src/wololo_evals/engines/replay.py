@@ -16,12 +16,20 @@ Resolution: the archive root is ``[engines.replay] runs_dir``. For a given
 itself. Each candidate directory carries a ``provenance.json``
 (``engine_id``/``model_id``/token counts) alongside ``<engine_id>.raw.jsonl``;
 absent a provenance file the engine is derived from the ``*.raw.jsonl`` stem.
+
+An archived directory may also carry a ``workspace/`` subtree: the files the
+recorded run left behind (generated tests, patched sources, an ``output.json``).
+Those are copied into the run workspace before scoring, so an offline replay
+presents a grader with the same files a live run would have - which is what
+lets a mechanical scorer recompute its number at gate time instead of reading
+back a recorded one.
 """
 from __future__ import annotations
 
 import dataclasses
 import json
 import pathlib
+import shutil
 from typing import Optional
 
 from ..core.interfaces import ADVISORY_DIR, RunResult, RunSpec, TraceNormaliser
@@ -33,6 +41,10 @@ _REPLAY_VERSION = "replay-1.0"
 
 class ReplaySourceError(FileNotFoundError):
     """No archived raw log resolves for this (case, seed) under ``runs_dir``."""
+
+
+#: Subdirectory of an archived run holding the files it left behind.
+WORKSPACE_DIR = "workspace"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -77,6 +89,7 @@ class ReplayAdapter:
         adv = self._advisory_dir(spec)
         adv.mkdir(parents=True, exist_ok=True)
         archived = self._resolve(spec)
+        restored = self._restore_workspace(archived, spec)
 
         raw_text = archived.source.read_text(encoding="utf-8")
         raw_path = adv / f"{archived.engine_id}.raw.jsonl"
@@ -112,6 +125,7 @@ class ReplayAdapter:
                 "engine_id": archived.engine_id,
                 "model_id": archived.model_id,
                 "replay_source": str(archived.source),
+                "restored_files": restored,
             },
         )
 
@@ -120,6 +134,23 @@ class ReplayAdapter:
     # ------------------------------------------------------------------ #
     def _advisory_dir(self, spec: RunSpec) -> pathlib.Path:
         return pathlib.Path(spec.cwd) / ADVISORY_DIR
+
+    def _restore_workspace(self, archived: _ArchivedRun, spec: RunSpec) -> int:
+        """Copy the archived ``workspace/`` subtree into the run workspace.
+
+        Returns the number of files restored (``0`` when the archive records no
+        workspace, which is the normal shape for a trace-only recording).
+        """
+        source = archived.source.parent / WORKSPACE_DIR
+        if not source.is_dir():
+            return 0
+        dest = pathlib.Path(spec.cwd)
+        dest.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(
+            source, dest, dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+        return sum(1 for p in source.rglob("*") if p.is_file())
 
     def _compose_prompt(self, spec: RunSpec) -> str:
         case = spec.case

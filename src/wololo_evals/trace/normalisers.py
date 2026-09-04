@@ -43,6 +43,7 @@ __all__ = [
     "ClaudeNormaliser",
     "CodexNormaliser",
     "CopilotNormaliser",
+    "ReplayNormaliser",
     "NORMALISERS",
     "get_normaliser",
     "normalise_stream",
@@ -492,16 +493,42 @@ def _copilot_target(name: str, args: Mapping[str, object]) -> Optional[str]:
     return None
 
 
-#: engine id → normaliser instance (README §6.1, covers the live engines; the
-#: ``replay`` engine resolves the recorded engine's normaliser one layer up).
-NORMALISERS: Mapping[str, _BaseNormaliser] = {
+class ReplayNormaliser:
+    """Normalise an archived stream with the *recorded* engine's normaliser.
+
+    ``replay`` is not a dialect, it is a re-emission: ``ReplayAdapter`` writes
+    the archived log back out under its original name
+    (``<engine>.raw.jsonl``), so the engine is read off the filename and the
+    real normaliser does the work. Without this a replayed matrix would
+    normalise nothing and every ``trace:`` assertion would score zero against a
+    perfectly good archive.
+    """
+
+    engine_id = "replay"
+
+    def normalise(self, raw_event_path: pathlib.Path) -> list[TraceEvent]:
+        path = pathlib.Path(raw_event_path)
+        recorded = path.name.split(".")[0]
+        if recorded == self.engine_id or recorded not in NORMALISERS:
+            raise TraceParseError(
+                f"{path}: cannot infer the recorded engine from the archived "
+                f"filename (got {recorded!r}; have: {sorted(NORMALISERS)})"
+            )
+        return NORMALISERS[recorded].normalise(path)
+
+
+#: engine id → normaliser instance (README §6.1). ``replay`` delegates to the
+#: recorded engine's normaliser, so an offline matrix normalises exactly like
+#: the live run it replays.
+NORMALISERS: Mapping[str, object] = {
     ClaudeNormaliser.engine_id: ClaudeNormaliser(),
     CodexNormaliser.engine_id: CodexNormaliser(),
     CopilotNormaliser.engine_id: CopilotNormaliser(),
+    ReplayNormaliser.engine_id: ReplayNormaliser(),
 }
 
 
-def get_normaliser(engine_id: str) -> _BaseNormaliser:
+def get_normaliser(engine_id: str) -> object:
     """Return the normaliser for ``engine_id`` or fail loudly (README §6.1)."""
     try:
         return NORMALISERS[engine_id]
