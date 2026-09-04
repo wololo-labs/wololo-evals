@@ -155,9 +155,19 @@ worker, an OTEL collector on `4318`, and the wololo-deploy canary stub on `8090`
 
 ### Features
 
-- **Five eval suites**, each a task plus a weighted `rubric.yaml`:
+- **Six eval suites**, each a task plus a weighted `rubric.yaml`:
   `skill-review`, `task-uplift`, `repo-eval`, `regression-replay`,
-  `skill-behaviour`.
+  `skill-behaviour`, `qe-review`. The registry is open: an out-of-tree suite
+  registers through the `wololo_evals.suites` entry-point group, the
+  `WOLOLO_EVALS_SUITE_DIRS` environment override, or `register_suite()`.
+- **A grader that dispatches by assertion kind**: `trace:` assertions to the
+  trajectory engine, `code:` assertions to the acceptance runner, plain text to
+  the hardened judge. A check that could not be evaluated emits
+  `evaluator_error`, never a zero.
+- **Mechanical QE scoring**: a mutation kill rate over `mutmut`, a seeded-defect
+  catch rate, and a four-dimension rule-based `qe-review` rubric, all computed
+  at gate time and all at zero spend. See
+  [the QE benchmark](#the-qe-benchmark-scoring-a-testing-skill).
 - **Paired-trial statistics**: baseline-versus-treatment arms with a DDL-enforced
   minimum of five trials per arm, a 95 percent Student-t confidence interval over
   paired differences, a wins rule and a `low_confidence` flag.
@@ -225,7 +235,7 @@ worker, an OTEL collector on `4318`, and the wololo-deploy canary stub on `8090`
 | `matrix` | Expand and run the engine-by-model matrix; `--dry-run`, `--smoke`, `--max-cost-usd` |
 | `bench` | Run one benchmark as a single combo |
 | `replay` | Re-score an archived matrix run at zero spend |
-| `gate` | Candidate-versus-baseline regression verdict for CI |
+| `gate` | Candidate-versus-baseline regression verdict for CI; `--signal-guard <id>` fails on a named signal regressing |
 | `label` | Record a human verdict into `labels.jsonl` |
 | `judge calibrate` | Golden-set judge agreement (Cohen's kappa) |
 
@@ -246,13 +256,131 @@ first live model trial.
 
 ---
 
+## The QE benchmark: scoring a testing skill
+
+A skill that writes tests is easy to praise and hard to measure: the suite it
+produces runs green either way. `benchmarks/qe-skill` measures it instead, over
+`examples/fixtures/quoting-service` - a parcel quoting service in ~190 lines of
+standard library Python, shipping with the seven-test suite a reviewer would
+wave through.
+
+```
+┌─────────────────┐   ┌──────────────────┐   ┌───────────────────┐
+│ recorded run    │──▶│ ReplayAdapter    │──▶│ production grader │
+│ raw stream      │   │ re-emit stream   │   │                   │
+│ generated tests │   │ restore workspace│   │ trace: ──▶ trace  │
+└─────────────────┘   └──────────────────┘   │ code:  ──▶ accept │
+                                             │ text   ──▶ judge  │
+                              ┌──────────────┤                   │
+                              │              │ + mutation        │
+                              ▼              │ + seeded defects  │
+                    ┌───────────────────┐    │ + qe-review       │
+                    │ gate              │◀───┤                   │
+                    │ 0 pass            │    └───────────────────┘
+                    │ 1 regression      │
+                    │ 2 refused         │
+                    └───────────────────┘
+```
+
+### What is scored
+
+Twelve cases: eleven asking for tests over one slice of the service, and one
+distractor with no testing work in it, where the correct behaviour is to answer
+and not activate. Every case is scored on the four `skill_behaviour` gate slots,
+and the `task_outcome` slot is where the QE number lives:
+
+| Signal | What it asks | Baseline | Candidate |
+|---|---|---:|---:|
+| `mutation_kill_rate` | of every mutant of `quoting/`, how many does the suite notice | 0.2373 | 0.3012 |
+| `seeded_defects_caught` | of the four defects in `seeded_defects.json`, how many does it go red on | 0.2500 | 0.3636 |
+| `qe_rubric` | the weighted `qe-review` composite | 0.8782 | 0.9033 |
+| `qe_assertion_strength` | share of tests making a discriminating expectation | 0.8571 | 0.8959 |
+| `qe_changed_line_coverage` | share of the declared changed lines executed | 0.7368 | 0.7847 |
+| `qe_flake_resistance` | share of tests whose outcome holds across hash seeds | 1.0000 | 1.0000 |
+| `qe_no_tautological_assertions` | share of assertions that can actually fail | 1.0000 | 0.9943 |
+
+Baseline is the no-agent arm: the repository's shipped suite, run as it stands.
+Every one of those numbers is **recomputed at gate time** from the tests the
+recorded run left in its workspace - the corpus records what each run *did*, not
+what it *scored*, so changing a scorer or a rubric weight moves the number.
+
+`qe_no_tautological_assertions` slipping by 0.0057 is real and is reported
+rather than smoothed away: one candidate case asserts a property of its own rate
+table, which pins nothing about the service. That is what the per-signal table
+is for.
+
+### Running it
+
+```console
+$ pip install -e '.[dev]'            # or '.[mutation]' for just the QE scorers
+$ wololo-evals-cli gate     --run      examples/runs/qe-quoting/recorded/candidate     --baseline examples/runs/qe-quoting/recorded/baseline     --signal-guard mutation_kill_rate     --signal-guard seeded_defects_caught     --signal-guard qe_flake_resistance
+# Gate verdict: PASS
+...
+| signal                    | slot         | baseline | candidate |   delta |          |
+| `mutation_kill_rate`      | task_outcome |   0.2373 |    0.3012 | +0.0639 | GUARDED  |
+| `seeded_defects_caught`   | task_outcome |   0.2500 |    0.3636 | +0.1136 | GUARDED  |
+| `qe_flake_resistance`     | -            |   1.0000 |    1.0000 | +0.0000 | GUARDED  |
+$ echo $?
+0
+```
+
+To recompute the pair from the archives rather than reading the committed one
+(about 100 seconds, nearly all of it mutation analysis):
+
+```console
+$ wololo-evals-cli matrix --config examples/runs/qe-quoting/matrix-baseline.toml
+$ wololo-evals-cli matrix --config examples/runs/qe-quoting/matrix-candidate.toml
+```
+
+`--signal-guard <id>` fails the gate when that signal's mean regressed. A rising
+composite can hide a measure slipping underneath it; a guard pins the ones that
+must not move the wrong way. A guard naming a signal absent from either run
+refuses (exit 2) rather than reporting a guard that measured nothing.
+
+### Which paths are live and which are fixture
+
+Nothing in the table above calls a model. Being explicit about that matters more
+than the numbers:
+
+| Path | State | Why |
+|---|---|---|
+| `trace:` assertions | **Live** | Pure functions over the normalised trace |
+| `code:` assertions | **Live** | AST-allow-listed expressions over the run's outputs and the QE scorers' live results |
+| `mutation_kill_rate` | **Live** | `mutmut` really mutates `quoting/` and really runs the suite, on every gate run |
+| `seeded_defects_caught` | **Live** | Each declared defect is planted into a staged copy and the suite is re-run |
+| `qe-review` rubric | **Live** | Two AST dimensions, two that run the suite (repeated execution, `coverage`) |
+| LLM judge | **Fixture** | No `ANTHROPIC_API_KEY` in CI, so judge assertions score `skipped` and are excluded from the slot denominators. Set the key (and leave `WOLOLO_EVALS_JUDGE` unset) to enable it |
+| Judge calibration (kappa) | **Not run** | No golden-set agreement record is committed for `qe-skill`. The judge does not participate, so the gate does not refuse; enabling the judge requires `judge calibrate` first |
+| Engine adapters (`claude`, `codex`) | **Fixture** | Both arms replay recorded streams; no engine subprocess runs |
+| Copilot adapter | **Fixture** | Replay only. A live smoke needs a Copilot token in the environment; without one the recorded path is used and labelled here |
+
+The seeded defects live in `seeded_defects.json` rather than in the fixture's
+code because mutation analysis needs a green baseline: a suite that cannot run
+cannot be scored. Each defect is an exact-string edit applied to a staged copy,
+and an edit that no longer matches fails loudly instead of reading as a defect
+nobody caught.
+
+### CI
+
+[`.github/workflows/eval-gate.yml`](.github/workflows/eval-gate.yml) runs the
+test suite, checks the committed casebooks compile to what is committed, then
+runs two gates. The `skill-behaviour` gate over `examples/runs/dropdowns-synthetic`
+**must exit 1** - that corpus records a skill upgrade that made things worse, so
+a green verdict there would mean the gate cannot fail. The QE gate must exit 0,
+and a final step reads the verdict JSON and fails on the numbers as well as the
+exit code.
+
+---
+
 ## Status
 
 | Capability | State | Notes |
 |---|---|---|
 | Contract schemas and test vectors | **Shipped** | `eval-candidate`, `eval-result`, imported `identity` |
 | File-first CLI (`cases compile`, `matrix --dry-run`, `bench`, `replay`, `gate`, `label`, `judge calibrate`) | **Shipped** | Reproducible offline against the committed example corpus |
-| Eval suites and rubrics | **Shipped** | Five suites, weights validated to sum to 1.0 at load |
+| Eval suites and rubrics | **Shipped** | Six suites, weights validated to sum to 1.0 at load; registry open to out-of-tree suites |
+| Production grader (`trace:`, `code:`, judge dispatch) | **Shipped** | Injected by default into `matrix` and `bench`; proven above zero on a live-shaped run |
+| QE benchmark and mechanical scorers | **Shipped** | 12 cases over `examples/fixtures/quoting-service`; mutation kill rate, seeded-defect catch rate and the `qe-review` rubric recomputed at gate time |
 | Paired-trial statistics and gate verdict | **Shipped** | Proven end to end by the committed replay archive |
 | Injection-hardened judge and calibration refusal | **Shipped** | |
 | FastAPI service, RLS tenancy, audit chain, envelope encryption | **Shipped** | Exercised against a real throwaway Postgres in the test suite |
