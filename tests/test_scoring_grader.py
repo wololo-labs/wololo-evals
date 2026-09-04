@@ -275,11 +275,29 @@ def test_without_a_judge_backend_judge_assertions_are_skipped(tmp_path):
         "code:[x for x in output.__dict__]",
         "code:open('/etc/passwd')",
         "code:__import__('os').listdir('.')",
+        # str.format interprets its format string at runtime, so the attribute
+        # walk never appears in the AST for the allow-list to reject.
+        'code:"{0.__class__}".format(output) != ""',
+        'code:"{0.__class__}".format_map(output) != ""',
+        # f-strings reach __format__ on the value for the same reason.
+        'code:f"{output}" != ""',
     ],
 )
 def test_code_assertions_cannot_reach_past_their_namespace(expression):
     with pytest.raises(acceptance.CodeAssertionError):
         acceptance.evaluate_code_assertion(expression, {"output": {"a": 1}})
+
+
+def test_a_code_assertion_cannot_hang_the_gate():
+    """`9**9**9` is three tokens that allocate for minutes. Exponentiation is
+    the one allow-listed operator whose cost is unbounded in the size of its
+    operands, so it is rejected at parse time rather than evaluated."""
+    with pytest.raises(acceptance.CodeAssertionError, match="exponentiation"):
+        acceptance.evaluate_code_assertion("code:9**9**9 > 0", {"output": {}})
+    # The bounded arithmetic an assertion actually uses still works.
+    assert acceptance.evaluate_code_assertion(
+        "code:output.n * 2 + 1 == 9", {"output": {"n": 4}}
+    ).passed
 
 
 def test_code_assertion_reads_nested_output_by_attribute_and_item():
