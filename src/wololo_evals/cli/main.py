@@ -78,21 +78,38 @@ def _timestamp() -> str:
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def _empty_grader(spec, result, trace):  # noqa: ANN001 - matches Grader seam
-    """Default live grader: emits no signals. A real assertion-engine grader is
-    injected by callers (or a future integration); without one, cases score 0."""
-    return ()
+def _replay_runs_dir(config) -> Optional[str]:  # noqa: ANN001 - MatrixConfig
+    """``[engines.replay] runs_dir`` from the matrix config, made absolute.
+
+    The replay archive is the one engine setting that is a *path*, so it
+    resolves against the config file's directory like ``benchmark`` and
+    ``output_dir`` do, not against the process cwd.
+    """
+    section = (config.raw.get("engines") or {}).get("replay") or {}
+    runs_dir = section.get("runs_dir")
+    if not runs_dir:
+        return None
+    return str((config.base_dir / str(runs_dir)).resolve())
 
 
-def _live_seams():
-    """Lazily build the (adapter_factory, normaliser_factory, grader) triple
-    from the real engine/trace packages. Kept lazy so authoring/replay/dry-run
-    never import an engine."""
+def _live_seams(config):  # noqa: ANN001 - MatrixConfig
+    """Build the (adapter_factory, normaliser_factory, grader) triple from the
+    real engine/trace/scoring packages.
+
+    Kept lazy so the authoring and dry-run commands never import an engine.
+    The grader is the real one: it dispatches every case assertion to the
+    engine that can settle it and runs the standing mechanical scorers. There
+    is no scoreless default - a matrix that cannot grade must fail loudly, not
+    report zeros that look like a bad candidate.
+    """
     from .. import engines as engines_pkg
+    from ..scoring import build_grader
     from ..trace import get_normaliser
 
+    runs_dir = _replay_runs_dir(config)
+
     def adapter_factory(engine_id: str):
-        return engines_pkg.get_adapter(engine_id)
+        return engines_pkg.get_adapter(engine_id, runs_dir=runs_dir)
 
     def normaliser_factory(engine_id: str):
         try:
@@ -100,7 +117,47 @@ def _live_seams():
         except Exception:  # noqa: BLE001 - no normaliser is a soft miss
             return None
 
-    return adapter_factory, normaliser_factory, _empty_grader
+    return (
+        adapter_factory,
+        normaliser_factory,
+        build_grader(
+            judge_backend=_judge_backend(),
+            benchmark_dir=config.benchmark_dir,
+        ),
+    )
+
+
+def _judge_backend():
+    """The LLM judge, when the environment supplies one.
+
+    ``WOLOLO_EVALS_JUDGE=off`` (or simply no ``ANTHROPIC_API_KEY``) leaves the
+    judge unconfigured, and the grader then emits ``skipped`` judge signals -
+    the documented zero-spend path. Nothing here calls a model at import time.
+    """
+    import os
+
+    if os.environ.get("WOLOLO_EVALS_JUDGE", "").lower() in ("off", "0", "false"):
+        return None
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    from ..judge import http_call_model, run_judge
+
+    model = os.environ.get("WOLOLO_EVALS_JUDGE_MODEL", "claude-sonnet-4-5")
+    base_url = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    call_model = http_call_model(model, base_url=base_url, api_key=api_key)
+
+    def backend(assertion_text: str, candidate_content: str) -> tuple[float, str]:
+        rubric_text = (
+            "Eval suite: case-assertion. Score each dimension 0.0..1.0:\n"
+            f"- satisfied: {assertion_text}"
+        )
+        result = run_judge(call_model, rubric_text, candidate_content, ["satisfied"], k=1)
+        score = float(result.dimension_medians["satisfied"])
+        return score, f"judge({model}) scored {score:.2f} for: {assertion_text}"
+
+    return backend
 
 
 def _cmd_cases_compile(args: argparse.Namespace) -> int:
@@ -125,7 +182,7 @@ def _cmd_matrix(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(_matrix.render_plan(_matrix.plan(config)), end="")
         return 0
-    adapter_factory, normaliser_factory, grader = _live_seams()
+    adapter_factory, normaliser_factory, grader = _live_seams(config)
     matrix_dir = _matrix.run_matrix(
         config,
         adapter_factory,
@@ -143,7 +200,7 @@ def _cmd_matrix(args: argparse.Namespace) -> int:
 
 def _cmd_bench(args: argparse.Namespace) -> int:
     config = load_matrix_config(args.config)
-    adapter_factory, normaliser_factory, grader = _live_seams()
+    adapter_factory, normaliser_factory, grader = _live_seams(config)
     scorecard = _bench.run_bench(
         config,
         adapter_factory,
