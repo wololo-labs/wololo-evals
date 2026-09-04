@@ -24,7 +24,17 @@ wololo-evals-cli = "wololo_evals.cli.main:main"
 
 [project.optional-dependencies]
 s3 = ["boto3>=1.34"]
-dev = ["pytest>=8", "pytest-asyncio>=0.24", "asgi-lifespan>=2.1"]
+# The mutation kill-rate scorer and the qe-review rubric's coverage dimension.
+# Optional: without them the QE signals report evaluator_error rather than a
+# misleading zero, and every other suite is unaffected.
+mutation = ["mutmut>=3.0", "coverage>=7.4"]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "asgi-lifespan>=2.1",
+    "mutmut>=3.0",
+    "coverage>=7.4",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -33,10 +43,18 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# Suite rubrics are data the runtime reads by path (suites.base.load_rubric)
+# and hashes for the pinned rubric_version, so they have to travel in the
+# wheel. Without this an installed (non-editable) build resolves every suite
+# to a missing rubric.yaml.
+[tool.setuptools.package-data]
+"wololo_evals.suites" = ["*/rubric.yaml"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 markers = [
     "compose: real containerized integration trial; needs a docker daemon + a model API key, skipped loudly otherwise (SPEC S14 rung 2)",
+    "mutation: drives the real mutmut-backed mutation scorer; slower than the rest of the suite, skipped loudly when mutmut is absent",
 ]
