@@ -104,6 +104,8 @@ class SignalDelta:
     candidate_mean: float
     baseline_n: int
     candidate_n: int
+    baseline_errors: int = 0
+    candidate_errors: int = 0
     guarded: bool = False
 
     @property
@@ -124,6 +126,8 @@ class SignalDelta:
             "delta": self.delta,
             "baseline_n": self.baseline_n,
             "candidate_n": self.candidate_n,
+            "baseline_errors": self.baseline_errors,
+            "candidate_errors": self.candidate_errors,
             "guarded": self.guarded,
             "regressed": self.regressed,
         }
@@ -212,51 +216,83 @@ def _case_rows(sc: Mapping[str, object]) -> dict[str, Mapping[str, object]]:
     return {str(c["case_id"]): c for c in sc.get("cases", [])}
 
 
-def _signal_means(run: _RunView) -> dict[str, tuple[str, Optional[str], float, int]]:
-    """``evaluator_id -> (kind, slot, mean score, n)`` across a whole run.
+@dataclass(frozen=True)
+class _SignalMean:
+    kind: str
+    slot: Optional[str]
+    mean: float
+    n: int
+    errors: int
 
-    ``skipped`` rows are excluded from the mean: a judge that did not run is
-    not a judge that scored zero, and averaging it in would make the disabled
-    path look like a regression against an enabled one.
+
+def _signal_means(run: _RunView) -> dict[str, _SignalMean]:
+    """``evaluator_id -> mean score`` across a whole run.
+
+    Neither non-verdict enters the mean. A ``skipped`` judge did not run, and
+    averaging it in would make the disabled path look like a regression against
+    an enabled one; an ``evaluator_error`` observed nothing at all, and
+    averaging its 0.0 in would let a mutmut outage on one arm read as the
+    candidate getting worse. Errors are counted instead, so a signal that is
+    error-only in a run is visible as ``n == 0`` rather than as a zero score.
     """
     totals: dict[str, list[float]] = {}
+    errors: dict[str, int] = {}
     meta: dict[str, tuple[str, Optional[str]]] = {}
     for combo in run.combos:
         for case in combo.scorecard.get("cases", []):
             for signal in case.get("signals", []):
-                if signal.get("verdict") == "skipped":
-                    continue
                 sid = str(signal.get("evaluator_id"))
-                totals.setdefault(sid, []).append(float(signal.get("score", 0.0)))
+                verdict = signal.get("verdict")
                 meta.setdefault(sid, (str(signal.get("kind", "")), signal.get("slot")))
+                if verdict == "evaluator_error":
+                    errors[sid] = errors.get(sid, 0) + 1
+                    totals.setdefault(sid, [])
+                    continue
+                if verdict == "skipped":
+                    totals.setdefault(sid, [])
+                    continue
+                totals.setdefault(sid, []).append(float(signal.get("score", 0.0)))
     return {
-        sid: (meta[sid][0], meta[sid][1], sum(scores) / len(scores), len(scores))
+        sid: _SignalMean(
+            kind=meta[sid][0],
+            slot=meta[sid][1],
+            mean=(sum(scores) / len(scores)) if scores else 0.0,
+            n=len(scores),
+            errors=errors.get(sid, 0),
+        )
         for sid, scores in totals.items()
-        if scores
     }
 
 
 def _signal_deltas(
     run: _RunView, base: _RunView, guards: Sequence[str]
 ) -> list[SignalDelta]:
-    """Pair every signal that both runs emitted. A signal only one run emitted
-    is left out: there is no comparison to make, and inventing a zero for the
-    missing side would report a regression that did not happen."""
+    """Pair every signal both runs actually scored.
+
+    A signal only one run emitted is left out: there is no comparison to make,
+    and inventing a zero for the missing side would report a regression that
+    did not happen. The same applies to a signal that emitted only
+    ``evaluator_error`` or ``skipped`` rows in a run, which is why the pairing
+    is on ``n > 0`` rather than on the id being present.
+    """
     guarded = set(guards)
     candidate = _signal_means(run)
     baseline = _signal_means(base)
     return [
         SignalDelta(
             evaluator_id=sid,
-            kind=candidate[sid][0],
-            slot=candidate[sid][1],
-            baseline_mean=baseline[sid][2],
-            candidate_mean=candidate[sid][2],
-            baseline_n=baseline[sid][3],
-            candidate_n=candidate[sid][3],
+            kind=candidate[sid].kind,
+            slot=candidate[sid].slot,
+            baseline_mean=baseline[sid].mean,
+            candidate_mean=candidate[sid].mean,
+            baseline_n=baseline[sid].n,
+            candidate_n=candidate[sid].n,
+            baseline_errors=baseline[sid].errors,
+            candidate_errors=candidate[sid].errors,
             guarded=sid in guarded,
         )
         for sid in sorted(set(candidate) & set(baseline))
+        if candidate[sid].n > 0 and baseline[sid].n > 0
     ]
 
 
@@ -429,6 +465,10 @@ class GateVerdict:
                 marker = "REGRESSED" if d.regressed else ""
                 if d.guarded:
                     marker = ("GUARDED " + marker).strip()
+                if d.baseline_errors or d.candidate_errors:
+                    marker = (
+                        marker + f" ({d.baseline_errors}/{d.candidate_errors} errored)"
+                    ).strip()
                 lines.append(
                     f"| `{d.evaluator_id}` | {d.slot or '-'} | {d.baseline_mean:.4f} "
                     f"| {d.candidate_mean:.4f} | {d.delta:+.4f} | {marker} |"
@@ -592,15 +632,30 @@ def evaluate(
     guarded_regressions = tuple(
         d.evaluator_id for d in deltas if d.guarded and d.regressed
     )
-    missing_guards = tuple(
-        g for g in signal_guards
-        if g not in {d.evaluator_id for d in deltas}
-    )
-    if missing_guards:
+    # A guard the runs cannot support is a refusal (exit 2), never a pass and
+    # never a regression. The distinction matters: "this signal did not score
+    # in one of the arms" is an input problem for an operator to fix, not
+    # evidence about the candidate.
+    compared = {d.evaluator_id for d in deltas}
+    candidate_means, baseline_means = _signal_means(run), _signal_means(base)
+    unusable: list[str] = []
+    for guard in signal_guards:
+        if guard in compared:
+            continue
+        arms = [
+            arm for arm, means in (("run", candidate_means), ("baseline", baseline_means))
+            if means.get(guard) is not None and means[guard].errors and not means[guard].n
+        ]
+        if arms:
+            unusable.append(f"{guard} (error-only in {', '.join(arms)})")
+        else:
+            unusable.append(f"{guard} (absent)")
+    if unusable:
         return _refused(
             run_p, base_p, run, max_regression,
-            f"guarded signal(s) {list(missing_guards)} are not present in both "
-            f"runs; refusing to report a guard that measured nothing",
+            "guarded signal(s) did not score in both runs: "
+            + "; ".join(unusable)
+            + "; refusing to report a guard that measured nothing",
             judge_info,
         )
 

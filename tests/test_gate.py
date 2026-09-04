@@ -278,3 +278,99 @@ def test_gate_missing_summary_fails_loud(tmp_path):
     (tmp_path / "base").mkdir()
     with pytest.raises(gate_mod.GateError):
         gate_mod.evaluate(tmp_path / "cand", tmp_path / "base")
+
+
+# --------------------------------------------------------------------------
+# an evaluator that could not run must not read as a regression
+# --------------------------------------------------------------------------
+def _sig(evaluator_id, score, verdict="pass", slot="task_outcome"):
+    return {
+        "evaluator_id": evaluator_id, "kind": "assertion", "score": score,
+        "weight": 1.0, "verdict": verdict, "slot": slot,
+    }
+
+
+def _write_arm(root, *, signals_by_case, benchmark_id="qe-skill"):
+    """Minimal matrix tree: matrix_summary.json plus one combo scorecard."""
+    combo_dir = root / "combos" / "c1" / "runs" / "c1"
+    combo_dir.mkdir(parents=True, exist_ok=True)
+    cases = [
+        {
+            "case_id": case_id, "status": "ok", "score": score, "pass_rate": 1.0,
+            "case_weight": 1.0, "quarantined": False, "signals": signals,
+        }
+        for case_id, (score, signals) in signals_by_case.items()
+    ]
+    (combo_dir / "scorecard.json").write_text(json.dumps({
+        "schema_version": "2.1.0", "benchmark_id": benchmark_id,
+        "summary": {"benchmark_score": sum(c["score"] for c in cases) / len(cases)},
+        "cases": cases,
+    }), encoding="utf-8")
+    (root / "matrix_summary.json").write_text(json.dumps({
+        "schema_version": "2.0.0", "benchmark_id": benchmark_id,
+        "evaluation_type": "skill_behaviour", "pass_threshold": 0.7,
+        "combos": [{
+            "combo_id": "c1", "engine_id": "replay", "model_id": "m",
+            "prompt_id": "p",
+            "scorecard_path": "combos/c1/runs/c1/scorecard.json",
+        }],
+    }), encoding="utf-8")
+    return root
+
+
+def test_a_scorer_outage_on_one_arm_is_not_a_regression(tmp_path):
+    """A mutmut outage in the candidate arm must not average in as 0.0 and
+    report the candidate getting worse: the tool broke, the candidate did not."""
+    baseline = _write_arm(tmp_path / "base", signals_by_case={
+        "c1": (1.0, [_sig("kill_rate", 0.24), _sig("other", 1.0)]),
+        "c2": (1.0, [_sig("kill_rate", 0.26), _sig("other", 1.0)]),
+    })
+    candidate = _write_arm(tmp_path / "cand", signals_by_case={
+        "c1": (1.0, [_sig("kill_rate", 0.40), _sig("other", 1.0)]),
+        # The scorer fell over on the second case only.
+        "c2": (1.0, [_sig("kill_rate", 0.0, "evaluator_error"), _sig("other", 1.0)]),
+    })
+
+    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",))
+    delta = next(d for d in verdict.signal_deltas if d.evaluator_id == "kill_rate")
+
+    # 0.40 alone, not (0.40 + 0.0) / 2 = 0.20 against a baseline of 0.25.
+    assert delta.candidate_mean == pytest.approx(0.40)
+    assert delta.candidate_n == 1
+    assert delta.candidate_errors == 1
+    assert not delta.regressed
+    assert verdict.verdict == "pass"
+    assert verdict.exit_code == 0
+
+
+def test_a_guard_on_an_error_only_signal_refuses(tmp_path):
+    """Refusing (exit 2) is the honest outcome: the guard measured nothing, so
+    the run is neither a pass nor evidence of a regression."""
+    baseline = _write_arm(tmp_path / "base", signals_by_case={
+        "c1": (1.0, [_sig("kill_rate", 0.24), _sig("other", 1.0)]),
+    })
+    candidate = _write_arm(tmp_path / "cand", signals_by_case={
+        "c1": (1.0, [_sig("kill_rate", 0.0, "evaluator_error"), _sig("other", 1.0)]),
+    })
+
+    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",))
+    assert verdict.verdict == "refused"
+    assert verdict.exit_code == 2
+    assert "error-only in run" in verdict.reason
+
+    # Unguarded, the same pair is simply not compared on that signal.
+    ungated = gate_mod.evaluate(candidate, baseline)
+    assert ungated.verdict == "pass"
+    assert "kill_rate" not in {d.evaluator_id for d in ungated.signal_deltas}
+
+
+def test_a_guard_on_an_absent_signal_still_refuses(tmp_path):
+    baseline = _write_arm(tmp_path / "base", signals_by_case={
+        "c1": (1.0, [_sig("other", 1.0)]),
+    })
+    candidate = _write_arm(tmp_path / "cand", signals_by_case={
+        "c1": (1.0, [_sig("other", 1.0)]),
+    })
+    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",))
+    assert verdict.exit_code == 2
+    assert "absent" in verdict.reason
