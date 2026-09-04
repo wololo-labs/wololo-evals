@@ -287,3 +287,60 @@ def test_code_assertion_reads_nested_output_by_attribute_and_item():
     assert acceptance.evaluate_code_assertion(
         "code:output.pytest.failed == 0 and output['pytest']['passed'] > 10", ns
     ).passed
+
+
+# --------------------------------------------------------------------------
+# an evaluator that could not run is never scored as a zero
+# --------------------------------------------------------------------------
+def test_an_evaluator_error_is_excluded_from_its_slot_not_averaged_as_zero():
+    """The rule the grader states and the composer has to honour: a check that
+    could not be evaluated observed nothing. Folding its 0.0 into the slot mean
+    would report the tool breaking as the candidate scoring badly."""
+    passing = ci.ScoredSignal("ok", "assertion", 1.0, 1.0, "pass", slot="task_outcome")
+    broken = ci.ScoredSignal(
+        "mutation_kill_rate", "assertion", 0.0, 1.0, "evaluator_error",
+        slot="task_outcome",
+    )
+
+    alone = compose_case([passing], "skill_behaviour", pass_threshold=0.7)
+    with_error = compose_case([passing, broken], "skill_behaviour", pass_threshold=0.7)
+
+    assert with_error.score == alone.score == pytest.approx(1.0)
+    assert with_error.slot_scores["task_outcome"] == pytest.approx(1.0)
+    assert with_error.passed
+
+    # It is not silently dropped either: the count is how an operator learns
+    # the score covers less than the checks the case declared.
+    assert alone.evaluator_errors == 0
+    assert with_error.evaluator_errors == 1
+
+
+def test_a_slot_of_only_evaluator_errors_leaves_the_denominator():
+    """With nothing evaluated in a slot, that slot contributes neither a score
+    nor a weight, rather than dragging the case toward zero."""
+    broken = ci.ScoredSignal(
+        "mutation_kill_rate", "assertion", 0.0, 1.0, "evaluator_error",
+        slot="task_outcome",
+    )
+    activation = ci.ScoredSignal(
+        "used", "assertion", 1.0, 1.0, "pass", slot="activation_correct"
+    )
+    composed = compose_case([activation, broken], "skill_behaviour", pass_threshold=0.7)
+    assert "task_outcome" not in composed.slot_scores
+    assert composed.score == pytest.approx(1.0)
+    assert composed.evaluator_errors == 1
+
+
+def test_the_grader_emits_an_evaluator_error_the_composer_then_ignores(tmp_path):
+    """End to end over the real grader: a malformed code: assertion must not
+    pull its case down."""
+    _write_output(tmp_path, {"tests_added": 4})
+    grader = build_grader(mutation_enabled=False)
+    case = _case(assertions=(
+        {"id": "wrote_tests", "text": _CODE, "weight": 1.0},
+        {"id": "broken", "text": "code:output.no_such_key > 1", "weight": 1.0},
+    ))
+    signals = grader(_spec(case, tmp_path), _result(tmp_path), _trace())
+    composed = compose_case(signals, "skill_behaviour", pass_threshold=0.7)
+    assert composed.evaluator_errors == 1
+    assert composed.slot_scores["task_outcome"] == pytest.approx(1.0)
