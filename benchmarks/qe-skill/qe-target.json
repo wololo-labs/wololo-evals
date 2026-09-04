@@ -1,0 +1,14 @@
+{
+  "fixture": "examples/fixtures/quoting-service",
+  "qe": {
+    "target": "../../examples/fixtures/quoting-service/quoting",
+    "tests": [
+      "../../examples/fixtures/quoting-service/tests",
+      "tests_generated"
+    ],
+    "changed_lines_file": "../../examples/fixtures/quoting-service/changed_lines.json",
+    "defects_file": "../../examples/fixtures/quoting-service/seeded_defects.json",
+    "mutation_threshold": 0.24,
+    "defect_threshold": 0.5
+  }
+}
