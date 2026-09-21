@@ -273,6 +273,33 @@ def test_gate_cli_writes_verdict_json_and_exit_code(tmp_path, capsys):
     assert "Gate verdict: REGRESSION" in md
 
 
+def test_gate_records_the_asset_it_measured(tmp_path):
+    # A verdict published beside an asset has to name that asset and the
+    # commit it was measured at, or a catalogue reading it cannot tell whose
+    # score it is, nor whether the score has gone stale.
+    ids = [f"c{i}" for i in range(10)]
+    run, baseline = _pair(
+        tmp_path, [_case(c, 0.95) for c in ids], [_case(c, 0.4) for c in ids]
+    )
+    out = tmp_path / "verdict.json"
+    main([
+        "gate", "--run", str(run), "--baseline", str(baseline), "-o", str(out),
+        "--subject-repo", "https://github.com/example/toolkit",
+        "--subject-path", "packages/demo-pack",
+        "--subject-commit", "0123456789abcdef0123456789abcdef01234567",
+    ])
+    assert json.loads(out.read_text())["subject"] == {
+        "repo": "https://github.com/example/toolkit",
+        "path": "packages/demo-pack",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+    }
+
+    # unnamed subject stays absent rather than empty: nothing to mis-read
+    plain = tmp_path / "plain.json"
+    main(["gate", "--run", str(run), "--baseline", str(baseline), "-o", str(plain)])
+    assert "subject" not in json.loads(plain.read_text())
+
+
 def test_gate_missing_summary_fails_loud(tmp_path):
     (tmp_path / "cand").mkdir()
     (tmp_path / "base").mkdir()

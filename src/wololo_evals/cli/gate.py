@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import json
 import pathlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Mapping, Optional, Sequence
 
 from ..core import ab
@@ -364,6 +364,11 @@ class GateVerdict:
     judge: Mapping[str, object]
     signal_deltas: Sequence[SignalDelta] = ()
     guarded_regressions: Sequence[str] = ()
+    #: Which asset this verdict is about: ``{"repo", "path", "commit"}``, all
+    #: operator-declared. A verdict that does not name its subject cannot be
+    #: published next to an asset, because nothing in it says which asset it
+    #: measured or at which commit; a catalogue reading it could only guess.
+    subject: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def exit_code(self) -> int:
@@ -391,6 +396,8 @@ class GateVerdict:
             "signals": [d.as_json() for d in self.signal_deltas],
             "guarded_regressions": list(self.guarded_regressions),
         }
+        if self.subject:
+            payload["subject"] = dict(self.subject)
         if v is not None:
             payload["stats"] = {
                 "mean_delta": v.mean_delta,
@@ -723,6 +730,18 @@ def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
         ),
     )
     parser.add_argument("-o", "--out", default=None, help="JSON verdict output path")
+    parser.add_argument(
+        "--subject-repo", default=None, metavar="URL",
+        help="the asset repository this verdict is about (recorded in subject)",
+    )
+    parser.add_argument(
+        "--subject-path", default=None, metavar="PATH",
+        help="the asset's path inside that repository, e.g. packages/<pack>",
+    )
+    parser.add_argument(
+        "--subject-commit", default=None, metavar="SHA",
+        help="the asset commit measured, so a catalogue can show a stale score",
+    )
 
 
 def run(args) -> int:  # noqa: ANN001 - argparse namespace
@@ -738,6 +757,17 @@ def run(args) -> int:  # noqa: ANN001 - argparse namespace
         judge_agreement_min=args.judge_agreement_min,
         signal_guards=tuple(args.signal_guard or ()),
     )
+    subject = {
+        k: v
+        for k, v in (
+            ("repo", args.subject_repo),
+            ("path", args.subject_path),
+            ("commit", args.subject_commit),
+        )
+        if v
+    }
+    if subject:
+        verdict = replace(verdict, subject=subject)
     out = pathlib.Path(args.out) if args.out else pathlib.Path(args.run) / "gate_verdict.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
