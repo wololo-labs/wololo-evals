@@ -84,6 +84,10 @@ class MatrixConfig:
     max_cost_usd: Optional[float] = None
     baseline_run: Optional[str] = None
     fixtures_dir: Optional[str] = None
+    #: Slug the asset under evaluation actually ships, when it differs from the
+    #: benchmark's own ``expected_skill``. One benchmark asks one question; two
+    #: assets answering it are entitled to different names.
+    expected_skill: Optional[str] = None
     models: Sequence[ModelEntry] = ()
     prompts: Sequence[PromptEntry] = ()
     baselines: Sequence[BaselineEntry] = ()
@@ -175,6 +179,7 @@ def load_matrix_config(path: str | pathlib.Path) -> MatrixConfig:
         ),
         baseline_run=data.get("baseline_run"),
         fixtures_dir=data.get("fixtures_dir"),
+        expected_skill=data.get("expected_skill"),
         models=tuple(models),
         prompts=tuple(prompts),
         baselines=tuple(baselines),

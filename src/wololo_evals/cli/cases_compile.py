@@ -231,7 +231,10 @@ def _build_row(
     row["turns"] = turns
     row["expected_outcome"] = expected_outcome
     row["expected_paths"] = expected_paths
-    row["expected_skill"] = case.get("expected_skill")
+    # A casebook over one skill declares it once in [defaults]; a case may
+    # still name its own. Compiling the default in is what lets a bare
+    # `trace:used_skill` resolve, and a matrix override replace it.
+    row["expected_skill"] = case.get("expected_skill", defaults.get("expected_skill"))
     row["quarantined"] = bool(case.get("quarantined", False))
     row["metadata"] = metadata
     row["assertions"] = assertions

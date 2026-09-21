@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 import pathlib
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable, Mapping, Optional, Sequence
 
 from ..core import interfaces as ci
@@ -444,6 +444,13 @@ def run_matrix(
     benchmark = load_benchmark(config.benchmark_dir)
     _validate_engines(config, benchmark)
     all_cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    if config.expected_skill:
+        # The benchmark names the skill it was written around; the asset under
+        # evaluation may ship the same capability under its own slug, and
+        # `trace:used_skill` with no argument reads the case's expectation.
+        all_cases = [
+            replace(case, expected_skill=config.expected_skill) for case in all_cases
+        ]
     combos = build_combos(config)
     seeds = config.seeds
 

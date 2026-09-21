@@ -308,6 +308,35 @@ def test_fixtures_dir_lands_one_copy_per_case_workspace(tmp_path):
     assert all(p.read_text() == "RATE = 1\n" for p in copies)
 
 
+def test_expected_skill_override_reaches_every_case(tmp_path):
+    # One benchmark, two assets doing the same job under different slugs: the
+    # matrix says which slug this arm ships, so activation is scored against
+    # the asset under evaluation rather than the benchmark's first author.
+    mc = _make_project(tmp_path)
+    mc.write_text('expected_skill = "test-writer-fixer"\n' + mc.read_text())
+    cfg = load_matrix_config(mc)
+    assert cfg.expected_skill == "test-writer-fixer"
+
+    seen: list[object] = []
+    factory = adapter_factory()
+
+    def recording_factory(engine_id):
+        adapter = factory(engine_id)
+        run = adapter.run
+
+        def spy(spec):
+            seen.append(spec.case.expected_skill)
+            return run(spec)
+
+        adapter.run = spy
+        return adapter
+
+    matrix_mod.run_matrix(
+        cfg, recording_factory, make_grader(), timestamp="20260719T000000Z"
+    )
+    assert seen and set(seen) == {"test-writer-fixer"}
+
+
 def test_run_matrix_writes_artefact_tree(tmp_path):
     cfg = load_matrix_config(_make_project(tmp_path))
     md = matrix_mod.run_matrix(
