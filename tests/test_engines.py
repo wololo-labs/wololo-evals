@@ -276,9 +276,11 @@ def test_run_minimises_env_no_foreign_tokens_reach_subprocess(tmp_path, monkeypa
 
 def test_run_mounts_asset_files_with_traversal_guard(tmp_path):
     fake = FakeExec()
-    spec = _spec(tmp_path, asset=_asset(files={"skills/dropdowns/SKILL.md": "# skill"}))
+    spec = _spec(tmp_path, asset=_asset(files={"dropdowns/SKILL.md": "# skill"}))
     ClaudeAdapter(exec_fn=fake).run(spec)
-    assert (pathlib.Path(spec.cwd) / "skills" / "dropdowns" / "SKILL.md").read_text() == "# skill"
+    # a skill lands where the CLI looks for skills, not at the workspace root
+    mounted = pathlib.Path(spec.cwd) / ".claude" / "skills" / "dropdowns" / "SKILL.md"
+    assert mounted.read_text() == "# skill"
 
     bad = _spec(tmp_path, asset=_asset(files={"../escape.md": "x"}))
     with pytest.raises(ValueError):

@@ -21,9 +21,13 @@ class ClaudeAdapter(LiveCliAdapter):
     engine_id = "claude"
     binary = "claude"
     default_version_range = ">=1.0.0,<3.0.0"
+    #: Where Claude Code discovers a project's own skills.
+    skill_mount_prefix = ".claude/skills"
     #: §6.2 allow-list for the ``claude`` engine.
     allowed_models = frozenset(
         {
+            "claude-opus-5",
+            "claude-sonnet-5",
             "claude-opus-4-7",
             "claude-opus-4-6",
             "claude-sonnet-4-6",

@@ -44,6 +44,10 @@ class LiveCliAdapter:
     version_argv: Sequence[str] = ("--version",)
     default_version_range: str = "*"
     allowed_models: frozenset[str] = frozenset()
+    #: Workspace-relative directory this CLI discovers project skills in.
+    #: Empty means the engine has no such directory and a skill asset mounts
+    #: at the workspace root.
+    skill_mount_prefix: str = ""
 
     def __init__(
         self,
@@ -202,8 +206,17 @@ class LiveCliAdapter:
     def _mount_asset(self, spec: RunSpec) -> None:
         """Write ``AssetSnapshot.files`` into the run workspace, path-traversal
         checked exactly like the wave-1 load-profile stage (harness-seam.md
-        §3): no absolute paths, no ``..`` escape."""
+        §3): no absolute paths, no ``..`` escape.
+
+        An ``agent_skill`` asset lands under :attr:`skill_mount_prefix`, the
+        directory this CLI discovers project skills in. Dropped at the
+        workspace root it is just a markdown file the harness never loads, and
+        the run would score zero on activation for a packaging reason rather
+        than anything about the skill.
+        """
         base = pathlib.Path(spec.cwd)
+        if spec.asset.ref.kind == "agent_skill" and self.skill_mount_prefix:
+            base = base / self.skill_mount_prefix
         for rel, content in spec.asset.files.items():
             if rel.startswith("/") or ".." in pathlib.PurePosixPath(rel).parts:
                 raise ValueError(f"unsafe asset file path {rel!r}")
