@@ -17,3 +17,4 @@ pgdata/
 uv.lock
 logs/
 examples/runs/qe-quoting-synthetic/out/
+examples/runs/qe-test-writer-live/out/
