@@ -300,6 +300,33 @@ def test_gate_records_the_asset_it_measured(tmp_path):
     assert "subject" not in json.loads(plain.read_text())
 
 
+def test_gate_report_carries_what_a_catalogue_publishes(tmp_path):
+    # The report is published verbatim beside the asset, so everything a
+    # catalogue renders has to come out of the gate rather than a transcription.
+    ids = [f"c{i}" for i in range(10)]
+    run, baseline = _pair(
+        tmp_path, [_case(c, 0.95) for c in ids], [_case(c, 0.4) for c in ids]
+    )
+    out = tmp_path / "eval-gate-report.json"
+    main([
+        "gate", "--run", str(run), "--baseline", str(baseline), "-o", str(out),
+        "--source", "https://github.com/example/evals/blob/abc123/README.md",
+        "--source-visibility", "internal",
+        "--recorded", "2026-09-21",
+    ])
+    payload = json.loads(out.read_text())
+    assert payload["recorded"] == "2026-09-21"
+    assert payload["sourceVisibility"] == "internal"
+    assert payload["source"].endswith("/abc123/README.md")
+    # the metrics a badge reads, straight off the signal rows
+    assert {"evaluator_id", "candidate_mean", "baseline_mean"} <= payload["signals"][0].keys()
+
+    # an undeclared date still records when the gate ran, never nothing
+    dated = tmp_path / "dated.json"
+    main(["gate", "--run", str(run), "--baseline", str(baseline), "-o", str(dated)])
+    assert len(json.loads(dated.read_text())["recorded"]) == len("2026-09-21")
+
+
 def test_gate_missing_summary_fails_loud(tmp_path):
     (tmp_path / "cand").mkdir()
     (tmp_path / "base").mkdir()

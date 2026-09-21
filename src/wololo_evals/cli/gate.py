@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+from datetime import datetime, timezone
 from dataclasses import dataclass, field, replace
 from typing import Mapping, Optional, Sequence
 
@@ -369,6 +370,12 @@ class GateVerdict:
     #: published next to an asset, because nothing in it says which asset it
     #: measured or at which commit; a catalogue reading it could only guess.
     subject: Mapping[str, str] = field(default_factory=dict)
+    #: Date the gate ran, ``YYYY-MM-DD``.
+    recorded: Optional[str] = None
+    #: URL of the run, pinned to a wololo-evals commit.
+    source: Optional[str] = None
+    #: How reachable that URL is for a reader; ``internal`` needs repo access.
+    source_visibility: Optional[str] = None
 
     @property
     def exit_code(self) -> int:
@@ -396,8 +403,17 @@ class GateVerdict:
             "signals": [d.as_json() for d in self.signal_deltas],
             "guarded_regressions": list(self.guarded_regressions),
         }
+        # Publication block: what a catalogue needs to show whose score this
+        # is, when it was taken and where to read the run. Each key stays
+        # absent when undeclared rather than landing as a null to be guessed at.
         if self.subject:
             payload["subject"] = dict(self.subject)
+        if self.recorded:
+            payload["recorded"] = self.recorded
+        if self.source:
+            payload["source"] = self.source
+        if self.source_visibility:
+            payload["sourceVisibility"] = self.source_visibility
         if v is not None:
             payload["stats"] = {
                 "mean_delta": v.mean_delta,
@@ -742,6 +758,18 @@ def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
         "--subject-commit", default=None, metavar="SHA",
         help="the asset commit measured, so a catalogue can show a stale score",
     )
+    parser.add_argument(
+        "--source", default=None, metavar="URL",
+        help="URL of this run, pinned to a wololo-evals commit",
+    )
+    parser.add_argument(
+        "--source-visibility", default=None, choices=("public", "internal"),
+        help="how reachable that URL is for a reader",
+    )
+    parser.add_argument(
+        "--recorded", default=None, metavar="YYYY-MM-DD",
+        help="date the gate ran (default: today, UTC)",
+    )
 
 
 def run(args) -> int:  # noqa: ANN001 - argparse namespace
@@ -766,8 +794,13 @@ def run(args) -> int:  # noqa: ANN001 - argparse namespace
         )
         if v
     }
-    if subject:
-        verdict = replace(verdict, subject=subject)
+    verdict = replace(
+        verdict,
+        subject=subject,
+        recorded=args.recorded or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        source=args.source,
+        source_visibility=args.source_visibility,
+    )
     out = pathlib.Path(args.out) if args.out else pathlib.Path(args.run) / "gate_verdict.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
