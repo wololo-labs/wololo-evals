@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
+import shutil
 from dataclasses import dataclass, field
 from typing import Callable, Mapping, Optional, Sequence
 
@@ -120,6 +121,28 @@ def _snapshot(entry: Optional[AssetEntry], base_dir: pathlib.Path) -> ci.AssetSn
     )
     return ci.AssetSnapshot(
         ref=ref, body=body, files=files, adapter_id="local", snapshot_digest=digest
+    )
+
+
+def _materialise_fixture(fixtures_dir: Optional[pathlib.Path], workspace: pathlib.Path) -> None:
+    """Copy the benchmark's fixture tree into one case workspace.
+
+    A live run has to be able to read the code it is asked to write tests for.
+    The replay engine re-materialises a workspace from its recording, so this
+    is the live path's equivalent: one pristine copy per case, never shared, so
+    a run that edits the code under test cannot affect the next case. The
+    scorers still resolve their target benchmark-relative, against the
+    committed fixture, so a tampered copy lowers the score rather than moving
+    the yardstick.
+    """
+    if fixtures_dir is None:
+        return
+    if not fixtures_dir.is_dir():
+        raise ValueError(f"fixtures_dir {fixtures_dir} is not a directory")
+    workspace.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        fixtures_dir, workspace, dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache", "mutants"),
     )
 
 
@@ -288,6 +311,7 @@ def _execute_combo(
     cumulative: float,
     smoke: bool,
     engine_versions: dict[str, str],
+    fixtures_dir: Optional[pathlib.Path] = None,
 ) -> float:
     """Run one combo's cases x seeds, write its seed/case/scorecard artefacts
     under ``run_dir``, append events, and return the new cumulative spend."""
@@ -331,6 +355,10 @@ def _execute_combo(
                     status="cost_cap_hit",
                 )
             else:
+                _materialise_fixture(
+                    fixtures_dir,
+                    ci.artefacts.workspace_dir(run_dir, seed, case.case_id),
+                )
                 ci.artefacts.advisory_dir(run_dir, seed, case.case_id).mkdir(
                     parents=True, exist_ok=True
                 )
@@ -448,6 +476,11 @@ def run_matrix(
             normaliser_factory=normaliser_factory, events=events,
             timestamp=timestamp, cap=cap, cumulative=cumulative, smoke=smoke,
             engine_versions=engine_versions,
+            fixtures_dir=(
+                (config.base_dir / config.fixtures_dir).resolve()
+                if config.fixtures_dir
+                else None
+            ),
         )
         scorecard_path = ci.artefacts.scorecard_path(run_dir)
         combo_records.append(

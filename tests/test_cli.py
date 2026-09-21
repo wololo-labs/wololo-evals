@@ -287,6 +287,27 @@ def test_pass_at_k_identities():
 # --------------------------------------------------------------------------
 # §15 artefact tree (injected adapter + grader)
 # --------------------------------------------------------------------------
+def test_fixtures_dir_lands_one_copy_per_case_workspace(tmp_path):
+    # A live run can only write tests for code it can read, so the fixture tree
+    # is materialised into every case workspace, one pristine copy each.
+    fixtures = tmp_path / "fixtures"
+    (fixtures / "quoting").mkdir(parents=True)
+    (fixtures / "quoting" / "pricing.py").write_text("RATE = 1\n")
+    mc = _make_project(tmp_path)
+    # top-level key, so it has to go in before the first table
+    mc.write_text('fixtures_dir = "fixtures"\n' + mc.read_text())
+
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    copies = sorted(md.rglob("workspace/*/quoting/pricing.py"))
+    assert copies, "fixture never reached a case workspace"
+    # one per case x seed x combo, and each one is its own copy
+    assert len({p.parent.parent for p in copies}) == len(copies)
+    assert all(p.read_text() == "RATE = 1\n" for p in copies)
+
+
 def test_run_matrix_writes_artefact_tree(tmp_path):
     cfg = load_matrix_config(_make_project(tmp_path))
     md = matrix_mod.run_matrix(
