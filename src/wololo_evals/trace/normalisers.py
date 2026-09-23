@@ -176,7 +176,12 @@ class ClaudeNormaliser(_BaseNormaliser):
     """
 
     engine_id = "claude"
-    _known = frozenset({"system", "assistant", "user", "result"})
+    #: ``rate_limit_event`` is the CLI telling the operator about throttling.
+    #: It carries no trajectory, but it is a real line a live stream emits, and
+    #: refusing it threw away a whole run that had already been paid for.
+    _known = frozenset({"system", "assistant", "user", "result", "rate_limit_event"})
+    #: Known types that describe the session rather than the run.
+    _ignored = frozenset({"system", "rate_limit_event"})
 
     #: native Claude Code tool names → normalised verbs.
     _VERBS = {
@@ -198,8 +203,8 @@ class ClaudeNormaliser(_BaseNormaliser):
                 f"{self.engine_id}:{lineno}: unknown event type {etype!r} "
                 f"(known: {sorted(self._known)})"
             )
-        if etype == "system":
-            return  # init handshake carries no trajectory event
+        if etype in self._ignored:
+            return  # session chatter: no trajectory event to record
         if etype == "result":
             usage = obj.get("usage") or {}
             yield ("__tokens__", {

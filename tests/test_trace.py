@@ -163,6 +163,21 @@ def test_normaliser_rejects_unknown_event_type(tmp_path):
         normalise_stream("claude", bad)
 
 
+def test_claude_session_chatter_is_ignored_not_rejected(tmp_path):
+    # A throttling notice is a real line a live stream emits. It carries no
+    # trajectory, and refusing it discards a run that has already been paid for.
+    raw = tmp_path / "claude.raw.jsonl"
+    raw.write_text(
+        '{"type":"system","subtype":"init"}\n'
+        '{"type":"rate_limit_event","status":"throttled"}\n'
+        '{"type":"assistant","message":{"content":['
+        '{"type":"tool_use","name":"Read","input":{"file_path":"a.py"}}]}}\n',
+        encoding="utf-8",
+    )
+    events = normalise_stream("claude", raw)
+    assert [(e.kind, e.name) for e in events] == [("tool_call", "read")]
+
+
 def test_codex_rejects_line_without_msg(tmp_path):
     bad = tmp_path / "codex.raw.jsonl"
     bad.write_text('{"id":"0"}\n', encoding="utf-8")
