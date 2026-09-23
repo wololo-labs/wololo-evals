@@ -277,6 +277,30 @@ def test_an_empty_denominator_is_not_a_perfect_score():
     assert mutation.MutationReport(killed=0, survived=0).kill_rate == 0.0
 
 
+def test_a_run_that_extends_the_shipped_suite_is_what_gets_staged(tmp_path):
+    """A run is free to add its tests to the suite already there rather than a
+    new file. Later paths win, so the workspace copy is what gets measured and
+    the committed one is only the fallback."""
+    pkg = tmp_path / "quoting"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+
+    shipped = tmp_path / "shipped"
+    shipped.mkdir()
+    (shipped / "test_quotes.py").write_text("def test_a():\n    assert True\n", encoding="utf-8")
+
+    after_the_run = tmp_path / "workspace-tests"
+    after_the_run.mkdir()
+    (after_the_run / "test_quotes.py").write_text(
+        "def test_a():\n    assert True\n\n\ndef test_boundary():\n    assert True\n",
+        encoding="utf-8",
+    )
+
+    ws = tmp_path / "staged"
+    mutation.stage_analysis_workspace(ws, pkg, [shipped, after_the_run])
+    assert "test_boundary" in (ws / "tests" / "test_quotes.py").read_text()
+
+
 def test_the_workspace_digest_is_content_addressed(tmp_path):
     """The grader caches the analysis on this, so two suites that differ must
     never collide and two identical ones must."""

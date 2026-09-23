@@ -4,6 +4,7 @@
     "target": "../../examples/fixtures/quoting-service/quoting",
     "tests": [
       "../../examples/fixtures/quoting-service/tests",
+      "tests",
       "tests_generated"
     ],
     "changed_lines_file": "../../examples/fixtures/quoting-service/changed_lines.json",
