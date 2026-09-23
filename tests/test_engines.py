@@ -220,6 +220,16 @@ def test_build_env_keeps_only_own_token_strips_the_rest():
         assert forbidden not in env
 
 
+def test_build_env_keeps_the_identity_a_credential_lookup_needs():
+    # Dropping USER does not fail loudly: the CLI starts, finds no stored
+    # credential and reports "Not logged in", which reads as a missing token
+    # rather than a missing username.
+    env = build_env(
+        "claude", {}, source_env={"PATH": "/usr/bin", "HOME": "/h", "USER": "agent"}
+    )
+    assert env["USER"] == "agent"
+
+
 def test_build_env_declared_run_env_cannot_reintroduce_forbidden_tokens():
     env = build_env(
         "codex",
