@@ -1,0 +1,35 @@
+# waza front-half spike: eval for the find-missing-tests skill (ainb-toolkit QE pack).
+# Run from the repo root once Copilot auth works (see docs/spikes/waza-front-half.md).
+name: find-missing-tests-eval
+description: Spike eval for find-missing-tests. Trigger accuracy lives in trigger_tests.yaml next to this file.
+skill: find-missing-tests
+schemaVersion: "1.0"
+version: "1.0"
+
+config:
+  trials_per_task: 1
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-4.6
+  # Clone path on this box. Waza resolves skill_directories from the spec dir; unverified until a live run.
+  skill_directories:
+    - /home/claude/.orca/ainb-toolkit/packages/qe-agent-pack/.apm/skills
+  # Trigger-precision mode: keep skill discovery, do not inject the SKILL.md body.
+  inject_skill_body: false
+
+metrics:
+  - name: gap_list_produced
+    weight: 1.0
+    threshold: 0.8
+    description: The run names at least one missing test case.
+
+graders:
+  - type: text
+    name: names_a_missing_test
+    config:
+      regex_match:
+        - "(?i)missing test"
+
+tasks:
+  - tasks/*.yaml
