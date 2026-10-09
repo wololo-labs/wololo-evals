@@ -1,24 +1,25 @@
 # Casebook II, over ../../examples/fixtures/ledger-service.
 #
-# Every case asks for tests over one slice of a ledger, and every slice hides a
-# seeded defect behind a conversion, a sequence, or a fallback that returns a
-# wrong value rather than raising. The suite the repository ships catches none
-# of the six, so the control arm starts from zero rather than from an already
-# competent baseline.
+# The first attempt at this casebook named the slice each case should test:
+# "how the ledger rounds", "what happens on a retry". The control passed it at
+# 0.8669, because naming the slice hands over the defect's location. A model
+# pointed at the rounding code writes a rounding boundary test and catches the
+# rounding defect; nothing was left for an asset to add.
 #
-# Two deliberate differences from the first casebook:
+# So the cases here ask for what a reviewer actually asks for, and are scored
+# on the catch rate across EVERY seeded defect rather than the one the prompt
+# pointed at. Finding which parts of a ledger are worth pinning is the work.
+#
+# Two further departures from casebook I, kept:
 #
 #   No activation assertion. `activation_correct` is worth 25 of the 100 family
-#   points, and in the first casebook a forced invocation moved the composite
+#   points, enough that forcing a skill to run moved casebook I's composite
 #   +0.2710 while every quality signal fell. Slot weights renormalise over the
-#   slots that received signals, so leaving activation unasserted makes this
-#   composite quality only: invoking a skill cannot move the headline. Routing
-#   is read from the traces and reported as its own number.
+#   slots that receive signals, so leaving it unasserted makes this composite
+#   quality only. Routing is read from the traces and reported separately.
 #
 #   No `output.*` assertion. A live run has no mechanism to report structured
-#   output about itself, so `code:output.pytest...` resolves to an
-#   evaluator_error on every live arm. Everything asserted here is recomputed
-#   by the standing scorers from the suite the run left behind.
+#   output about itself, so that assertion can only ever be an evaluator error.
 #
 # `cases compile` turns this into cases.jsonl; keep the two in sync
 # (`cases compile --check`).
@@ -33,6 +34,7 @@ assertions = [
   "left_the_code_under_test_alone",
   "suite_is_stable",
   "no_vacuous_assertions",
+  "catches_most_defects",
 ]
 
 [defaults.assertion_weights]
@@ -40,134 +42,63 @@ read_before_writing_tests = 1.0
 left_the_code_under_test_alone = 2.0
 suite_is_stable = 1.0
 no_vacuous_assertions = 1.0
-catches_the_rounding_defect = 3.0
-catches_the_negative_defect = 3.0
-catches_the_conversion_defect = 3.0
-catches_the_retry_defect = 3.0
-catches_the_reversal_defect = 3.0
-catches_the_fallback_defect = 3.0
+catches_most_defects = 4.0
+kills_most_mutants = 2.0
 
 [assertions]
 # --- trace_conformance slot ---------------------------------------------------
 read_before_writing_tests = "trace:require_order(read, write)"
 # Editing the code under test until the new tests pass destroys the thing being
-# measured, so it is weighted above every quality signal.
+# measured, so it outweighs every quality signal.
 left_the_code_under_test_alone = "trace:deny_tools(edit:ledger/*, write:ledger/*)"
 
 # --- task_outcome slot (code:, over what the scorers just computed) ----------
 suite_is_stable = "code:qe.rubric.flake_resistance == 1.0"
 no_vacuous_assertions = "code:qe.rubric.no_tautological_assertions >= 0.75"
-
-# One per case: the defect that case's slice is supposed to pin. Weighted 3.0,
-# because catching the planted defect is the question and the rest is hygiene.
-catches_the_rounding_defect = "code:'half-up-rounding-becomes-truncation' in qe.defects.caught"
-catches_the_negative_defect = "code:'negative-amount-rounds-toward-zero' in qe.defects.caught"
-catches_the_conversion_defect = "code:'cross-currency-conversion-truncates' in qe.defects.caught"
-catches_the_retry_defect = "code:'idempotent-retry-double-counts' in qe.defects.caught"
-catches_the_reversal_defect = "code:'reversal-not-recorded-as-reversed' in qe.defects.caught"
-catches_the_fallback_defect = "code:'unpriced-currency-silently-defaulted' in qe.defects.caught"
+# The question, weighted 4.0: across all six planted defects, not the one the
+# prompt happened to mention. The shipped suite scores 0.0 here.
+catches_most_defects = "code:qe.defects.catch_rate >= 0.5"
+kills_most_mutants = "code:qe.mutation.kill_rate >= 0.5"
 
 # =============================================================================
 # Cases
 # =============================================================================
 [[cases]]
-case_id = "qe2-01-half-unit-rounding"
+case_id = "qe2-01-strengthen-the-suite"
 fixture_id = "ledger_service"
-case_weight = 1.0
-title = "Amounts landing exactly on half a minor unit"
+case_weight = 2.0
+title = "The suite is thin: make it catch something"
 difficulty = "hard"
-tags = ["rounding", "boundary", "seeded-defect"]
-input_text = "Write pytest tests for how the ledger converts decimal amount strings into minor units. Cover what happens at the edges of the smallest unit the currency has."
-assertions = [
-  "read_before_writing_tests",
-  "left_the_code_under_test_alone",
-  "suite_is_stable",
-  "no_vacuous_assertions",
-  "catches_the_rounding_defect",
-]
-metadata = { slice = "minor-unit rounding", targets_defect = "half-up-rounding-becomes-truncation" }
+tags = ["coverage", "judgement", "seeded-defect"]
+input_text = "This ledger package has a test suite that passes but is very thin. Strengthen it with pytest tests that would actually catch a regression in this code."
+metadata = { slice = "whole package", targets_defect = "all" }
 
 [[cases]]
-case_id = "qe2-02-negative-amounts"
+case_id = "qe2-02-money-handling"
 fixture_id = "ledger_service"
 case_weight = 1.0
-title = "Debits: a signed amount through the same conversion"
+title = "Money handling, without being told where the edges are"
 difficulty = "hard"
-tags = ["rounding", "sign", "seeded-defect"]
-input_text = "Write pytest tests for how the ledger handles debits, meaning negative amount strings, when it converts them into minor units."
-assertions = [
-  "read_before_writing_tests",
-  "left_the_code_under_test_alone",
-  "suite_is_stable",
-  "no_vacuous_assertions",
-  "catches_the_negative_defect",
-]
-metadata = { slice = "signed amounts", targets_defect = "negative-amount-rounds-toward-zero" }
+tags = ["money", "judgement", "seeded-defect"]
+input_text = "Write pytest tests for the money handling in this ledger package. Pin the behaviour a finance team would care about if it changed."
+metadata = { slice = "money", targets_defect = "all" }
 
 [[cases]]
-case_id = "qe2-03-cross-currency"
+case_id = "qe2-03-posting-lifecycle"
 fixture_id = "ledger_service"
 case_weight = 1.0
-title = "A posting in a currency the account does not hold"
+title = "The posting lifecycle, as a caller drives it"
 difficulty = "hard"
-tags = ["conversion", "rounding", "seeded-defect"]
-input_text = "Write pytest tests for posting an amount in one currency to an account held in another, including what the converted figure should be."
-assertions = [
-  "read_before_writing_tests",
-  "left_the_code_under_test_alone",
-  "suite_is_stable",
-  "no_vacuous_assertions",
-  "catches_the_conversion_defect",
-]
-metadata = { slice = "cross-currency conversion", targets_defect = "cross-currency-conversion-truncates" }
+tags = ["sequence", "judgement", "seeded-defect"]
+input_text = "Write pytest tests for the posting lifecycle in this ledger package, the way a caller would actually drive it over the life of an account."
+metadata = { slice = "postings", targets_defect = "all" }
 
 [[cases]]
-case_id = "qe2-04-idempotent-retry"
+case_id = "qe2-04-review-before-release"
 fixture_id = "ledger_service"
 case_weight = 1.0
-title = "The same entry delivered twice"
+title = "A pre-release review of the whole package"
 difficulty = "hard"
-tags = ["idempotency", "sequence", "seeded-defect"]
-input_text = "Write pytest tests for what the ledger does when a caller retries, sending the same posting twice."
-assertions = [
-  "read_before_writing_tests",
-  "left_the_code_under_test_alone",
-  "suite_is_stable",
-  "no_vacuous_assertions",
-  "catches_the_retry_defect",
-]
-metadata = { slice = "idempotent retry", targets_defect = "idempotent-retry-double-counts" }
-
-[[cases]]
-case_id = "qe2-05-reversals"
-fixture_id = "ledger_service"
-case_weight = 1.0
-title = "Reversing an entry, and reversing it again"
-difficulty = "hard"
-tags = ["reversal", "sequence", "seeded-defect"]
-input_text = "Write pytest tests for reversing a posting in the ledger, covering what should happen to the balance and what should happen if the same entry is reversed more than once."
-assertions = [
-  "read_before_writing_tests",
-  "left_the_code_under_test_alone",
-  "suite_is_stable",
-  "no_vacuous_assertions",
-  "catches_the_reversal_defect",
-]
-metadata = { slice = "reversals", targets_defect = "reversal-not-recorded-as-reversed" }
-
-[[cases]]
-case_id = "qe2-06-unpriced-currency"
-fixture_id = "ledger_service"
-case_weight = 1.0
-title = "A currency with no rate, answered rather than refused"
-difficulty = "hard"
-tags = ["validation", "fallback", "seeded-defect"]
-input_text = "Write pytest tests for what the ledger service does with a posting whose currency it has no rate for, and for how a caller can tell that case apart from a normal posting."
-assertions = [
-  "read_before_writing_tests",
-  "left_the_code_under_test_alone",
-  "suite_is_stable",
-  "no_vacuous_assertions",
-  "catches_the_fallback_defect",
-]
-metadata = { slice = "unpriced currency", targets_defect = "unpriced-currency-silently-defaulted" }
+tags = ["review", "judgement", "seeded-defect"]
+input_text = "This ledger package is going into a release. Add the pytest tests you would want in place before it ships."
+metadata = { slice = "whole package", targets_defect = "all" }
