@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Defects planted into a staged copy of the fixture, each an exact-string edit, to ask one mechanical question of a candidate suite: does it go red? Every one sits on the far side of a conversion, a sequence or a silent fallback, so the shipped suite stays green against all of them. That is deliberate: the control arm has to fail this casebook before any asset is measured against it.",
+  "defects": [
+    {
+      "id": "half-up-rounding-becomes-truncation",
+      "title": "An amount on exactly half a minor unit truncates instead of rounding up",
+      "file": "ledger/money.py",
+      "find": "    if int(carry_digit) >= 5:\n        minor += 1\n",
+      "replace": "    if int(carry_digit) > 5:\n        minor += 1\n",
+      "rationale": "1.005 posts as 1.00 rather than 1.01. Every amount a caller is likely to try rounds the same either way, so only a test pinning the half-unit boundary itself sees it."
+    },
+    {
+      "id": "negative-amount-rounds-toward-zero",
+      "title": "A negative amount loses its sign before rounding",
+      "file": "ledger/money.py",
+      "find": "    return -minor if negative else minor\n",
+      "replace": "    return -(minor - 1) if negative and minor else minor\n",
+      "rationale": "Debits come back a minor unit short. A suite that only posts credits never evaluates the branch, and one that posts a round debit like -10.00 gets a wrong answer that still looks like money."
+    },
+    {
+      "id": "unpriced-currency-silently-defaulted",
+      "title": "An unpriced currency is accepted at the default rate instead of refused",
+      "file": "ledger/service.py",
+      "find": "    priced = currency in RATES\n    effective = currency if priced else DEFAULT_CURRENCY\n",
+      "replace": "    priced = True\n    effective = currency if currency in RATES else DEFAULT_CURRENCY\n",
+      "rationale": "The response stops admitting the amount was never priced, so a caller cannot tell a real rate from a fallback. Nothing raises, so an assertion that the call did not throw passes."
+    },
+    {
+      "id": "reversal-not-recorded-as-reversed",
+      "title": "A reversed entry is not marked, so it can be reversed twice",
+      "file": "ledger/account.py",
+      "find": "            self.reversed_ids.append(posting.reverses)\n",
+      "replace": "",
+      "rationale": "Reversing the same entry twice subtracts it twice and the balance goes wrong only after that third posting. A test that posts and reverses once cannot reach it."
+    },
+    {
+      "id": "idempotent-retry-double-counts",
+      "title": "Re-posting the same entry id applies it again",
+      "file": "ledger/account.py",
+      "find": "        if posting.entry_id in self.postings:\n            # Idempotent retry: the caller may send the same entry twice.\n            return self.balance\n",
+      "replace": "",
+      "rationale": "A retrying caller double-counts. The defect needs the same id posted twice in one test, which is a sequence a single-call test never builds."
+    },
+    {
+      "id": "cross-currency-conversion-truncates",
+      "title": "Cross-currency conversion truncates instead of rounding",
+      "file": "ledger/money.py",
+      "find": "    remainder = scaled - floor\n    if remainder >= 0.5:\n        floor += 1\n",
+      "replace": "    remainder = scaled - floor\n",
+      "rationale": "Converted postings land a minor unit light, and only on amounts whose conversion falls above a half unit. A test asserting the converted balance is positive, or merely non-zero, is blind to it."
+    }
+  ]
+}
