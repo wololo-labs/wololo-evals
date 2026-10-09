@@ -76,8 +76,11 @@ def convert(minor: int, currency: str, into: str) -> int:
     in_default = major / RATES[currency]
     target_major = in_default * RATES[into]
     scaled = target_major * (10 ** _EXPONENT[into])
-    floor = int(scaled)
-    remainder = scaled - floor
-    if remainder >= 0.5:
-        floor += 1
-    return floor
+    # Half away from zero, and symmetric: -1.5 minor units rounds to -2, not
+    # -1. int() truncates toward zero, so the sign is taken out first.
+    sign = -1 if scaled < 0 else 1
+    magnitude = abs(scaled)
+    whole = int(magnitude)
+    if magnitude - whole >= 0.5:
+        whole += 1
+    return sign * whole

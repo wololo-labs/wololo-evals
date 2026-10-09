@@ -32,7 +32,7 @@
       "file": "ledger/account.py",
       "find": "            self.reversed_ids.append(posting.reverses)\n",
       "replace": "",
-      "rationale": "Reversing the same entry twice subtracts it twice and the balance goes wrong only after that third posting. A test that posts and reverses once cannot reach it."
+      "rationale": "Reversing the same entry twice subtracts it twice, and the running balance then disagrees with a rebuild from the postings. A test that posts and reverses once cannot reach it."
     },
     {
       "id": "idempotent-retry-double-counts",
@@ -46,9 +46,9 @@
       "id": "cross-currency-conversion-truncates",
       "title": "Cross-currency conversion truncates instead of rounding",
       "file": "ledger/money.py",
-      "find": "    remainder = scaled - floor\n    if remainder >= 0.5:\n        floor += 1\n",
-      "replace": "    remainder = scaled - floor\n",
-      "rationale": "Converted postings land a minor unit light, and only on amounts whose conversion falls above a half unit. A test asserting the converted balance is positive, or merely non-zero, is blind to it."
+      "find": "    if magnitude - whole >= 0.5:\n        whole += 1\n",
+      "replace": "",
+      "rationale": "Converted postings land a minor unit light whenever the conversion falls on or above a half unit. A test asserting the converted balance is positive, or merely non-zero, is blind to it."
     }
   ]
 }

@@ -76,9 +76,8 @@ class Account:
         total = 0
         for entry_id, posting in self.postings.items():
             if posting.reverses is not None:
-                original = self.postings.get(posting.reverses)
-                if original is not None:
-                    total -= self._in_account_currency(original)
+                # A reversal's whole effect is cancelling its original, and the
+                # original is skipped below, so the pair contributes nothing.
                 continue
             if entry_id in self.reversed_ids:
                 continue
