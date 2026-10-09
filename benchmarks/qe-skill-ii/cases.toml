@@ -102,3 +102,43 @@ difficulty = "hard"
 tags = ["review", "judgement", "seeded-defect"]
 input_text = "This ledger package is going into a release. Add the pytest tests you would want in place before it ships."
 metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-05-regression-guard"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "Tests that would fail if someone changed the arithmetic"
+difficulty = "hard"
+tags = ["regression", "judgement", "seeded-defect"]
+input_text = "Add pytest tests to this ledger package that would fail if someone changed its arithmetic without meaning to."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-06-handover"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "Tests for someone inheriting the module"
+difficulty = "hard"
+tags = ["documentation", "judgement", "seeded-defect"]
+input_text = "You are handing this ledger package to another team. Write the pytest tests that document what it guarantees."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-07-edge-cases"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "The inputs nobody tried"
+difficulty = "hard"
+tags = ["edges", "judgement", "seeded-defect"]
+input_text = "Write pytest tests for this ledger package covering the inputs and sequences its current tests do not."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-08-audit"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "An auditor asks what the balance is guaranteed to be"
+difficulty = "hard"
+tags = ["invariants", "judgement", "seeded-defect"]
+input_text = "An auditor wants to know the balance on this ledger can be trusted. Write pytest tests that establish it."
+metadata = { slice = "invariants", targets_defect = "all" }
