@@ -1,0 +1,22 @@
+# Casebook II control: the same model on the same cases, no skill installed.
+#
+# This arm is run FIRST and on its own. A casebook whose control already passes
+# cannot show an asset helping, so the control's failure is a precondition for
+# measuring anything against it, not a result to report afterwards.
+schema_version = "2.0.0"
+benchmark = "../../../benchmarks/qe-skill-ii"
+output_dir = "out/baseline"
+fixtures_dir = "../../fixtures/ledger-service"
+seeds = 1
+max_cost_usd = 6.0
+
+[engines.claude]
+version_range = ">=2.0,<3"
+
+[[models]]
+id = "claude-sonnet-5"
+engine = "claude"
+model = "claude-sonnet-5"
+
+[[prompts]]
+id = "qe-skill-ii"
