@@ -23,7 +23,37 @@ is vendored the same way; wololo-evals never hand-rolls a token interface
 | autoresearch candidate source | `src/wololo_evals/stubs/candidate_fixture_gen.py` | 09 | `eval-candidate` submissions (skill/prompt variants) | Retire generator; autoresearch submits real candidates; wire cerebro tech-signal digest as a second source |
 | Entitlement issuer (JWKS) | `tests/fixtures/dev-jwks.json` + `specs/identity/test-vectors/` | 06a | Entitlement token signed by `wololo-licence`, keys by `kid` from the deploy-published JWKS | Swap fixture JWKS path for the 06a JWKS URL; **same validation code path** |
 | Per-run model API key | compose env `WOLOLO_EVALS_JUDGE_API_KEY` | 03 (wololo-broker) | Short-TTL per-run credential | Broker issues per-run keys; egress allowlist becomes broker-policy-driven |
-| copilot live validation deferred | `src/wololo_evals/engines/copilot.py` + recorded fixtures replayed via `engines/replay.py` | operator (`COPILOT_GITHUB_TOKEN`) | The `copilot` `EngineAdapter` run — a live `copilot -p … --log-level all` event-log trial; imitated today by recorded fixtures re-scored through the `replay` engine (never spawns `copilot`) | Provide a working `COPILOT_GITHUB_TOKEN`, run one live smoke trial, and confirm `_parse_usage` reads real `usage` events off the log; then the adapter runs live and the fixture-replay path is only a regression baseline |
+| copilot live validation blocked on the `-p` path | `src/wololo_evals/engines/copilot.py` + recorded fixtures replayed via `engines/replay.py` | operator, then waza | The `copilot` `EngineAdapter` run — a live `copilot -p … --log-level all` event-log trial; imitated today by recorded fixtures re-scored through the `replay` engine (never spawns `copilot`) | Route Copilot execution through waza's embedded SDK runtime rather than the standalone CLI, per that spike's GO verdict; the `-p` invocation is refused by policy on both accounts tried (see below). `_parse_usage` still has not run against a live log |
+
+## The Copilot `-p` path is refused, the SDK runtime is not
+
+Tried on two separate accounts, 2026-10-09. This adapter shells out to the
+standalone CLI (`~/.local/bin/copilot` 1.0.94) as `copilot -p …`, and both
+accounts answer the same way:
+
+```console
+$ copilot -p 'Reply with the single word OK.' --model gpt-4.1 --allow-all-tools
+Error: Access denied by policy settings
+```
+
+Request ids `C3FD:236AB:26DD00:2D27A7:6AC8E779` and
+`E86C:3C3AD1:343FF3:3C4BAB:6AC8EA78`. The same refusal comes back for
+`gpt-5.4-mini` and `claude-sonnet-4.6`, so it is not model-specific.
+
+It is specific to the `-p` path, not to Copilot: on the second of those
+accounts the embedded Copilot SDK runtime runs live. So the fix is not a token
+or an administrator, it is the front half: Copilot execution goes through that
+runtime and this adapter stops being the entry point.
+
+Two consequences worth stating plainly rather than leaving implied:
+
+- `_parse_usage` in this adapter has still never seen a live Copilot log. Every
+  assertion about its cost and token parsing rests on recorded fixtures.
+- `allowed_models` in `engines/copilot.py` names models the account that does
+  authenticate does not list, so `_check_model` would refuse every call even
+  with the policy question settled. Filed rather than fixed here: the list
+  needs to come from what an account actually offers, not from a hand-written
+  constant, and guessing at replacement names would simply move the error.
 
 ## Re-wire once neighbours land (SPEC S16)
 
