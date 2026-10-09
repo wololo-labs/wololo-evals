@@ -55,3 +55,44 @@ What would change the answer, in order of evidence quality:
 What does not follow: that skills are worthless, or that this one is. It says
 the instrument cannot separate this asset from a frontier model on this kind of
 code, and that an honest catalogue therefore has nothing to badge.
+
+## Positive control: the instrument does work
+
+Run after the conclusion above, on casebook II, `claude-haiku-4-5` on both
+arms, skill against no skill, four cases each. **This is a check on the
+instrument, not a score for the asset**, and it is not a catalogue number: an
+asset is scored against the model a consumer would actually run.
+
+| | No skill | With the skill | Delta |
+|---|---:|---:|---:|
+| benchmark score | 0.9731 | 0.9895 | +0.0163 |
+| seeded defects caught | 0.8333 | 1.0000 | +0.1667 |
+| mutation kill rate | 0.8030 | 0.8674 | +0.0644 |
+| fired unprompted | 0 of 4 | 3 of 4 | |
+
+Gate verdict `pass`, with `significant_improvement: true` and a 95% CI of
+`[+0.0060, +0.0322]`, an interval that excludes zero. This is the first
+model-matched pair in slice C where the gate has reported a real effect.
+
+Two things that makes true, and one it does not.
+
+It makes true that the gate, the scorers and the guards can detect a skill
+helping when there is room for one to help: the same machinery that returned
+`+0.0003` with a CI straddling zero on a frontier model returns a significant
+improvement here, on the same casebook and fixture.
+
+It also makes true that this pack's instructions are not inert. The weaker
+model reached for the skill on three of four cases unprompted, where the
+frontier model reached for it on none of eleven, and following it took the
+defect catch rate to all six.
+
+It does **not** make true that the pack earns a catalogue score. The asset is
+badged against the model a consumer runs, and on that model it is still
+indistinguishable from no skill at all. A lift on a cheaper model is a reason
+to keep the asset and to say where it helps, not a score to publish.
+
+One caveat about comparing down the table: the frontier casebook II control ran
+before two bugs in the ledger fixture were fixed, bugs its own tests found, so
+its mutation and defect figures are not comparable with the haiku pair. Both
+haiku arms ran after the fix, on identical code, which is what makes the pair
+valid as a control.
