@@ -101,3 +101,85 @@ resolve a delta of 0.005. That is a power problem rather than a null result,
 and the fix is more cases and more seeds rather than a different conclusion.
 Until that is run, slice C has no model-matched pair, at any model strength,
 where the gate reports an effect it can stand behind.
+
+## Correction: the answer key was reachable, and about half the frontier runs read it
+
+Found while building the next control. The fixture is copied into every case
+workspace, and the defect manifest and changed-line map sat beside it. Their
+rationales name the rules a good suite is meant to discover, and the runs could
+open them. Counting tool calls that read them, per arm:
+
+| Arm | Runs that opened the answer key |
+|---|---:|
+| quoting, no skill | 7 of 16 |
+| quoting, skill natural | 6 of 12 |
+| quoting, skill forced | 5 of 12 |
+| ledger control | 1 of 4 |
+| haiku, no skill | 0 of 10 |
+
+What that does and does not change:
+
+- It did not bias any comparison. The frontier arms read the key at about the
+  same rate, so the deltas between them stand.
+- It did inflate every frontier catch rate, including the control's, which
+  weakens the "no headroom" reading drawn from them. The ledger control's
+  "caught 5 of 6" was measured from a run that never opened the key, so that
+  one figure stands; the per-case scores of the others do not.
+- Haiku never opened it, so the weaker-model pairs were unaffected.
+
+The files are now withheld from the workspace (`7896dda`); the scorers read the
+committed copy benchmark-relative, so nothing else changed. Every frontier
+figure above this section predates that fix.
+
+## Fourth fixture: an invented protocol, answer key withheld, control still strong
+
+Built as the briefed positive control: a frame protocol the model cannot know
+(Skerry), with a reserved checksum value, a pad byte, a banned source address,
+a no-reading sentinel, modular sequence order and a reset that opens a new
+epoch. No rule appears in a comment, a prompt or a file name. A skill carrying
+the spec was written and every claim in it was checked against the fixture.
+The shipped suite catches 0 of 6 planted defects.
+
+The no-skill frontier control, calibrated first and alone, with the key
+withheld (0 of 4 runs touched it):
+
+| Case | Defects caught |
+|---|---:|
+| strengthen the suite | 5 of 6 |
+| the codec | 3 of 6 |
+| pre-release review | 5 of 6 |
+| inheriting the package | 6 of 6 |
+
+Composite 0.9621. Every one of the six defects was caught in at least one case.
+**The control did not fail, so the precondition is unmet and the skill arms
+were not run.** About $2 of the round was spent on this calibration.
+
+### Why it did not fail, and why that is structural
+
+The protocol is invented, but the code that implements it is in the workspace.
+The control read `frame.py` (once per case), saw `return 251 if c == 0 else c`,
+and in two of four runs wrote a small search for an input that reaches that
+branch. The rule was never in a comment and was recoverable anyway, because an
+implementation is the most precise statement of its own rules.
+
+That is a property of the design and not of this fixture. A skill that carries
+a protocol's rules adds nothing a model with the source and a shell cannot
+recover from the source. **Spec knowledge in a skill can only help when the
+code is not available to read.**
+
+### What would make the control fail
+
+A black-box variant: the model gets the package as importable bytecode only, or
+as an executable it can call but not read, while the scorers keep mutating the
+real source benchmark-relative. Then the rules are not on the page and the only
+way to test them is to know which inputs to probe, which is what the skill
+supplies. That is a new materialisation step and a new fixture build, not a
+tweak, and it needs its own budget. Model-driven decompilation is still
+possible, so even that variant would need the control calibrated before it is
+trusted.
+
+### Round accounting
+
+The round budget was 10 USD. The scaled haiku pair on casebook II, stopped and
+not gated, cost 2.94 USD measured over 11 completed runs. The Skerry control
+cost about 1.99 USD. Roughly 5 USD remains, unspent.
