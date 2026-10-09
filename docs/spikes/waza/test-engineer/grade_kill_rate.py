@@ -25,10 +25,12 @@ def main() -> int:
     if not target.is_dir() or not tests.is_dir():
         print(f"missing quoting/ or tests_generated/ under {ws}", file=sys.stderr)
         return 1
-    # The agent writes into this workspace, so it can plant symlinks. Refuse to score through them.
-    if target.is_symlink() or tests.is_symlink():
-        print("quoting/ or tests_generated/ is a symlink; refusing to score", file=sys.stderr)
-        return 1
+    # The agent writes into this workspace, so it can plant symlinks at any depth. The scorer copies
+    # these trees with shutil.copytree, which follows links and would run an outside file as a test.
+    for root in (target, tests):
+        if root.is_symlink() or any(p.is_symlink() for p in root.rglob("*")):
+            print(f"{root.name}/ contains a symlink; refusing to score", file=sys.stderr)
+            return 1
     try:
         report = run_mutation_analysis(target, [tests], timeout_s=800)
     except MutationError as exc:
