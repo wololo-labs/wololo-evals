@@ -2,32 +2,42 @@
 
 Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, trigger tests, with/without A/B) with wololo-evals as the back half (mechanical scoring, gate)?
 
-**Recommendation: HOLD. Front half is partly proven, A/B is not run.** Activation works on find-missing-tests. Q4 (A/B) is the open gate. The back half works.
+**Recommendation: HOLD, leaning no-go as the front half for now.** waza runs the A/B and hands the workspace to the mechanical scorer, and that join works. But the skill effect on the one QE task we measured sits inside the trial spread at 3 trials per arm.
 
 ## Verdicts
 
-| # | Question | Verdict | Evidence (short) |
+| # | Question | Verdict | Evidence (computed this spike) |
 |---|---|---|---|
-| Q1 | Install, Copilot auth | PASS | waza 0.38.9 installed, checksum verified. Copilot 403 cleared after sign-in. `waza models` lists 11 models |
+| Q1 | Install, Copilot auth | PASS | waza 0.38.9 installed, checksum verified. Copilot sign-in done. Rerun: `waza models` lists 11 models |
 | Q2 | Well-formed (`check`, `spec verify`, `tokens`) | FAIL (waza flags) | find-missing-tests 665/500 tokens; test-driven-development 2213/500; agent file rejected by `waza check`; spec verify 0/1 covered |
-| Q3 | Does the skill fire (trigger tests) | PASS (weak) | `skill.invoked` on 2 of 3 positive prompts, 0 of 3 negatives. One trial, six prompts. Accuracy 81.8% |
-| Q4 | With/without A/B, trials 3 | NOT RUN | Spec not finalised. Cost cap not agreed. No scores computed, none reported |
-| Q5 | The join (waza output to mutation scorer) | BLOCKED (scorer side PASS) | Scorer computes kill_rate 0.2373 on the fixture with its own tests. No waza run output exists to feed it yet |
+| Q3 | Does the skill fire (trigger tests) | PASS (weak) | Two identical runs. `skill.invoked` on 2 of 3 positive prompts, 0 of 3 negatives. Accuracy 81.8%, recall 60% |
+| Q4 | With/without A/B, 3 trials per arm | DONE, no detectable skill effect | With skills mean kill rate 0.3461, without 0.3291, gap +0.0170, pooled SD 0.0277. waza verdict NEUTRAL (100% vs 100%) |
+| Q5 | The join (waza output to mutation scorer) | PASS (prototype) | Kill rate computed on each of the 6 full-run workspaces by `grade_kill_rate.py`. Four glue items still open |
 
-Spend: one Q3 run, 7 premium requests, 33.33 AI Credits as reported by waza. Waza reports no USD figure, so the $10 budget cannot be checked from its output.
+Spend (AI Credits, as reported by waza; waza gives no USD figure):
+
+| Run | Runs | AI Credits |
+|---|---|---|
+| Q3 trigger, run 1 | 1 | 33.33 |
+| Q3 trigger, rerun | 1 | 33.24 |
+| Q4 pilot (1 trial per arm) | 2 | 6.04 |
+| Q4 full (3 trials per arm) | 6 | 18.03 |
+| **Total metered** | | **90.65** |
+
+The earlier Q4 pilot, whose with-skills arm failed on agent parsing, was not metered in this total. Failed setup attempts errored at 0 s and cost nothing. The $10 USD cap cannot be checked from these numbers.
 
 ## Shape of the join
 
 ```
 ┌───────────────┐  --keep-workspace  ┌──────────────────────┐
 │ waza run      │───────────────────▶│ workspace/           │
-│ copilot-sdk   │  Q3 ran; Q4 next   │ quoting/ tests_gen/  │
-└───────────────┘                    └──────────┬───────────┘
-                                                │ GLUE MISSING
+│ copilot-sdk   │  program grader    │ quoting/ tests_gen/  │
+└───────────────┘  (grade_kill_rate) └──────────┬───────────┘
+                                                │ kill_rate.json
                                                 ▼
                                      ┌──────────────────────┐
                                      │ mutation scorer      │
-                                     │ kill_rate (PASS)     │
+                                     │ kill_rate (computed) │
                                      └──────────────────────┘
 ```
 
@@ -41,8 +51,8 @@ Spend: one Q3 run, 7 premium requests, 33.33 AI Credits as reported by waza. Waz
 Error: failed to list models: JSON-RPC Error -32603: Request models.list failed with message: GenericFailure, {"kind":"http","status":403,"statusText":"Forbidden","body":"unauthorized: not authorized to use this Copilot feature\n", ...}
 ```
 
-- The login flow tried to open a browser on this headless box (`xdg-open` missing). The OAuth callback was completed through the local listener on `127.0.0.1`. After sign-in, `waza models` succeeded.
-- Live model IDs on this account include `claude-sonnet-5.5`, `claude-haiku-5.5`, `claude-opus-5.5`. The `claude-sonnet-4.6` ID in the first draft of the spec was not on the account, so the spec was corrected to `claude-sonnet-5.5`.
+- The login flow tried to open a browser on this headless box (`xdg-open` missing). The OAuth callback was completed through the local listener on `127.0.0.1`. After sign-in, `waza models` succeeded and lists 11 models.
+- Live model IDs on this account include `claude-sonnet-5.5`, `claude-haiku-5.5`, `claude-opus-5.5`. The `claude-sonnet-4.6` ID in the first draft of the spec was not on the account, so the spec uses `claude-sonnet-5.5`.
 
 ## Q2: well-formed
 
@@ -56,7 +66,7 @@ Error: failed to list models: JSON-RPC Error -32603: Request models.list failed 
 
 The 500-token budget is waza's default. Read the flags as "waza's default gate fails", not "the skill is broken".
 
-The spec files validate against waza's published `eval.schema.json` and `task.schema.json` (checked with `jsonschema`). Spec verify's one miss is deliberate: the A/B task forbids filing issues, because the skill would otherwise write to GitHub.
+The spec files validate against waza's published `eval.schema.json` and `task.schema.json` (checked with `jsonschema`). Spec verify's one miss is deliberate: the find-missing-tests task forbids filing issues, because the skill would otherwise write to GitHub.
 
 ## Q3: does it fire
 
@@ -71,26 +81,38 @@ Run: `trigger_tests.yaml` from `docs/spikes/waza/find-missing-tests/` (3 positiv
 | What's the weather like in Lisbon today? | silent | no | pass |
 | Deploy the staging build to Azure | silent | no | pass |
 
-- Trigger accuracy 81.8%, precision 100%, recall 60%, F1 75%. TP 2, FP 0, FN 1, TN 3. [fact, one trial]
+- Two runs gave the same metrics: accuracy 81.8%, precision 100%, recall 60%, F1 75%, TP 2, FP 0, FN 1, TN 3. Six prompts is still a small sample.
 - Evidence is `skill.invoked` events in the run transcript, not response text.
-- Six prompts and one trial is weak evidence. Rerun with more trials before treating recall as settled.
 - Our 0.0833 activation number is not in this repo (no run artifact, no matching value). Source unverified.
 - 0.0833 = 1/12, which matches 12 cases with one hit. [inference]
 - The casebook asserts `trace:used_skill(qe-test-authoring)` (`benchmarks/qe-skill/cases.toml:31,57`). The pack ships `expect-test`, `find-missing-tests`, `test-driven-development`, `webapp-testing`. `qe-test-authoring` is not in the pack, on any branch (`git log --all -S`), or in GitHub code search. [fact]
 - STALE hypothesis: the scored name `qe-test-authoring` does not exist, so no shipped skill can satisfy it. This came from reading `main` only. Parent correction: unpushed commit 153c8a1 on `slice-c-qe-gate` ("score activation against the asset under evaluation") makes the assertion fall back to each case's `expected_skill`, and a matrix config overrides it per arm. That commit is not in this clone, so it is unverified here.
-- Cause of 0.0833: OPEN. The waza trigger-test runs below are the evidence now.
+- Cause of 0.0833: OPEN. The waza trigger-test runs above are the evidence now.
 - Repo copilot adapter has never run live (`docs/INTEGRATION-DEBT.md:26`). [fact]
 
 ## Q4: A/B
 
-Not run. Open items:
+Spec: `docs/spikes/waza/test-engineer/eval.yaml`. Task: write pytest tests for the `weight_grams` boundary in `quoting/`, into `tests_generated/`. Model `claude-sonnet-5.5`, `--baseline --trials 3 --keep-workspace`. The task forbids touching `quoting/` and filing issues.
 
-- Target: recommend the `test-engineer` agent, not find-missing-tests. find-missing-tests files GitHub issues, a side effect the A/B should not cause.
-- Cost: each A/B trial is an agent run with tests written and executed. Waza reports AI Credits, not USD. A cap is needed before running 6 trials (2 arms x 3).
+Per-trial mutation kill rate, from `grade_kill_rate.py` on each kept workspace (computed, 85 of 236 mutants killed in the best case):
+
+| Trial | With skills | Without skills |
+|---|---|---|
+| 1 | 0.3178 | 0.3644 |
+| 2 | 0.3602 | 0.3093 |
+| 3 | 0.3602 | 0.3136 |
+| **Mean** | **0.3461** (SD 0.0245, range 0.0424) | **0.3291** (SD 0.0306, range 0.0551) |
+
+- Gap, with minus without: **+0.0170**. Pooled SD 0.0277. The gap is smaller than the pooled SD and smaller than either arm's range. At 3 trials per arm this run cannot tell the arms apart. [fact]
+- waza's own binary grader passed 6 of 6 runs at the 0.24 threshold, and waza reports NEUTRAL (100% vs 100%). Its own metric gives no signal here, so the kill rate is the metric that carries the comparison.
+- Test files differ between arms (different hashes, 10 vs 14 test functions in the two arms checked), but the kill rate for these two arms matched in the pilot (both 0.3602). Not a general claim.
+- Setup finding: the with-skills arm first failed because waza parses every `.agent.md` in a skill directory. A sibling agent, `playwright-test-generator.agent.md`, does not parse (`tools` given as a string). The spec now points at an isolated directory with only `test-engineer.agent.md`.
 
 ## Q5: the join
 
-Scorer side, run on the fixture with its own shipped tests (no waza):
+Post-step, not a waza-native grader. `docs/spikes/waza/test-engineer/grade_kill_rate.py` runs as a waza `program` grader. It reads `WAZA_WORKSPACE_DIR`, scores `tests_generated/` against `quoting/` with `run_mutation_analysis`, writes the full report to `kill_rate.json` in the workspace, and exits 0 at or above 0.24. waza's program grader is binary, so the number travels in the sidecar. The grader ran in about 4.5 s per run.
+
+Baseline on the fixture with its own shipped tests (no waza):
 
 ```
 run_mutation_analysis('examples/fixtures/quoting-service/quoting', ['examples/fixtures/quoting-service/tests'])
@@ -101,20 +123,22 @@ kill_rate 0.2373 (strict) · kill_rate_executed 0.4179 · ~5 s
 - The shipped suite scores 0.2373 against `mutation_threshold` 0.24 in `benchmarks/qe-skill/qe-target.json`. It fails that threshold by 0.003. [fact]
 - Waza facts: the `program` grader receives the agent output on stdin and `WAZA_WORKSPACE_DIR`, and returns binary pass/fail (`docs/graders/program.md`). Results JSON records `workspace_dir` (`internal/models/outcome.go:215`). [fact]
 
-### Glue missing
+### Glue status
 
-1. **Numeric score path.** Program grader is binary. The grader must write the kill rate to a sidecar JSON inside `$WAZA_WORKSPACE_DIR`.
-2. **Grader entrypoint.** No module wraps `run_mutation_analysis`, `run_defect_detection` or `score_qe_rubric` for a waza workspace. Needs a small `wololo_evals` grader script.
-3. **Fixed test drop path.** The agent must write tests to the path in `qe-target.json` (`tests_generated`). Waza enforces nothing here. Prompt-only, untested.
-4. **Keep workspace and timeout.** Run with `--keep-workspace`. Set grader `timeout` to at least 600 s (the default is 30 s, and the scorer defaults to 600 s).
-5. **Ingestion.** `gate` reads its own run directories. No converter from waza results JSON to that format.
-6. **Name mismatch.** Casebook `qe-test-authoring` vs shipped skills. Rename the casebook or ship the skill.
+1. **Numeric score path.** Done in the prototype: `kill_rate.json` in the workspace.
+2. **Grader entrypoint.** Prototype exists (`grade_kill_rate.py`). Not yet a wrapper for `run_defect_detection` or `score_qe_rubric`.
+3. **Fixed test drop path.** Held in every scored run in this spike (`tests_generated/test_weight_boundary.py`). Waza does not enforce it; the prompt does.
+4. **Keep workspace and timeout.** Done: `--keep-workspace`, grader timeout 900 s.
+5. **Ingestion, open.** `gate` reads its own run directories. No converter from waza results JSON to that format.
+6. **Name mismatch, open.** Casebook `qe-test-authoring` vs shipped skills. Cause of 0.0833 still open (see Q3).
+7. **New: spec layout rules.** Fixtures and skill directories must sit inside the spec directory, with no `..` and no absolute paths. A skill directory may hold only parseable agent files.
+8. **New: `--task` filter drops trigger tests.** Trigger runs need at least one task to execute.
 
 ## Go / no-go
 
-- **HOLD.** Activation works on find-missing-tests (Q3, weak). A/B is unproven (Q4 not run).
-- Back half is ready: the scorer computes a real kill rate; the glue is six items, none a blocker to write.
-- Next: agree a cost cap, run Q4 on `test-engineer` with 3 trials per arm, then decide go or no-go.
+- **HOLD, leaning no-go as the front half for now.** The join works. The A/B effect on this task is inside trial spread at n=3.
+- waza's own grader gives no signal here (6 of 6 pass, NEUTRAL). The kill-rate comparison gives a gap of +0.0170 that is smaller than the pooled SD of 0.0277.
+- Next: agree a USD cost cap (waza reports credits only), then run more trials on this task and a second QE task before deciding go or no-go.
 
 ## Reproduce
 
@@ -137,10 +161,10 @@ waza spec verify $Q/skills/find-missing-tests docs/spikes/waza/find-missing-test
 #     with trigger_tests.yaml, eval.yaml and a no-tool carrier task (tasks/noop.yaml).
 waza run <scratch-spec>/eval.yaml -v --output-dir <out>
 
-# Q4: A/B, not run yet
-waza run docs/spikes/waza/find-missing-tests/eval.yaml --baseline --trials 3
+# Q4 + Q5: A/B on the test-engineer task, grader writes kill_rate.json per workspace
+waza run docs/spikes/waza/test-engineer/eval.yaml --baseline --trials 3 --keep-workspace -v --output-dir <out>
 
-# Q5: scorer on the fixture (venv with the mutation extra)
+# Q5 baseline: scorer on the fixture (venv with the mutation extra)
 uv venv <venv> && uv pip install --python <venv>/bin/python -e '.[mutation]'
 <venv>/bin/python -c "from wololo_evals.scoring.mutation import run_mutation_analysis as r; x=r('examples/fixtures/quoting-service/quoting',['examples/fixtures/quoting-service/tests']); print(x.as_dict(), x.kill_rate)"
 ```
