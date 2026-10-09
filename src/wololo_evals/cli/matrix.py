@@ -125,6 +125,15 @@ def _snapshot(entry: Optional[AssetEntry], base_dir: pathlib.Path) -> ci.AssetSn
     )
 
 
+#: Files the scorers read to grade a run. They sit next to the fixture so the
+#: manifests stay beside the code they describe, but they must never reach a
+#: case workspace: the defect manifest is the answer key, and its rationales
+#: name the rules a good suite is meant to discover. The scorers resolve these
+#: benchmark-relative, against the committed copy, so withholding them from the
+#: workspace costs nothing.
+_ORACLE_FILES = ("seeded_defects.json", "changed_lines.json")
+
+
 def _materialise_fixture(fixtures_dir: Optional[pathlib.Path], workspace: pathlib.Path) -> None:
     """Copy the benchmark's fixture tree into one case workspace.
 
@@ -143,7 +152,9 @@ def _materialise_fixture(fixtures_dir: Optional[pathlib.Path], workspace: pathli
     workspace.mkdir(parents=True, exist_ok=True)
     shutil.copytree(
         fixtures_dir, workspace, dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache", "mutants"),
+        ignore=shutil.ignore_patterns(
+            "__pycache__", "*.pyc", ".pytest_cache", "mutants", *_ORACLE_FILES
+        ),
     )
     _seal_workspace_git(workspace)
 

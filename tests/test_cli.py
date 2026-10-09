@@ -308,6 +308,28 @@ def test_fixtures_dir_lands_one_copy_per_case_workspace(tmp_path):
     assert all(p.read_text() == "RATE = 1\n" for p in copies)
 
 
+def test_the_answer_key_never_reaches_a_case_workspace(tmp_path):
+    # About half of the first live runs ran `cat seeded_defects.json`: the
+    # manifest is copied beside the fixture, and its rationales name the very
+    # rules a good suite is supposed to find. Withheld from the workspace, the
+    # scorers still read the committed copy benchmark-relative.
+    fixtures = tmp_path / "fixtures"
+    (fixtures / "pkg").mkdir(parents=True)
+    (fixtures / "pkg" / "mod.py").write_text("VALUE = 1\n")
+    (fixtures / "seeded_defects.json").write_text("{}")
+    (fixtures / "changed_lines.json").write_text("{}")
+    mc = _make_project(tmp_path)
+    mc.write_text('fixtures_dir = "fixtures"\n' + mc.read_text())
+
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    assert list(md.rglob("workspace/*/pkg/mod.py")), "fixture never reached a workspace"
+    assert not list(md.rglob("workspace/*/seeded_defects.json"))
+    assert not list(md.rglob("workspace/*/changed_lines.json"))
+
+
 def test_a_case_workspace_cannot_commit_to_the_host_repository(tmp_path):
     # A trial's cwd sits inside this repository. One that ran `git commit`
     # committed its generated tests into the fixture's own shipped suite, the
