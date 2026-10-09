@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import pathlib
 import shutil
+import subprocess
 from dataclasses import dataclass, field, replace
 from typing import Callable, Mapping, Optional, Sequence
 
@@ -144,6 +145,32 @@ def _materialise_fixture(fixtures_dir: Optional[pathlib.Path], workspace: pathli
         fixtures_dir, workspace, dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache", "mutants"),
     )
+    _seal_workspace_git(workspace)
+
+
+def _seal_workspace_git(workspace: pathlib.Path) -> None:
+    """Give the workspace its own git repository, so a trial cannot commit here.
+
+    A trial runs with the workspace as its cwd, and the workspace sits inside
+    this repository's tree. A run that decides to commit its work therefore
+    commits to the branch being used to measure it. That happened: one trial
+    committed its generated tests into the fixture's own shipped suite, which
+    is the control baseline, and every later case in that matrix then started
+    from a strong suite instead of a thin one.
+
+    An empty repository rooted at the workspace makes the trial's git commands
+    land in a throwaway it owns. It is not a sandbox and does not pretend to
+    be; it closes the one path that silently corrupted a measurement.
+    """
+    try:
+        subprocess.run(
+            ["git", "init", "-q"], cwd=workspace, check=True,
+            capture_output=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(
+            f"could not seal workspace {workspace} from the host repository: {exc}"
+        ) from exc
 
 
 def _baseline_snapshot(baseline: BaselineEntry) -> ci.AssetSnapshot:

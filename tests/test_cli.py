@@ -308,6 +308,26 @@ def test_fixtures_dir_lands_one_copy_per_case_workspace(tmp_path):
     assert all(p.read_text() == "RATE = 1\n" for p in copies)
 
 
+def test_a_case_workspace_cannot_commit_to_the_host_repository(tmp_path):
+    # A trial's cwd sits inside this repository. One that ran `git commit`
+    # committed its generated tests into the fixture's own shipped suite, the
+    # control baseline, and every later case started from a strong suite.
+    fixtures = tmp_path / "fixtures"
+    (fixtures / "pkg").mkdir(parents=True)
+    (fixtures / "pkg" / "mod.py").write_text("VALUE = 1\n")
+    mc = _make_project(tmp_path)
+    mc.write_text('fixtures_dir = "fixtures"\n' + mc.read_text())
+
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    workspaces = {p.parent.parent for p in md.rglob("workspace/*/pkg/mod.py")}
+    assert workspaces, "fixture never reached a case workspace"
+    for ws in workspaces:
+        assert (ws / ".git").is_dir(), f"{ws} is not sealed from the host repository"
+
+
 def test_expected_skill_override_reaches_every_case(tmp_path):
     # One benchmark, two assets doing the same job under different slugs: the
     # matrix says which slug this arm ships, so activation is scored against
