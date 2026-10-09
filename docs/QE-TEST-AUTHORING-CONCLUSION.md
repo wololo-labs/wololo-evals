@@ -183,3 +183,87 @@ trusted.
 The round budget was 10 USD. The scaled haiku pair on casebook II, stopped and
 not gated, cost 2.94 USD measured over 11 completed runs. The Skerry control
 cost about 1.99 USD. Roughly 5 USD remains, unspent.
+
+## Do not quote the earlier absolute catch rates
+
+Every absolute seeded-defect catch rate in this document and on the pull
+request that predates commit `7896dda` was measured while the answer key was
+readable from the workspace, and roughly half the frontier runs read it. That
+includes the control figures for casebook II and for the first Skerry fixture.
+The deltas between frontier arms were not biased, because the arms read the key
+at about the same rate, but the absolute rates are inflated and **are not to be
+quoted**. One of them, the ledger control's "5 of 6", came from a run that never
+opened the key; treat it as unquotable all the same, because the runs around it
+did. The figures in the section below were measured with the key withheld and 0
+of 9 runs touching it.
+
+## Instrument validation: the gate detects a skill effect once the fixture allows it
+
+The first Skerry control was readable: it found a visible branch in the source
+and searched for an input to reach it. Skerry was rebuilt (`fe845c3`) so that no
+rule can be recovered from the code. Every constant is invented and the code
+has no special branches. Each of the six seeded defects changes a value that
+encode and decode, or a conversion and its inverse, share, so the mutant still
+round-trips. Before any model ran, the fixture was bracketed:
+
+| Suite | Catches |
+|---|---:|
+| the shipped suite | 0 of 6 |
+| round-trip tests only | 0 of 6 |
+| tests built from the protocol's own vectors | 6 of 6 |
+
+All three are green on the clean code. The skill carries the protocol's
+constants and four known byte frames, and every claim in it was checked against
+the fixture first, which caught one wrong claim in its own first draft.
+
+Same frontier model on every arm, three unguided cases, one seed, workspaces
+sealed from the host repository, answer key withheld:
+
+| Arm | Defect catch per case | Mean | Skill invoked | Composite |
+|---|---|---:|---:|---:|
+| no skill | 0.50, 0.50, 0.00 | 0.333 | n/a | 0.8372 |
+| skill, left to choose | 1.00, 1.00, 1.00 | 1.000 | 3 of 3 | 0.9816 |
+| skill, named in the prompt | 1.00, 1.00, 1.00 | 1.000 | 3 of 3 | 0.9804 |
+
+| Gate against the no-skill control | Delta | 95% CI | Significant improvement |
+|---|---:|---|---|
+| skill, left to choose | +0.1445 | [+0.0323, +0.2554] | yes |
+| skill, named in the prompt | +0.1432 | [+0.0311, +0.2550] | yes |
+
+The guarded signal moved the way the design predicts: seeded defects caught
+0.333 to 1.000. The control caught the checksum constants and the field order,
+which it pinned from exact output bytes, and never caught the fill byte, the unit
+constant or the sequence space in any case. Evidence files are under
+`examples/runs/qe-skerry-live/evidence/`.
+
+### What this licenses
+
+That the gate, its scorers and its guards can detect a skill effect when the
+fixture leaves room for one. Together with the frontier results above, that
+changes how the earlier flat results read: they were consistent with an
+instrument that works but had no headroom to measure, not with a broken one.
+This is also the first model-matched pair in slice C where the gate reports an
+effect from a baseline that was not contaminated.
+
+### What it does not license
+
+- **Nothing about `test-writer-pack`.** This is a purpose-built skill carrying
+  facts a model cannot know. The pack carries procedure a frontier model
+  already follows. It stays unscored and its pull request stays unopened.
+- **Nothing about breadth.** Mutation kill rate fell slightly (0.822 to 0.786
+  natural, 0.788 forced) and the rubric composite fell a little (0.980 to 0.966
+  and 0.947). The skill made the author pin the specified values and the
+  suites were otherwise no stronger.
+- **Not a robust interval.** The unit is the case, there are three of them, and
+  the bootstrap resamples three pairs at one seed. The lower bounds sit at
+  +0.03. Read this as the instrument showing a signal, to be replicated with
+  more cases and seeds before it is treated as established. The budget for that
+  was spent.
+- **Not a catalogue badge.** This is instrument validation. Nothing here is an
+  asset score.
+
+### Round accounting
+
+Round budget 10 USD, measured spend 8.94. The stopped scaled haiku pair cost
+2.94, the first Skerry control 1.99, and the rebuilt Skerry control plus both
+skill arms 4.01 over 9 runs. About 1 USD remains, too little to replicate.
