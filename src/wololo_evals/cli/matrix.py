@@ -312,6 +312,7 @@ def _execute_combo(
     smoke: bool,
     engine_versions: dict[str, str],
     fixtures_dir: Optional[pathlib.Path] = None,
+    prompt_preamble: Optional[str] = None,
 ) -> float:
     """Run one combo's cases x seeds, write its seed/case/scorecard artefacts
     under ``run_dir``, append events, and return the new cumulative spend."""
@@ -337,6 +338,7 @@ def _execute_combo(
                 seed=seed,
                 cwd=str(ci.artefacts.workspace_dir(run_dir, seed, case.case_id)),
                 caps=ci.RunCaps(),
+                extra=({"prompt_preamble": prompt_preamble} if prompt_preamble else {}),
             )
             if cap is not None and cumulative >= cap:
                 result = ci.RunResult(
@@ -488,6 +490,7 @@ def run_matrix(
                 if config.fixtures_dir
                 else None
             ),
+            prompt_preamble=config.prompt_preamble,
         )
         scorecard_path = ci.artefacts.scorecard_path(run_dir)
         combo_records.append(

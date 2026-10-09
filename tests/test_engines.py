@@ -284,6 +284,22 @@ def test_run_minimises_env_no_foreign_tokens_reach_subprocess(tmp_path, monkeypa
     assert "GITHUB_TOKEN" not in run_env
 
 
+def test_a_declared_preamble_leads_the_case_prompt(tmp_path):
+    # The preamble is how an arm says whether it is scoring the asset's
+    # contents or also whether the model finds it. Without it the prompt is
+    # the case text alone.
+    fake = FakeExec()
+    spec = _spec(tmp_path, extra={"prompt_preamble": "Use the test-writer-fixer skill."})
+    ClaudeAdapter(exec_fn=fake).run(spec)
+    prompt = fake.run_calls[0]["argv"][2]
+    assert prompt.startswith("Use the test-writer-fixer skill.")
+    assert prompt.rstrip().endswith("open the dropdown")
+
+    plain = FakeExec()
+    ClaudeAdapter(exec_fn=plain).run(_spec(tmp_path))
+    assert plain.run_calls[0]["argv"][2] == "open the dropdown"
+
+
 def test_claude_runs_on_project_settings_only(tmp_path):
     # Without this the trial inherits the operator's own skills and memory, so
     # it measures their installation and the asset competes with hundreds of

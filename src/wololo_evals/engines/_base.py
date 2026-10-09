@@ -225,6 +225,20 @@ class LiveCliAdapter:
             dest.write_text(str(content), encoding="utf-8")
 
     def _compose_prompt(self, spec: RunSpec) -> str:
+        """The case prompt, after any declared preamble.
+
+        A preamble exists for one reason: to separate what an asset *contains*
+        from whether a model *routes* to it. Told to use a skill, a run scores
+        the skill's instructions; left to choose, it scores discovery as well.
+        Both are worth knowing and they are not the same number, so an arm
+        declares which it is measuring.
+        """
+        case = spec.case
+        preamble = str(spec.extra.get("prompt_preamble") or "").strip()
+        body = self._case_body(spec)
+        return f"{preamble}\n\n{body}" if preamble else body
+
+    def _case_body(self, spec: RunSpec) -> str:
         case = spec.case
         if case.turns is None:
             return case.input_text

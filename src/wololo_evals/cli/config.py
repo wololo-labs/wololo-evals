@@ -88,6 +88,10 @@ class MatrixConfig:
     #: benchmark's own ``expected_skill``. One benchmark asks one question; two
     #: assets answering it are entitled to different names.
     expected_skill: Optional[str] = None
+    #: Text prepended to every case prompt. Declares what an arm measures: a
+    #: preamble naming the asset scores its contents, no preamble scores
+    #: discovery too.
+    prompt_preamble: Optional[str] = None
     models: Sequence[ModelEntry] = ()
     prompts: Sequence[PromptEntry] = ()
     baselines: Sequence[BaselineEntry] = ()
@@ -180,6 +184,7 @@ def load_matrix_config(path: str | pathlib.Path) -> MatrixConfig:
         baseline_run=data.get("baseline_run"),
         fixtures_dir=data.get("fixtures_dir"),
         expected_skill=data.get("expected_skill"),
+        prompt_preamble=data.get("prompt_preamble"),
         models=tuple(models),
         prompts=tuple(prompts),
         baselines=tuple(baselines),
