@@ -21,7 +21,7 @@ def test_a_frame_comes_back_from_decode():
 
 
 def test_a_depth_is_a_number():
-    assert to_metres(16) is not None
+    assert isinstance(to_metres(16), float)
 
 
 def test_a_session_answers_a_hello():

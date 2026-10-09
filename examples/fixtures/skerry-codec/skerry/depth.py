@@ -1,8 +1,7 @@
 """Depth readings."""
 from __future__ import annotations
 
-ELL_M = 1.143
-NO_READING = -2048
+SPAN = 0.8137
 
 
 def signed12(raw: int) -> int:
@@ -10,8 +9,9 @@ def signed12(raw: int) -> int:
     return v - 0x1000 if v >= 0x800 else v
 
 
-def to_metres(raw: int):
-    v = signed12(raw)
-    if v == NO_READING:
-        return None
-    return v / 8 * ELL_M
+def to_metres(raw: int) -> float:
+    return signed12(raw) / 6 * SPAN
+
+
+def from_metres(metres: float) -> int:
+    return round(metres / SPAN * 6) & 0xFFF

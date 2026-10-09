@@ -1,54 +1,54 @@
 {
   "schema_version": "1.0.0",
-  "description": "Defects planted into a staged copy of the fixture, each an exact-string edit. Every one is a place where the correct behaviour is defined by the Skerry protocol's own rules rather than by anything a reader can derive from the surrounding code, so only a tester who knows those rules knows what to pin. The suite the repository ships catches none of them.",
+  "description": "Defects planted into a staged copy of the fixture, each an exact-string edit. Every one changes a constant that encode and decode, or conversion and its inverse, share, so the mutant is internally consistent and a suite that only round-trips cannot see it. Only a test that knows the protocol's own value can.",
   "defects": [
     {
-      "id": "reserved-checksum-not-remapped",
-      "title": "A computed checksum of zero is sent as zero",
+      "id": "checksum-weight-offset-wrong",
+      "title": "The checksum's position weights use the wrong offset",
       "file": "skerry/frame.py",
-      "find": "    return 251 if c == 0 else c\n",
-      "replace": "    return c\n",
-      "rationale": "Only a payload whose weighted sum lands on one residue reaches the branch, so a suite that round-trips ordinary payloads never sees it."
+      "find": "_A, _B, _M = 3, 2, 11",
+      "replace": "_A, _B, _M = 3, 4, 11",
+      "rationale": "Encode and decode share one checksum function, so every frame still round-trips. Only a frame whose checksum byte is known from the protocol exposes it."
     },
     {
-      "id": "odd-payload-pad-byte-wrong",
-      "title": "An odd-length payload is padded with zero instead of the protocol's pad byte",
+      "id": "checksum-mask-wrong",
+      "title": "The checksum's final XOR mask is wrong",
       "file": "skerry/frame.py",
-      "find": "        body += b\"\\x7f\"\n",
-      "replace": "        body += b\"\\x00\"\n",
-      "rationale": "The frame still round-trips, because the length field excludes the pad. Only a test that pins the encoded bytes of an odd-length frame notices."
+      "find": "_MASK = 0x6D",
+      "replace": "_MASK = 0x6B",
+      "rationale": "Shared by encode and decode, so round trips pass. Visible only against a known checksum byte."
     },
     {
-      "id": "broadcast-node-accepted-as-source",
-      "title": "The broadcast node id is accepted as a frame source",
+      "id": "header-field-order-swapped",
+      "title": "Node and sequence are written in the wrong order",
       "file": "skerry/frame.py",
-      "find": "    if node == BROADCAST:\n        raise FrameError(\"bad node\")\n    seq",
-      "replace": "    seq",
-      "rationale": "A frame claiming to come from the broadcast address decodes cleanly. Needs a hand-built frame with that node, which no encode call can produce."
+      "find": "_LAYOUT = (\"node\", \"seq\")",
+      "replace": "_LAYOUT = (\"seq\", \"node\")",
+      "rationale": "Applied identically on both sides, so a frame survives encode then decode. Only the byte layout the protocol fixes tells them apart."
     },
     {
-      "id": "no-reading-sentinel-treated-as-depth",
-      "title": "The sentinel raw value is reported as a real depth",
+      "id": "fill-byte-wrong",
+      "title": "An odd-length payload is padded with the wrong byte",
+      "file": "skerry/frame.py",
+      "find": "_FILL = 0x9C",
+      "replace": "_FILL = 0x9B",
+      "rationale": "Decode ignores the pad, and the checksum is computed over whatever was written, so everything stays self-consistent."
+    },
+    {
+      "id": "unit-span-wrong",
+      "title": "The depth unit's length is wrong",
       "file": "skerry/depth.py",
-      "find": "    if v == NO_READING:\n        return None\n",
-      "replace": "",
-      "rationale": "The most negative 12-bit value means no reading was taken. Without the check it becomes a depth of about minus 292 metres."
+      "find": "SPAN = 0.8137",
+      "replace": "SPAN = 0.8317",
+      "rationale": "to_metres and from_metres share the constant, so converting there and back returns what went in. A known conversion exposes it."
     },
     {
-      "id": "sequence-compared-without-wraparound",
-      "title": "Sequence order is a plain comparison, so the wrap past 4095 is rejected",
-      "file": "skerry/session.py",
-      "find": "    return 0 < (new - old) % SEQ_SPACE < SEQ_SPACE // 2\n",
-      "replace": "    return new > old\n",
-      "rationale": "Every ordinary run of increasing sequence numbers behaves identically. The defect shows only when the counter wraps from near 4095 to near 0."
-    },
-    {
-      "id": "reset-keeps-sequence-memory",
-      "title": "A RESET does not forget the last sequence number",
-      "file": "skerry/session.py",
-      "find": "        if f.kind == \"RESET\":\n            self.last = None\n            return True\n",
-      "replace": "        if f.kind == \"RESET\":\n            return True\n",
-      "rationale": "After a reset the stream restarts from a low number and must be accepted. Needs a sequence of frames, a reset, then a lower sequence number."
+      "id": "sequence-space-wrong",
+      "title": "The sequence counter wraps at the wrong value",
+      "file": "skerry/frame.py",
+      "find": "SEQ_SPACE = 3001",
+      "replace": "SEQ_SPACE = 3000",
+      "rationale": "Every ordinary run of sequence numbers behaves the same. It shows only at and after the top of the range."
     }
   ]
 }

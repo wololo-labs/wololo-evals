@@ -3,11 +3,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-KINDS = {"HELLO": 1, "DATA": 2, "RESET": 3, "BYE": 4}
+KINDS = {"HELLO": 5, "DATA": 9, "RESET": 12, "BYE": 17}
 _BY_CODE = {v: k for k, v in KINDS.items()}
-_LIMIT = {"HELLO": 4, "DATA": 14, "RESET": 0, "BYE": 0}
-BROADCAST = 0xFFF
-SEQ_SPACE = 4096
+_LIMIT = {"HELLO": 6, "DATA": 18, "RESET": 0, "BYE": 0}
+SEQ_SPACE = 3001
+MAX_NODE = 2999
+_LAYOUT = ("node", "seq")
+_FILL = 0x9C
+_A, _B, _M = 3, 2, 11
+_MOD = 227
+_MASK = 0x6D
 
 
 class FrameError(ValueError):
@@ -25,25 +30,25 @@ class Frame:
 def checksum(body: bytes) -> int:
     acc = 0
     for i, b in enumerate(body):
-        acc += (i % 7 + 1) * b
-    c = (acc % 251) ^ 0x5A
-    return 251 if c == 0 else c
+        acc += ((_A * i + _B) % _M + 1) * b
+    return (acc % _MOD) ^ _MASK
 
 
 def encode(frame: Frame) -> bytes:
     if frame.kind not in KINDS:
         raise FrameError(f"unknown kind {frame.kind!r}")
-    if not 0 <= frame.node < 0x1000 or frame.node == BROADCAST:
+    if not 0 <= frame.node <= MAX_NODE:
         raise FrameError("bad node")
     if not 0 <= frame.seq < SEQ_SPACE:
         raise FrameError("bad seq")
     if len(frame.payload) > _LIMIT[frame.kind]:
         raise FrameError("payload too long")
     body = bytes([KINDS[frame.kind]])
-    body += frame.node.to_bytes(2, "big") + frame.seq.to_bytes(2, "big")
+    for name in _LAYOUT:
+        body += getattr(frame, name).to_bytes(2, "big")
     body += bytes([len(frame.payload)]) + frame.payload
     if len(frame.payload) % 2:
-        body += b"\x7f"
+        body += bytes([_FILL])
     return body + bytes([checksum(body)])
 
 
@@ -56,14 +61,17 @@ def decode(raw: bytes) -> Frame:
     kind = _BY_CODE.get(body[0])
     if kind is None:
         raise FrameError("unknown kind code")
-    node = int.from_bytes(body[1:3], "big")
-    if node == BROADCAST:
+    fields = {}
+    for i, name in enumerate(_LAYOUT):
+        fields[name] = int.from_bytes(body[1 + 2 * i:3 + 2 * i], "big")
+    if fields["node"] > MAX_NODE:
         raise FrameError("bad node")
-    seq = int.from_bytes(body[3:5], "big")
+    if fields["seq"] >= SEQ_SPACE:
+        raise FrameError("bad seq")
     n = body[5]
     if n > _LIMIT[kind]:
         raise FrameError("payload too long")
     padded = n + n % 2
     if len(body) != 6 + padded:
         raise FrameError("length mismatch")
-    return Frame(node=node, seq=seq, kind=kind, payload=bytes(body[6:6 + n]))
+    return Frame(node=fields["node"], seq=fields["seq"], kind=kind, payload=bytes(body[6:6 + n]))
