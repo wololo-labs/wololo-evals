@@ -1,0 +1,29 @@
+# Positive control for the instrument, not a score for the asset.
+#
+# Every model-matched frontier pair has come back inside the noise, and the
+# skill never fires unprompted, so this eval has never once demonstrated that
+# it can detect a skill effect at all. A weaker model on both arms asks that
+# narrower question: with headroom present, does the gate move?
+#
+# claude-haiku-4-5 both sides, skill against no skill. A result here says
+# something about the instrument. It is NOT a catalogue score, and must never
+# be published as one: the asset's score is measured against the model a
+# consumer would actually run.
+schema_version = "2.0.0"
+benchmark = "../../../benchmarks/qe-skill-ii"
+output_dir = "out/haiku-baseline"
+fixtures_dir = "../../fixtures/ledger-service"
+expected_skill = "test-writer-fixer"
+seeds = 1
+max_cost_usd = 1.0
+
+[engines.claude]
+version_range = ">=2.0,<3"
+
+[[models]]
+id = "claude-haiku-4-5"
+engine = "claude"
+model = "claude-haiku-4-5"
+
+[[prompts]]
+id = "qe-skill-ii"
