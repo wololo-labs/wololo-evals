@@ -13,7 +13,7 @@ fixtures_dir = "../../fixtures/skerry-codec"
 expected_skill = "skerry-frame-testing"
 prompt_preamble = "Use the skerry-frame-testing skill for this task."
 seeds = 1
-max_cost_usd = 2.5
+max_cost_usd = 1.6
 
 [engines.claude]
 version_range = ">=2.0,<3"
