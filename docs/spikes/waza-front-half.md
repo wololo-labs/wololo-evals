@@ -2,7 +2,7 @@
 
 Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, trigger tests, with/without A/B) with wololo-evals as the back half (mechanical scoring, gate)?
 
-**Recommendation: HOLD, leaning no-go as the front half for now.** waza runs the A/B and hands the workspace to the mechanical scorer, and that join works. But the skill effect on the one QE task we measured sits inside the trial spread at 3 trials per arm.
+**Recommendation: GO for waza as the front half.** Every front-half function ran end to end: auth (Q1), lint (Q2), trigger routing (Q3), paired with/without execution (Q4), and the kill-rate join on waza workspaces (Q5). The remaining build is glue items 5 and 6. The Q4 result (no detectable skill effect at 3 trials per arm) is a fixture limit, not a waza limit. See Go / no-go.
 
 ## Verdicts
 
@@ -136,9 +136,11 @@ kill_rate 0.2373 (strict) · kill_rate_executed 0.4179 · ~5 s
 
 ## Go / no-go
 
-- **HOLD, leaning no-go as the front half for now.** The join works. The A/B effect on this task is inside trial spread at n=3.
-- waza's own grader gives no signal here (6 of 6 pass, NEUTRAL). The kill-rate comparison gives a gap of +0.0170 that is smaller than the pooled SD of 0.0277.
-- Next: agree a USD cost cap (waza reports credits only), then run more trials on this task and a second QE task before deciding go or no-go.
+**GO: waza as the front half.** The spike question is whether waza runs the front half, and it does. The remaining build is glue.
+
+- Q4 reading: no detectable skill effect at 3 trials per arm (with 0.3461, without 0.3291, gap 0.0170, pooled SD 0.0277). The no-skill arm also passed waza's binary threshold 6 of 6, so this fixture does not separate the arms. This is a fixture limit, not a waza limit. Per the slice-c session, a capable model writes these tests unaided. The next work is a harder fixture where the no-skill arm fails, not more trials on this one.
+- Build remaining: glue item 5 (ingestion converter from waza results JSON to gate run dirs) and glue item 6 (rename the casebook `qe-test-authoring` slug or ship the skill). Item 6 is tied to the open Q3 cause.
+- Spend: 90.65 AI Credits metered across Q3 and Q4. USD conversion is open and the $10 cap is unverified. Model spend is on hold: no more trials.
 
 ## Reproduce
 
