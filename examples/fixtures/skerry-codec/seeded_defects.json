@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Defects planted into a staged copy of the fixture, each an exact-string edit. Every one is a place where the correct behaviour is defined by the Skerry protocol's own rules rather than by anything a reader can derive from the surrounding code, so only a tester who knows those rules knows what to pin. The suite the repository ships catches none of them.",
+  "defects": [
+    {
+      "id": "reserved-checksum-not-remapped",
+      "title": "A computed checksum of zero is sent as zero",
+      "file": "skerry/frame.py",
+      "find": "    return 251 if c == 0 else c\n",
+      "replace": "    return c\n",
+      "rationale": "Only a payload whose weighted sum lands on one residue reaches the branch, so a suite that round-trips ordinary payloads never sees it."
+    },
+    {
+      "id": "odd-payload-pad-byte-wrong",
+      "title": "An odd-length payload is padded with zero instead of the protocol's pad byte",
+      "file": "skerry/frame.py",
+      "find": "        body += b\"\\x7f\"\n",
+      "replace": "        body += b\"\\x00\"\n",
+      "rationale": "The frame still round-trips, because the length field excludes the pad. Only a test that pins the encoded bytes of an odd-length frame notices."
+    },
+    {
+      "id": "broadcast-node-accepted-as-source",
+      "title": "The broadcast node id is accepted as a frame source",
+      "file": "skerry/frame.py",
+      "find": "    if node == BROADCAST:\n        raise FrameError(\"bad node\")\n    seq",
+      "replace": "    seq",
+      "rationale": "A frame claiming to come from the broadcast address decodes cleanly. Needs a hand-built frame with that node, which no encode call can produce."
+    },
+    {
+      "id": "no-reading-sentinel-treated-as-depth",
+      "title": "The sentinel raw value is reported as a real depth",
+      "file": "skerry/depth.py",
+      "find": "    if v == NO_READING:\n        return None\n",
+      "replace": "",
+      "rationale": "The most negative 12-bit value means no reading was taken. Without the check it becomes a depth of about minus 292 metres."
+    },
+    {
+      "id": "sequence-compared-without-wraparound",
+      "title": "Sequence order is a plain comparison, so the wrap past 4095 is rejected",
+      "file": "skerry/session.py",
+      "find": "    return 0 < (new - old) % SEQ_SPACE < SEQ_SPACE // 2\n",
+      "replace": "    return new > old\n",
+      "rationale": "Every ordinary run of increasing sequence numbers behaves identically. The defect shows only when the counter wraps from near 4095 to near 0."
+    },
+    {
+      "id": "reset-keeps-sequence-memory",
+      "title": "A RESET does not forget the last sequence number",
+      "file": "skerry/session.py",
+      "find": "        if f.kind == \"RESET\":\n            self.last = None\n            return True\n",
+      "replace": "        if f.kind == \"RESET\":\n            return True\n",
+      "rationale": "After a reset the stream restarts from a low number and must be accepted. Needs a sequence of frames, a reset, then a lower sequence number."
+    }
+  ]
+}
