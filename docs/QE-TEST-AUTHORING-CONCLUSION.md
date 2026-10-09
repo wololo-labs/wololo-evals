@@ -56,43 +56,23 @@ What does not follow: that skills are worthless, or that this one is. It says
 the instrument cannot separate this asset from a frontier model on this kind of
 code, and that an honest catalogue therefore has nothing to badge.
 
-## Positive control: the instrument does work
+## Positive control: first attempt invalid, rerun pending
 
-Run after the conclusion above, on casebook II, `claude-haiku-4-5` on both
-arms, skill against no skill, four cases each. **This is a check on the
-instrument, not a score for the asset**, and it is not a catalogue number: an
-asset is scored against the model a consumer would actually run.
+A weaker-model pair was run and its numbers are withdrawn. During the no-skill
+arm, one trial ran `git commit` in its workspace. The workspace sits inside
+this repository, so the commit landed on the branch doing the measuring, and
+what it committed was 87 generated tests written into the ledger fixture's own
+shipped suite: the control baseline. Every case of the arm that ran afterwards
+therefore materialised a fixture whose shipped suite was strong rather than
+thin, which is exactly the variable the pair was meant to hold still.
 
-| | No skill | With the skill | Delta |
-|---|---:|---:|---:|
-| benchmark score | 0.9731 | 0.9895 | +0.0163 |
-| seeded defects caught | 0.8333 | 1.0000 | +0.1667 |
-| mutation kill rate | 0.8030 | 0.8674 | +0.0644 |
-| fired unprompted | 0 of 4 | 3 of 4 | |
+The withdrawn figures, recorded here so the correction is legible rather than
+silent: benchmark score 0.9731 to 0.9895, seeded defects caught 0.8333 to
+1.0000, mutation kill rate 0.8030 to 0.8674, gate `pass` with
+`significant_improvement: true`. They are not evidence of anything: the arms
+did not run against the same code.
 
-Gate verdict `pass`, with `significant_improvement: true` and a 95% CI of
-`[+0.0060, +0.0322]`, an interval that excludes zero. This is the first
-model-matched pair in slice C where the gate has reported a real effect.
-
-Two things that makes true, and one it does not.
-
-It makes true that the gate, the scorers and the guards can detect a skill
-helping when there is room for one to help: the same machinery that returned
-`+0.0003` with a CI straddling zero on a frontier model returns a significant
-improvement here, on the same casebook and fixture.
-
-It also makes true that this pack's instructions are not inert. The weaker
-model reached for the skill on three of four cases unprompted, where the
-frontier model reached for it on none of eleven, and following it took the
-defect catch rate to all six.
-
-It does **not** make true that the pack earns a catalogue score. The asset is
-badged against the model a consumer runs, and on that model it is still
-indistinguishable from no skill at all. A lift on a cheaper model is a reason
-to keep the asset and to say where it helps, not a score to publish.
-
-One caveat about comparing down the table: the frontier casebook II control ran
-before two bugs in the ledger fixture were fixed, bugs its own tests found, so
-its mutation and defect figures are not comparable with the haiku pair. Both
-haiku arms ran after the fix, on identical code, which is what makes the pair
-valid as a control.
+The commit is reverted, the fixture's shipped suite is thin again and catches 0
+of 6 planted defects, and each case workspace now gets its own git repository
+so a trial's commands cannot reach this repository. The pair is being rerun on
+that footing.
