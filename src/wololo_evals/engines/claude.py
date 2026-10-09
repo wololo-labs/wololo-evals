@@ -40,6 +40,11 @@ class ClaudeAdapter(LiveCliAdapter):
             self.binary,
             "-p",
             self._compose_prompt(spec),
+            # Project settings only: without this the trial inherits the
+            # operator's user-level skills and memory, and the asset under
+            # evaluation is one of hundreds competing to be chosen.
+            "--setting-sources",
+            "project",
             "--output-format",
             "stream-json",
             "--verbose",

@@ -284,6 +284,18 @@ def test_run_minimises_env_no_foreign_tokens_reach_subprocess(tmp_path, monkeypa
     assert "GITHUB_TOKEN" not in run_env
 
 
+def test_claude_runs_on_project_settings_only(tmp_path):
+    # Without this the trial inherits the operator's own skills and memory, so
+    # it measures their installation and the asset competes with hundreds of
+    # unrelated skills for the model's attention.
+    fake = FakeExec()
+    spec = _spec(tmp_path)
+    ClaudeAdapter(exec_fn=fake).run(spec)
+    argv = fake.run_calls[0]["argv"]
+    assert "--setting-sources" in argv
+    assert argv[argv.index("--setting-sources") + 1] == "project"
+
+
 def test_run_mounts_asset_files_with_traversal_guard(tmp_path):
     fake = FakeExec()
     spec = _spec(tmp_path, asset=_asset(files={"dropdowns/SKILL.md": "# skill"}))
