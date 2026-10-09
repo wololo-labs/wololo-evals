@@ -25,13 +25,27 @@ def main() -> int:
     if not target.is_dir() or not tests.is_dir():
         print(f"missing quoting/ or tests_generated/ under {ws}", file=sys.stderr)
         return 1
+    # The agent writes into this workspace, so it can plant symlinks. Refuse to score through them.
+    if target.is_symlink() or tests.is_symlink():
+        print("quoting/ or tests_generated/ is a symlink; refusing to score", file=sys.stderr)
+        return 1
     try:
         report = run_mutation_analysis(target, [tests], timeout_s=800)
     except MutationError as exc:
         print(f"mutation analysis failed: {exc}", file=sys.stderr)
         return 1
     payload = {**report.as_dict(), "kill_rate": report.kill_rate, "threshold": THRESHOLD}
-    (ws / "kill_rate.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    # Exclusive create, then rename over the destination. A symlink the agent planted at either
+    # name is replaced, never followed, so the write cannot land outside the workspace.
+    tmp = ws / ".kill_rate.json.tmp"
+    tmp.unlink(missing_ok=True)  # removes a planted link itself, never its target
+    try:
+        with open(tmp, "x", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+        os.replace(tmp, ws / "kill_rate.json")
+    except OSError as exc:
+        print(f"could not write kill_rate.json: {exc}", file=sys.stderr)
+        return 1
     print(f"kill_rate={report.kill_rate:.4f} executed={report.kill_rate_executed:.4f}")
     return 0 if report.kill_rate >= THRESHOLD else 1
 
