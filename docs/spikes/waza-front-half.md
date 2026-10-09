@@ -77,8 +77,8 @@ Run: `trigger_tests.yaml` from `docs/spikes/waza/find-missing-tests/` (3 positiv
 - Our 0.0833 activation number is not in this repo (no run artifact, no matching value). Source unverified.
 - 0.0833 = 1/12, which matches 12 cases with one hit. [inference]
 - The casebook asserts `trace:used_skill(qe-test-authoring)` (`benchmarks/qe-skill/cases.toml:31,57`). The pack ships `expect-test`, `find-missing-tests`, `test-driven-development`, `webapp-testing`. `qe-test-authoring` is not in the pack, on any branch (`git log --all -S`), or in GitHub code search. [fact]
-- Most likely cause of 0.0833: the scored skill name does not exist, so no shipped skill can satisfy the assertion. [inference]
-- Falsify: rename the casebook assertion to a shipped skill and rerun. Activation moves, or it stays 0.
+- STALE hypothesis: the scored name `qe-test-authoring` does not exist, so no shipped skill can satisfy it. This came from reading `main` only. Parent correction: unpushed commit 153c8a1 on `slice-c-qe-gate` ("score activation against the asset under evaluation") makes the assertion fall back to each case's `expected_skill`, and a matrix config overrides it per arm. That commit is not in this clone, so it is unverified here.
+- Cause of 0.0833: OPEN. The waza trigger-test runs below are the evidence now.
 - Repo copilot adapter has never run live (`docs/INTEGRATION-DEBT.md:26`). [fact]
 
 ## Q4: A/B
