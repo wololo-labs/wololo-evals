@@ -1,0 +1,36 @@
+# waza front-half spike, Q4: with/without A/B for the test-engineer agent on one QE task.
+# Run: waza run docs/spikes/waza/test-engineer/eval.yaml --baseline --trials 3 --keep-workspace
+name: test-engineer-ab
+description: A/B for the test-engineer agent on the quoting-service weight boundary. Pass threshold is the mutation kill rate from grade_kill_rate.py.
+skill: test-engineer
+schemaVersion: "1.0"
+version: "1.0"
+
+config:
+  trials_per_task: 3
+  timeout_seconds: 600
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-5.5
+  # Isolated dir holding only test-engineer.agent.md (byte-identical copy of the ainb-toolkit file, check with cmp).
+  # The shared agents dir fails: waza parses every .agent.md in a skill dir, and playwright-test-generator.agent.md does not parse.
+  skill_directories:
+    - docs/spikes/waza/test-engineer/agents
+
+metrics:
+  - name: mutation_kill_rate
+    weight: 1.0
+    threshold: 0.24
+    description: Share of seeded mutants the generated suite kills (qe-target.json mutation_threshold).
+
+graders:
+  - type: program
+    name: mutation_kill_rate
+    config:
+      # Interpreter from the scratch venv with the wololo-evals mutation extra. Box-specific.
+      command: /tmp/claude-1000/-home-claude-orca-workspaces-wololo-evals-waza-spike/bd7ffd71-91a6-41d0-9cdc-5a0c3df4d145/scratchpad/venv-mut/bin/python
+      args: ["docs/spikes/waza/test-engineer/grade_kill_rate.py"]
+      timeout: 900
+
+tasks:
+  - tasks/*.yaml

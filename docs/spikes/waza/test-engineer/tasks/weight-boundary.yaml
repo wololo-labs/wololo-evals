@@ -1,0 +1,10 @@
+# Task: pin the weight_grams boundary in the seeded-defect fixture. Writes tests only; must not touch the code under test or file issues.
+id: weight-boundary-001
+name: Weight boundary tests for the quoting service
+description: Write pytest tests for the weight_grams boundary into tests_generated/.
+
+inputs:
+  prompt: "Write pytest tests for the weight_grams boundary in the quoting service in this workspace: the smallest parcel it should price and the largest it should accept. Put the tests in tests_generated/test_weight_boundary.py. Do not edit anything under quoting/ or tests/. Do not create GitHub issues."
+  context:
+    # Resolved from the eval spec dir. Byte-identical copy of examples/fixtures/quoting-service (check with diff -r).
+    fixture: fixtures/quoting-service
