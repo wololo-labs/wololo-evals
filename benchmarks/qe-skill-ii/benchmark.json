@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0.0",
+  "id": "qe-skill-ii",
+  "evaluation_type": "skill_behaviour",
+  "description": "Does a test-authoring skill produce a suite that catches defects a capable model misses on its own? Six cases over examples/fixtures/ledger-service, a stdlib-only ledger whose defects all sit behind a conversion, a sequence or a silent fallback. The shipped suite catches none of the six seeded defects, and the control arm has to fail before any asset is measured. Activation is deliberately not an assertion here: the composite is quality only, so invoking a skill cannot move the headline. Routing is reported separately from the traces.",
+  "pass_threshold": 0.7,
+  "engines": ["claude", "codex", "copilot", "replay"]
+}
