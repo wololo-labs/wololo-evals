@@ -56,23 +56,48 @@ What does not follow: that skills are worthless, or that this one is. It says
 the instrument cannot separate this asset from a frontier model on this kind of
 code, and that an honest catalogue therefore has nothing to badge.
 
-## Positive control: first attempt invalid, rerun pending
+## Positive control: rerun clean, and it does not demonstrate detection
 
-A weaker-model pair was run and its numbers are withdrawn. During the no-skill
-arm, one trial ran `git commit` in its workspace. The workspace sits inside
-this repository, so the commit landed on the branch doing the measuring, and
-what it committed was 87 generated tests written into the ledger fixture's own
-shipped suite: the control baseline. Every case of the arm that ran afterwards
-therefore materialised a fixture whose shipped suite was strong rather than
-thin, which is exactly the variable the pair was meant to hold still.
+A weaker-model pair, `claude-haiku-4-5` on both arms, casebook II, four cases
+each, every workspace sealed from this repository. **A check on the instrument,
+not a score for the asset**, and not a catalogue number under any reading.
 
-The withdrawn figures, recorded here so the correction is legible rather than
-silent: benchmark score 0.9731 to 0.9895, seeded defects caught 0.8333 to
-1.0000, mutation kill rate 0.8030 to 0.8674, gate `pass` with
-`significant_improvement: true`. They are not evidence of anything: the arms
-did not run against the same code.
+| | No skill | With the skill | Delta |
+|---|---:|---:|---:|
+| benchmark score | 0.9716 | 0.9769 | +0.0053 |
+| seeded defects caught | 0.7917 | 0.8750 | +0.0833 |
+| mutation kill rate | 0.8210 | 0.8362 | +0.0152 |
+| fired unprompted | 0 of 4 | 4 of 4 | |
 
-The commit is reverted, the fixture's shipped suite is thin again and catches 0
-of 6 planted defects, and each case workspace now gets its own git repository
-so a trial's commands cannot reach this repository. The pair is being rerun on
-that footing.
+Gate verdict `pass`, 95% CI `[-0.0014, +0.0154]`, `significant_improvement:
+false`. Every direction is favourable to the skill and none of it is
+significant.
+
+### The first attempt said otherwise, and it was wrong
+
+The withdrawn run reported `+0.0163` with a CI of `[+0.0060, +0.0322]` and
+`significant_improvement: true`. That arm pair had been corrupted: during the
+no-skill arm one trial ran `git commit` in its workspace, which sits inside
+this repository, and committed 87 generated tests into the ledger fixture's own
+shipped suite. Every case that ran afterwards started from a strong suite
+rather than a thin one, so the two arms were not measuring the same code.
+
+The commit is reverted, the shipped suite is thin again and catches 0 of 6
+planted defects, and each case workspace now gets its own git repository
+(`caf5aad`) so a trial's git commands land in a throwaway it owns. The honest
+reading of the pair before and after: **the only model-matched "significant
+improvement" slice C has produced came from a contaminated baseline, and it
+disappeared when the contamination did.**
+
+### So what does the instrument show
+
+One thing it does show: the skill fires for this model. Four of four cases
+unprompted, against none of eleven on the frontier model. Routing is a real,
+measurable difference between models.
+
+What it does not show, still: that the gate can detect a skill *effect*. Four
+cases at one seed gives a confidence interval about 0.017 wide, which cannot
+resolve a delta of 0.005. That is a power problem rather than a null result,
+and the fix is more cases and more seeds rather than a different conclusion.
+Until that is run, slice C has no model-matched pair, at any model strength,
+where the gate reports an effect it can stand behind.
