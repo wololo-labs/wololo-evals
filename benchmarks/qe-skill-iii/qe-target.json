@@ -1,0 +1,15 @@
+{
+  "fixture": "examples/fixtures/skerry-codec",
+  "qe": {
+    "target": "../../examples/fixtures/skerry-codec/skerry",
+    "tests": [
+      "../../examples/fixtures/skerry-codec/tests",
+      "tests",
+      "tests_generated"
+    ],
+    "changed_lines_file": "../../examples/fixtures/skerry-codec/changed_lines.json",
+    "defects_file": "../../examples/fixtures/skerry-codec/seeded_defects.json",
+    "mutation_threshold": 0.3,
+    "defect_threshold": 0.5
+  }
+}

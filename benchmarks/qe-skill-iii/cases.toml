@@ -1,0 +1,79 @@
+# Casebook III, INSTRUMENT VALIDATION over ../../examples/fixtures/skerry-codec.
+#
+# Skerry is an invented protocol. The prompts below name no rule, no field and
+# no defect: they ask for tests, the way a reviewer would. Whether a suite
+# catches the planted defects therefore depends on whether the author knows the
+# protocol's rules, which only the skill under test carries.
+#
+# Quality only. There is no activation assertion, since activation was worth 25
+# of 100 family points and moved a casebook I composite while every quality
+# signal fell. Routing is read from the traces and reported on its own.
+#
+# `cases compile` turns this into cases.jsonl; keep the two in sync.
+
+version = 2
+
+[defaults]
+expected_skill = "skerry-frame-testing"
+metadata_file = "qe-target.json"
+assertions = [
+  "read_before_writing_tests",
+  "left_the_code_under_test_alone",
+  "suite_is_stable",
+  "no_vacuous_assertions",
+  "catches_most_defects",
+]
+
+[defaults.assertion_weights]
+read_before_writing_tests = 1.0
+left_the_code_under_test_alone = 2.0
+suite_is_stable = 1.0
+no_vacuous_assertions = 1.0
+catches_most_defects = 4.0
+
+[assertions]
+read_before_writing_tests = "trace:require_order(read, write)"
+left_the_code_under_test_alone = "trace:deny_tools(edit:skerry/*, write:skerry/*)"
+suite_is_stable = "code:qe.rubric.flake_resistance == 1.0"
+no_vacuous_assertions = "code:qe.rubric.no_tautological_assertions >= 0.75"
+catches_most_defects = "code:qe.defects.catch_rate >= 0.5"
+
+[[cases]]
+case_id = "qe3-01-strengthen"
+fixture_id = "skerry_codec"
+case_weight = 1.0
+title = "The suite is thin: make it catch something"
+difficulty = "hard"
+tags = ["judgement", "seeded-defect"]
+input_text = "This package has a test suite that passes but is very thin. Strengthen it with pytest tests that would actually catch a regression in this code."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe3-02-codec"
+fixture_id = "skerry_codec"
+case_weight = 1.0
+title = "The codec, as a reviewer would ask"
+difficulty = "hard"
+tags = ["judgement", "seeded-defect"]
+input_text = "Write pytest tests for the encoding and decoding in this package."
+metadata = { slice = "codec", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe3-03-pre-release"
+fixture_id = "skerry_codec"
+case_weight = 1.0
+title = "A pre-release review of the whole package"
+difficulty = "hard"
+tags = ["review", "judgement", "seeded-defect"]
+input_text = "This package is going into a release. Add the pytest tests you would want in place before it ships."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe3-04-inherit"
+fixture_id = "skerry_codec"
+case_weight = 1.0
+title = "Tests for someone inheriting the package"
+difficulty = "hard"
+tags = ["documentation", "judgement", "seeded-defect"]
+input_text = "You are handing this package to another team. Write the pytest tests that document what it guarantees."
+metadata = { slice = "whole package", targets_defect = "all" }
