@@ -27,8 +27,9 @@ graders:
   - type: program
     name: mutation_kill_rate
     config:
-      # Interpreter from the scratch venv with the wololo-evals mutation extra. Box-specific.
-      command: /tmp/claude-1000/-home-claude-orca-workspaces-wololo-evals-waza-spike/bd7ffd71-91a6-41d0-9cdc-5a0c3df4d145/scratchpad/venv-mut/bin/python
+      # Interpreter from a user-owned venv with the wololo-evals mutation extra (not /tmp). Box-specific.
+      # Create it: uv venv ~/.local/share/wololo-spike/venv && uv pip install --python <venv>/bin/python -e '.[mutation]'
+      command: /home/claude/.local/share/wololo-spike/venv/bin/python
       args: ["docs/spikes/waza/test-engineer/grade_kill_rate.py"]
       timeout: 900
 
