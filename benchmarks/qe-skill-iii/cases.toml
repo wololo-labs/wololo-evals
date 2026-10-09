@@ -1,5 +1,8 @@
 # Casebook III, INSTRUMENT VALIDATION over ../../examples/fixtures/skerry-codec.
 #
+# Three cases, not four: the round has a fixed budget, and the codec-only prompt
+# was the one most likely to be answered by round-tripping alone.
+#
 # Skerry is an invented protocol. The prompts below name no rule, no field and
 # no defect: they ask for tests, the way a reviewer would. Whether a suite
 # catches the planted defects therefore depends on whether the author knows the
@@ -47,16 +50,6 @@ difficulty = "hard"
 tags = ["judgement", "seeded-defect"]
 input_text = "This package has a test suite that passes but is very thin. Strengthen it with pytest tests that would actually catch a regression in this code."
 metadata = { slice = "whole package", targets_defect = "all" }
-
-[[cases]]
-case_id = "qe3-02-codec"
-fixture_id = "skerry_codec"
-case_weight = 1.0
-title = "The codec, as a reviewer would ask"
-difficulty = "hard"
-tags = ["judgement", "seeded-defect"]
-input_text = "Write pytest tests for the encoding and decoding in this package."
-metadata = { slice = "codec", targets_defect = "all" }
 
 [[cases]]
 case_id = "qe3-03-pre-release"
