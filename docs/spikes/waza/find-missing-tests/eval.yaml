@@ -11,7 +11,7 @@ config:
   timeout_seconds: 300
   parallel: false
   executor: copilot-sdk
-  model: claude-sonnet-4.6
+  model: claude-sonnet-5.5
   # Clone path on this box. Waza resolves skill_directories from the spec dir; unverified until a live run.
   skill_directories:
     - /home/claude/.orca/ainb-toolkit/packages/qe-agent-pack/.apm/skills
