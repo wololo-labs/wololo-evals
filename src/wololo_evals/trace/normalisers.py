@@ -182,7 +182,13 @@ class _BaseNormaliser:
                 if item is None:
                     continue
                 if item[0] == "__tokens__":
-                    tin, tout = item[1]["tokens_in"], item[1]["tokens_out"]
+                    # A report is a running total, so only what the events do
+                    # not already carry is new. Adding it whole counted Claude's
+                    # per-turn usage twice and a repeated report twice.
+                    have_in = sum(p[1][1].get("tokens_in", 0) for p in pending)
+                    have_out = sum(p[1][1].get("tokens_out", 0) for p in pending)
+                    tin = max(0, item[1]["tokens_in"] - have_in)
+                    tout = max(0, item[1]["tokens_out"] - have_out)
                     if pending:
                         pending[-1][1][1]["tokens_in"] = (
                             pending[-1][1][1].get("tokens_in", 0) + tin

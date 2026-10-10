@@ -493,3 +493,32 @@ def test_a_skill_call_that_errored_is_not_an_activation(tmp_path):
     # a stream cut before the result arrives is not proof either way: keep it
     cut = normalise_stream("claude", _skill_stream(tmp_path, result=None))
     assert [e.target for e in cut if e.is_skill_activation] == ["demo"]
+
+
+def test_reported_token_totals_are_totals_not_increments(tmp_path):
+    # Claude's `result` line reports the run's total usage on top of the
+    # per-turn usage already attached inline, and Codex and Copilot report
+    # cumulative totals that can repeat. Adding each report double counted:
+    # a recorded run summed to 8162 output tokens against a reported 8119.
+    raw = tmp_path / "claude.raw.jsonl"
+    raw.write_text(
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"a"}],'
+        '"usage":{"input_tokens":10,"output_tokens":4}}}\n'
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"b"}],'
+        '"usage":{"input_tokens":6,"output_tokens":5}}}\n'
+        '{"type":"result","usage":{"input_tokens":16,"output_tokens":100}}\n',
+        encoding="utf-8",
+    )
+    events = normalise_stream("claude", raw)
+    assert (sum(e.tokens_in for e in events), sum(e.tokens_out for e in events)) == (16, 100)
+
+    cop = tmp_path / "copilot.raw.jsonl"
+    cop.write_text(
+        '{"type":"assistant_message"}\n'
+        '{"type":"usage","input_tokens":100,"output_tokens":20}\n'
+        '{"type":"assistant_message"}\n'
+        '{"type":"usage","input_tokens":100,"output_tokens":20}\n',
+        encoding="utf-8",
+    )
+    events = normalise_stream("copilot", cop)
+    assert (sum(e.tokens_in for e in events), sum(e.tokens_out for e in events)) == (100, 20)
