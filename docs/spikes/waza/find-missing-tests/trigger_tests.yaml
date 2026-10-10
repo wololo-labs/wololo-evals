@@ -2,14 +2,14 @@
 skill: find-missing-tests
 
 should_trigger_prompts:
-  - prompt: "Find the missing test cases in this codebase and file an issue for each gap"
+  - prompt: "Find the missing test cases in this codebase and list them. Do not create any GitHub issues."
     reason: Direct gap-analysis request, matches the skill description
     confidence: high
   - prompt: "What tests are we missing for the payments module?"
     reason: Asks for untested behaviour, the skill's core job
     confidence: high
-  - prompt: "Audit our test coverage gaps and open GitHub issues for them"
-    reason: Coverage audit plus issue creation
+  - prompt: "Audit our test coverage gaps and list them. Do not open any GitHub issues."
+    reason: Coverage audit, no issue filing
     confidence: medium
 
 should_not_trigger_prompts:
