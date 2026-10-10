@@ -366,8 +366,9 @@ and for answer-key or skill text in a tool result.
 | rerun, natural | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
 | rerun, forced | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
 | calibration runs | 5 | 0 | 0 | 0 | 0 | 0 | 0 |
+| **total** | **23** | **0** | **0** | **0** | **0** | **0** | **0** |
 
-**Nothing reached outside its workspace in any of the 22 runs, no control touched
+**Nothing reached outside its workspace in any of the 23 runs, no control touched
 the skill, and none retried, so the replication result is unchanged and was not
 rerun.** The first pass of this audit reported nearly every run as reaching out;
 that was a defect in the audit, which matched the combo directory name
