@@ -346,9 +346,8 @@ read the answer key.
 
 ## Audit after code review: did any Skerry run reach the answer key or the skill?
 
-Review of the pull request found that trials ran with `--dangerouslyDisableSandbox`
-equivalent permissions and a working directory 16 levels below the repository
-root, so `../` reached the answer key, the skill file and the casebook. Confirmed
+Review of the pull request found that trials ran with `--dangerously-skip-permissions`
+and a working directory 16 levels below the repository root, so `../` reached the answer key, the skill file and the casebook. Confirmed
 by resolving it from a real case workspace. Trials now run in a throwaway
 directory outside the repository (`2aaf74e`), which removes the casual route and
 is not a sandbox: an absolute path still works.
