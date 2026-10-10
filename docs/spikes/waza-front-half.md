@@ -2,7 +2,7 @@
 
 Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, trigger tests, with/without A/B) with wololo-evals as the back half (mechanical scoring, gate)?
 
-**Recommendation: GO for waza as the front half.** Every front-half function ran end to end: auth (Q1), lint (Q2), trigger routing (Q3), paired with/without execution (Q4), and the kill-rate join on waza workspaces (Q5). The remaining build is glue items 5 and 6, with glue items 2 and 3 partly open; the complete list is under Open items. The Q4 result (no detectable skill effect at 3 trials per arm) is a fixture limit, not a waza limit. See Go / no-go.
+**Recommendation: GO for waza as the front half.** Every front-half function ran end to end: auth (Q1), lint (Q2), trigger routing (Q3), paired with/without execution (Q4), and the kill-rate join on waza workspaces (Q5). The remaining build is glue items 5 and 6, with glue items 2 and 3 partly open; the complete list is under Open items. The Q4 result (no detectable skill effect at 3 trials per arm) cannot be attributed to the fixture: the committed test-engineer agent does not load, so the with-skills arm very likely ran without it. See Q4 and Mock verification.
 
 ## Verdicts
 
@@ -108,8 +108,9 @@ Per-trial mutation kill rate on the gate's own terms (shipped tests plus `tests_
 - The rescored values are not directly comparable to the 0.2373 baseline in Q5. That baseline scores the shipped tests alone, against the fixture.
 - waza's own binary grader passed 6 of 6 runs at the 0.24 threshold, and waza reports NEUTRAL (100% vs 100%). Its own metric gives no signal here, so the kill rate is the metric that carries the comparison.
 - Test files differ between arms: different hashes, and in the pilot workspaces 10 vs 14 test functions. Pilot scores were under the withdrawn grader and are not reported.
-- Setup finding (corrected): an earlier with-skills arm errored once, when the shared ainb-toolkit agents dir was used. The error was a YAML unmarshal failure on `playwright-test-generator.agent.md`. The cause is not established. `test-engineer.agent.md` has the same comma-separated `tools` shape and parses without error: the final run log has no parse warnings and prints `Skill: test-engineer`. The playwright file's exact failing field was not isolated, and that log was overwritten.
-- Was test-engineer loaded in the with-skills arm? Evidence it was resolved: `Skill: test-engineer` printed and no parse warning appeared, so waza had the agent definition. Not shown: a per-session record that the agent body reached the model. The results digest holds only bash tool calls and names no skill. So Q4 cannot fully separate "not loaded" from "no effect". The resolution evidence points to loaded, but that is not proof.
+- Setup finding (corrected again): the committed `test-engineer.agent.md` fails waza's agent parser. Under executor mock, waza rejects it with `line 11: cannot unmarshal !!str 'Read, W...' into []string`. Earlier wording that it "parses without error" was wrong. The earlier playwright error had the same field shape, and that is why it was not isolated.
+- Was test-engineer loaded in the with-skills arm? Not established, and the evidence now points against it. The `Skill: test-engineer` line is the eval's name, not proof of load. On the Copilot path, `buildSkillSystemMessage` (`internal/execution/copilot.go:1046`) logs a warning and injects nothing when the agent fails to parse, so the run continues without the agent body. The warning does not appear in the saved Q4 log, so this is inference from source. [inference]
+- Consequence: Q4 did not test the agent. Its no-effect result says nothing about test-engineer, either way, until the committed spec loads.
 
 ## Q5: the join
 
@@ -143,7 +144,7 @@ kill_rate 0.2373 (strict) · kill_rate_executed 0.4179 · ~5 s
 2. Glue 6: casebook slug or shipped skill. Build. The cause of 0.0833 is open with it.
 3. Glue 2: defect and rubric scorers not wrapped for a waza workspace. Build.
 4. Glue 3: the test drop path is enforced by the prompt only. Design gap.
-5. Q4: whether the agent body reached the model in the with-skills arm is not proven. Evidence gap.
+5. Q4 agent: the committed `test-engineer.agent.md` does not load, so the with-skills arm likely ran without it. The committed spec does not load. Decision needed on the `tools` line (see Mock verification). Build plus evidence gap.
 6. Spend: the USD conversion of 90.64 AI Credits is open, and the $10 cap is unverified. Budget.
 7. Commit 153c8a1 on `slice-c-qe-gate` is not in this clone, so the Q3 correction is unverified here. Evidence gap.
 
@@ -153,9 +154,92 @@ Closed: glue 1 (kill-rate sidecar) and glue 4 (keep-workspace, timeout).
 
 **GO: waza as the front half.** The spike question is whether waza runs the front half, and it does. The remaining build is the open items above.
 
-- Q4 reading: no detectable skill effect at 3 trials per arm (with 0.3785, without 0.3686, gap 0.0099, pooled SD 0.0157). The no-skill arm also passed waza's binary threshold 6 of 6, so this fixture does not separate the arms. This is a fixture limit, not a waza limit. Per the slice-c session, a capable model writes these tests unaided. The next work is a harder fixture where the no-skill arm fails, not more trials on this one.
+- Q4 reading: no detectable skill effect at 3 trials per arm (with 0.3785, without 0.3686, gap 0.0099, pooled SD 0.0157). The no-skill arm also passed waza's binary threshold 6 of 6. This is not evidence about the fixture or the agent, because the with-skills arm very likely ran without the agent (see Q4). Per the slice-c session, a capable model writes these tests unaided, which is a separate reason a harder fixture may be needed. Next: make the committed spec load, then rerun Q4 before any conclusion about the agent.
 - Build remaining: the Build items in Open items (glue 5, glue 6, glue 2).
 - Spend: 90.64 AI Credits metered across Q3 and Q4. USD conversion is open and the $10 cap is unverified. Model spend is on hold: no more trials.
+
+## Mock verification (no model calls)
+
+Scope: mock proves that specs load, that fixture and skill paths resolve from the spec dir, and that the program grader launches and writes its sidecar. Mock does not prove model behaviour: it writes no tests, and its response echoes the prompt.
+
+`waza run` has no executor flag. The executor comes from the spec `config`, so each committed spec was copied to a scratch dir with `executor: mock`. The committed files were not edited for these runs. `S` is the scratch dir.
+
+```bash
+# scratch copy of the test-engineer spec, executor set to mock
+cp -r docs/spikes/waza/test-engineer $S/mock-te
+sed -i 's/^  executor: copilot-sdk/  executor: mock/' $S/mock-te/eval.yaml
+# mock writes no tests; this agent-written suite stands in for the agent's output in the scratch fixture
+mkdir -p $S/mock-te/fixtures/quoting-service/tests_generated
+cp /tmp/waza-1045558716/tests_generated/test_weight_boundary.py $S/mock-te/fixtures/quoting-service/tests_generated/
+```
+
+**Run A: committed test-engineer spec, unchanged agent**
+
+```bash
+waza run $S/mock-te/eval.yaml --keep-workspace -v --output-dir $S/mock-out-te
+```
+
+```
+  Run 1/3... error (0s)
+  Run 2/3... error (0s)
+  Run 3/3... error (0s)
+  Failed: 1
+```
+
+The run's `error_msg` in the results JSON reads: `line 11: cannot unmarshal !!str 'Read, W...' into []string`, from `parsing agent ".../test-engineer.agent.md": yaml: unmarshal errors:`.
+
+The committed agent has the same field: `tools: Read, Write, Edit, MultiEdit, Grep, Glob, Bash`. The spec does not load as committed.
+
+**Run B: same spec, `tools:` line removed from the scratch agent copy only**
+
+```bash
+sed -i '/^tools: /d' $S/mock-te/agents/test-engineer.agent.md
+waza run $S/mock-te/eval.yaml --keep-workspace -v --output-dir $S/mock-out-te2
+```
+
+```
+Skill: test-engineer
+Skill Directories:
+  - .../mock-te/agents            (spec-relative: resolves from the spec dir)
+  [GRADER] mutation_kill_rate score=1.00 ... kill_rate=0.3856 executed=0.6791   (x3 trials)
+Succeeded: 1
+Workspace preserved: /tmp/waza-mock-1099200919
+```
+
+Only the last workspace is preserved, even with `--keep-workspace`. That workspace holds `quoting/ tests/ tests_generated/ kill_rate.json`. Its sidecar:
+
+```
+{"killed":91,"total":236,"kill_rate":0.3855932203389831,"threshold":0.24}
+```
+
+The 0.3856 is the same suite scored on the gate's test set in Q4. The grader launched through `uv run --project .` from the repo root, wrote the sidecar, and exited on threshold.
+
+**Run C: committed find-missing-tests spec, executor mock**
+
+```bash
+cp -r docs/spikes/waza/find-missing-tests $S/mock-fmt
+sed -i 's/^  executor: copilot-sdk/  executor: mock/' $S/mock-fmt/eval.yaml
+waza run $S/mock-fmt/eval.yaml --keep-workspace -v --output-dir $S/mock-out-fmt
+```
+
+```
+Skill Directories:
+  - .../mock-fmt/skills           (spec-relative)
+Succeeded: 1
+Workspace preserved: /tmp/waza-mock-3143906682   (contains quoting/ and tests/ from the spec-relative fixture)
+```
+
+Not evidence, and not reported as results: the text grader `names_a_missing_test` passed only because the mock echoes the prompt, which contains "missing test". The trigger line (accuracy 100%) is also not evidence: mock invokes no skill.
+
+**Verdicts**
+
+| Spec | Loads | Skill/fixture paths resolve from spec dir | Grader writes sidecar |
+|---|---|---|---|
+| find-missing-tests (committed) | yes | yes | not applicable (no program grader) |
+| test-engineer (committed) | no: agent parse fails | not reached | not reached |
+| test-engineer (scratch, `tools` line removed) | yes | yes | yes |
+
+**Decision needed (parent):** the `tools:` line in `test-engineer.agent.md`. (a) Remove it: the only option verified to load. The agent then has no allow-list. (b) Convert it to a YAML list: waza then enforces the list as an allow-list, which may block the agent's tools. Not tested. No change made to the committed agent in this section.
 
 ## Reproduce
 
