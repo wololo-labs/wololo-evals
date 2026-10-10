@@ -74,14 +74,15 @@ Run: `trigger_tests.yaml` from `docs/spikes/waza/find-missing-tests/` (3 positiv
 
 | Prompt | Expected | Skill invoked | Result |
 |---|---|---|---|
-| Find the missing test cases in this codebase and file an issue for each gap | fire | yes (`skill.invoked`) | pass |
+| Find the missing test cases in this codebase and file an issue for each gap (earlier wording) | fire | yes (`skill.invoked`) | pass |
 | What tests are we missing for the payments module? | fire | no (tools used, skill not invoked) | FN |
-| Audit our test coverage gaps and open GitHub issues for them (medium) | fire | yes | pass |
+| Audit our test coverage gaps and open GitHub issues for them (medium, earlier wording) | fire | yes | pass |
 | Fix the failing login test in auth.spec.ts | silent | no | pass |
 | What's the weather like in Lisbon today? | silent | no | pass |
 | Deploy the staging build to Azure | silent | no | pass |
 
-- Two runs gave the same metrics: TP 2, FP 0, FN 1, TN 3, so accuracy 83.3% (5/6), precision 100%, recall 66.7% (2/3), F1 80%. The earlier 81.8%, 60% and 75% were wrong and are withdrawn. Six prompts is still a small sample.
+- Prompt wording: two of the positive prompts, marked "earlier wording" above, asked to file or open GitHub issues, and they ran live. No issue was filed. Each positive run made one `skill` call and no shell call ran `gh` or created an issue (transcript check). A search for issues by this account in the run windows (10:40 to 11:10 UTC and 12:30 to 12:55 UTC) returned none. Global search was not used as proof, because it cannot show a negative across all of GitHub. The current spec asks not to file issues. The Q3 numbers below are for the earlier wording and need a rerun before they count for the current prompts.
+- Two runs gave the same metrics on the earlier wording: TP 2, FP 0, FN 1, TN 3, so accuracy 83.3% (5/6), precision 100%, recall 66.7% (2/3), F1 80%. The earlier 81.8%, 60% and 75% were wrong and are withdrawn. Six prompts is still a small sample.
 - Evidence is `skill.invoked` events in the run transcript, not response text.
 - Our 0.0833 activation number is not in this repo (no run artifact, no matching value). Source unverified.
 - 0.0833 = 1/12, which matches 12 cases with one hit. [inference]
