@@ -401,7 +401,11 @@ def _run_with_retry(
     if result.status == "infra_fail":
         if reset is not None:
             reset()
+        first = result
         result = adapter.run(spec)
+        # The adapter retries too, so one trial can execute four times. Count
+        # all of them, not just the last call's.
+        result = dataclasses.replace(result, attempts=first.attempts + result.attempts)
     return result
 
 

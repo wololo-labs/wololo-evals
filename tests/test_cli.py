@@ -794,3 +794,20 @@ def test_skipped_event_types_roll_up_into_the_run_provenance(tmp_path):
     assert json.loads((clean / "matrix_summary.json").read_text())["provenance"][
         "trace_skipped_event_types"
     ] == {}
+
+
+def test_attempts_include_the_matrix_level_retry():
+    # The adapter retries once and the matrix retries again, so a run can
+    # execute four times. The recorded count came from the last call alone.
+    calls = []
+
+    class Flaky:
+        def run(self, spec):  # noqa: ANN001
+            calls.append(1)
+            status = "infra_fail" if len(calls) < 2 else "ok"
+            return ci.RunResult(run_id="r", status=status, artefact_dir="x",
+                                runtime_seconds=0.0, attempts=2)
+
+    result = matrix_mod._run_with_retry(Flaky(), spec=None)
+    assert result.status == "ok"
+    assert result.attempts == 4
