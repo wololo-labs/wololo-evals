@@ -696,3 +696,15 @@ def test_allow_engine_drift_reaches_the_adapter(tmp_path):
             timestamp=f"2026072{int(flag)}T000000Z", allow_engine_drift=flag,
         )
         assert seen and all(v is flag for v in seen)
+
+
+def test_provenance_does_not_claim_the_run_was_hermetic(tmp_path):
+    # Trials run outside the repo but are not sandboxed (an absolute path still
+    # works), so a published `hermetic: true` was false.
+    md = matrix_mod.run_matrix(
+        load_matrix_config(_make_project(tmp_path)), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    prov = json.loads((md / "matrix_summary.json").read_text())["provenance"]
+    assert prov["hermetic"] is False
+    assert "not a sandbox" in prov["isolation"]

@@ -735,7 +735,10 @@ def _provenance(
             "cases_run": list(cases_run),
             "fixtures_dir": config.fixtures_dir,
         },
-        "hermetic": True,
+        # Trials run in a throwaway directory outside the repository. That
+        # removes the casual `../` route, not the absolute-path one.
+        "hermetic": False,
+        "isolation": "none: the trial directory is outside the repo but is not a sandbox",
         "exfiltration_scan_scope": "advisory",
         "repro_command": f"wololo-evals-cli matrix --config {config.matrix_id}.toml",
     }
