@@ -88,6 +88,16 @@ def _case_hard_failed(signals: Sequence[Mapping[str, object]], hard: frozenset[s
     )
 
 
+def _hard_signal_ids(signals: Sequence[Mapping[str, object]], hard: frozenset[str]) -> frozenset[str]:
+    """Hard-gate evaluators that actually scored in this case."""
+    return frozenset(
+        str(s.get("evaluator_id"))
+        for s in signals
+        if s.get("verdict") in ("pass", "fail")
+        and (s.get("evaluator_id") in hard or s.get("slot") in hard)
+    )
+
+
 def _case_has_active_judge(signals: Sequence[Mapping[str, object]]) -> bool:
     return any(s.get("kind") == "judge" and s.get("verdict") != "skipped" for s in signals)
 
@@ -716,8 +726,13 @@ def evaluate(
                     baseline_hard_failed=_case_hard_failed(
                         base_case.get("signals", []), hard
                     ),
+                    # A hard gate the baseline scored and the candidate did not is
+                    # a failure: dropping the check must not be a way past it.
                     candidate_hard_failed=_case_hard_failed(
                         cand_case.get("signals", []), hard
+                    ) or bool(
+                        _hard_signal_ids(base_case.get("signals", []), hard)
+                        - _hard_signal_ids(cand_case.get("signals", []), hard)
                     ),
                     quarantined=is_quarantined,
                     case_weight=w_cand,

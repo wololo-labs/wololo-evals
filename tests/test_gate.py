@@ -575,3 +575,18 @@ def test_a_case_weight_that_differs_between_the_runs_is_refused(tmp_path):
     run, baseline = _pair(tmp_path, cand, base)
     v = gate_mod.evaluate(run, baseline)
     assert v.verdict == "refused" and "case_weight" in v.reason and "c0" in v.reason
+
+
+def test_a_hard_gate_signal_the_candidate_dropped_counts_as_a_hard_failure(tmp_path):
+    # `_case_hard_failed` only recognised an explicit "fail", so a candidate
+    # that stopped emitting the baseline's hard-gate signal avoided the check.
+    ids = [f"c{i}" for i in range(6)]
+    base = [_case(c, 0.9) for c in ids]
+    for row in base:
+        row["signals"].append({"evaluator_id": "exfiltration", "kind": "safety", "score": 1.0,
+                               "weight": 1.0, "verdict": "pass", "slot": None})
+    cand = [_case(c, 0.9) for c in ids]  # no exfiltration signal at all
+    run, baseline = _pair(tmp_path, cand, base)
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "regression"
+    assert len(v.ab_verdict.newly_failing_hard_gates) == 6
