@@ -76,7 +76,9 @@ Flagger/Argo confirm-rollout integration when 06c lands:
    confirmed 2xx, never optimistically. A non-2xx (e.g. a transient deploy-side
    5xx) leaves the gate `regressed` with its intent + key persisted and fails
    the durable canary-poll job, which backoff-retries and re-sends the SAME
-   key until a 2xx confirms — exactly-once, never at-most-once.
+   key until a 2xx confirms. Delivery is at-least-once; the rollback takes
+   effect exactly once only because wololo-deploy honours the key, which this
+   service cannot enforce.
 
 ## Test vectors
 

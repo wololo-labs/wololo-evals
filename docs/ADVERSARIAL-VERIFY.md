@@ -42,7 +42,9 @@ WOLOLO_EVALS_WRITE_PROOF=1 \
   intent in txn 1 -> HTTP rollback outside any txn -> confirm in txn 2) plus the
   `rollback_key IS NULL` guard means a redelivered poll after a crash re-sends
   the identical `Idempotency-Key`; the stub de-duplicates on that key, so the
-  rollback fires exactly once.
+  rollback fires exactly once. That is a property of the stub; a real
+  wololo-deploy has to honour the key for the same to hold, and this proof does
+  not show that it does.
 - **Independence.** The harness only calls shipped public surfaces
   (`create_app`, `canary.*`, `FsBlobStore`, `run_skill_review`) and the named
   stubs; it does not reach into private worker internals to force an outcome.

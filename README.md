@@ -198,7 +198,8 @@ worker, an OTEL collector on `4318`, and the wololo-deploy canary stub on `8090`
   round-robin fairness, idempotency keys and a daily run quota returning 429.
 - **Canary gate lifecycle**: open, telemetry and verdict routes plus a
   `canary-poll` worker with a two-consecutive-window regression debounce and an
-  exactly-once, crash-safe idempotent rollback.
+  crash-safe rollback sent with a stable `Idempotency-Key`: delivery is at-least-once,
+  and the effect is exactly-once only when wololo-deploy honours the key.
 - **Observability**: OTEL traces and per-tenant metering on every route and run.
 
 ### Tech stack
