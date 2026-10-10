@@ -12,10 +12,10 @@ config:
   parallel: false
   executor: copilot-sdk
   model: claude-sonnet-5.5
-  # Isolated dir holding only test-engineer.agent.md (byte-identical copy of the ainb-toolkit file, check with cmp).
-  # The shared agents dir fails: waza parses every .agent.md in a skill dir, and playwright-test-generator.agent.md does not parse.
+  # Relative to the spec dir. Holds only test-engineer.agent.md, a byte-identical copy of the ainb-toolkit file (check with cmp).
+  # Sharing the ainb-toolkit agents dir failed the with-skills arm once (playwright-test-generator.agent.md); cause not established.
   skill_directories:
-    - docs/spikes/waza/test-engineer/agents
+    - agents
 
 metrics:
   - name: mutation_kill_rate
@@ -27,10 +27,10 @@ graders:
   - type: program
     name: mutation_kill_rate
     config:
-      # Interpreter from a user-owned venv with the wololo-evals mutation extra (not /tmp). Box-specific.
-      # Create it: uv venv ~/.local/share/wololo-spike/venv && uv pip install --python <venv>/bin/python -e '.[mutation]'
-      command: /home/claude/.local/share/wololo-spike/venv/bin/python
-      args: ["docs/spikes/waza/test-engineer/grade_kill_rate.py"]
+      # Run waza from the repo root. uv resolves the repo's pyproject with the mutation extra, so no box-specific interpreter.
+      # Program-grader args resolve against the waza working directory, not the spec dir (waza sets no cwd for graders).
+      command: uv
+      args: ["run", "--project", ".", "--extra", "mutation", "python", "docs/spikes/waza/test-engineer/grade_kill_rate.py"]
       timeout: 900
 
 tasks:
