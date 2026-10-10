@@ -359,7 +359,9 @@ def render_plan(p: MatrixPlan) -> str:
 # ---------------------------------------------------------------------------
 # Live / injected execution
 # ---------------------------------------------------------------------------
-def _spec_extra(case: ci.CaseSpec, prompt_preamble: Optional[str]) -> dict:
+def _spec_extra(
+    case: ci.CaseSpec, prompt_preamble: Optional[str], allow_engine_drift: bool = False
+) -> dict:
     """Per-run extras. The preamble names the asset, so it stays off a case
     whose point is that the asset must stay silent.
 
@@ -367,9 +369,10 @@ def _spec_extra(case: ci.CaseSpec, prompt_preamble: Optional[str]) -> dict:
     to use the skill, the forced arm would fail it by construction, and the
     failure would measure the preamble rather than the skill.
     """
+    extra: dict = {"allow_engine_drift": allow_engine_drift}
     if prompt_preamble and case.expected_outcome != "no_activation":
-        return {"prompt_preamble": prompt_preamble}
-    return {}
+        extra["prompt_preamble"] = prompt_preamble
+    return extra
 
 
 def _run_with_retry(
@@ -434,6 +437,7 @@ def _execute_combo(
     engine_versions: dict[str, str],
     fixtures_dir: Optional[pathlib.Path] = None,
     prompt_preamble: Optional[str] = None,
+    allow_engine_drift: bool = False,
 ) -> float:
     """Run one combo's cases x seeds, write its seed/case/scorecard artefacts
     under ``run_dir``, append events, and return the new cumulative spend."""
@@ -469,7 +473,7 @@ def _execute_combo(
                     seed=seed,
                     cwd=str(work),
                     caps=ci.RunCaps(),
-                    extra=_spec_extra(case, prompt_preamble),
+                    extra=_spec_extra(case, prompt_preamble, allow_engine_drift),
                 )
                 if cap is not None and cumulative >= cap:
                     result = ci.RunResult(
@@ -633,6 +637,7 @@ def run_matrix(
                 else None
             ),
             prompt_preamble=config.prompt_preamble,
+            allow_engine_drift=allow_engine_drift,
         )
         scorecard_path = ci.artefacts.scorecard_path(run_dir)
         combo_records.append(

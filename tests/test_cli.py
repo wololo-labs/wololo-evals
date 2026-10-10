@@ -676,3 +676,23 @@ def test_replay_is_byte_stable(tmp_path):
 def test_replay_missing_summary_fails_loud(tmp_path):
     with pytest.raises(replay_mod.ReplayError):
         replay_mod.replay(tmp_path)
+
+
+def test_allow_engine_drift_reaches_the_adapter(tmp_path):
+    # run_matrix accepted the flag and never forwarded it, so the adapter's
+    # version check refused an out-of-range CLI even with the override set.
+    mc = _make_project(tmp_path)
+    seen = []
+
+    class Spy(FakeAdapter):
+        def run(self, spec):  # noqa: ANN001
+            seen.append(spec.extra.get("allow_engine_drift"))
+            return super().run(spec)
+
+    for flag in (True, False):
+        seen.clear()
+        matrix_mod.run_matrix(
+            load_matrix_config(mc), lambda e: Spy(e), make_grader(),
+            timestamp=f"2026072{int(flag)}T000000Z", allow_engine_drift=flag,
+        )
+        assert seen and all(v is flag for v in seen)
