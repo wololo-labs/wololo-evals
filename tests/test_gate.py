@@ -424,7 +424,7 @@ def test_a_scorer_outage_on_one_arm_is_not_a_regression(tmp_path):
         "c2": (1.0, [_sig("kill_rate", 0.0, "evaluator_error"), _sig("other", 1.0)]),
     })
 
-    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",))
+    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",), min_cases=1)
     delta = next(d for d in verdict.signal_deltas if d.evaluator_id == "kill_rate")
 
     # 0.40 alone, not (0.40 + 0.0) / 2 = 0.20 against a baseline of 0.25.
@@ -446,7 +446,7 @@ def test_a_guard_on_an_error_only_signal_refuses(tmp_path):
         "c1": (1.0, [_sig("kill_rate", 0.0, "evaluator_error"), _sig("other", 1.0)]),
     })
 
-    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",))
+    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",), min_cases=1)
     assert verdict.verdict == "refused"
     assert verdict.exit_code == 2
     assert "error-only in run" in verdict.reason
@@ -464,7 +464,7 @@ def test_a_guard_on_an_absent_signal_still_refuses(tmp_path):
     candidate = _write_arm(tmp_path / "cand", signals_by_case={
         "c1": (1.0, [_sig("other", 1.0)]),
     })
-    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",))
+    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",), min_cases=1)
     assert verdict.exit_code == 2
     assert "absent" in verdict.reason
 
@@ -590,3 +590,12 @@ def test_a_hard_gate_signal_the_candidate_dropped_counts_as_a_hard_failure(tmp_p
     v = gate_mod.evaluate(run, baseline)
     assert v.verdict == "regression"
     assert len(v.ab_verdict.newly_failing_hard_gates) == 6
+
+
+def test_a_verdict_needs_a_minimum_number_of_comparable_cases(tmp_path):
+    # One comparable pair reached the bootstrap, whose interval over a single
+    # delta is a point, so a gate of record could pass or fail on n = 1.
+    run, baseline = _pair(tmp_path, [_case("c0", 0.1)], [_case("c0", 0.9)])
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "refused" and "at least 3" in v.reason
+    assert gate_mod.evaluate(run, baseline, min_cases=1).verdict == "regression"

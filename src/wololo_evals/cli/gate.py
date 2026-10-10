@@ -604,6 +604,7 @@ def evaluate(
     judge_agreement_min: float = 0.7,
     signal_guards: Sequence[str] = (),
     allow_subset: bool = False,
+    min_cases: int = 3,
 ) -> GateVerdict:
     """Produce the §16.4 gate verdict comparing ``run_dir`` against ``baseline_dir``.
 
@@ -754,6 +755,14 @@ def evaluate(
             judge_info,
         )
 
+    comparable = sum(1 for p in pairs if not p.quarantined)
+    if comparable < min_cases:
+        return _refused(
+            run_p, base_p, run, max_regression,
+            f"{comparable} comparable case(s); a verdict needs at least {min_cases}",
+            judge_info,
+        )
+
     ab_verdict = ab.compare(
         pairs,
         max_regression=max_regression,
@@ -842,6 +851,10 @@ def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
         "--allow-subset", action="store_true",
         help="compare only the cases both runs have (default: refuse when the "
              "run omits a baseline case or combo)",
+    )
+    parser.add_argument(
+        "--min-cases", type=int, default=3,
+        help="refuse a verdict over fewer comparable cases than this (default 3)",
     )
     parser.add_argument("--confidence", type=float, default=0.95)
     parser.add_argument("--resamples", type=int, default=1000)
@@ -944,6 +957,7 @@ def run(args) -> int:  # noqa: ANN001 - argparse namespace
         judge_agreement_min=args.judge_agreement_min,
         signal_guards=tuple(args.signal_guard or ()),
         allow_subset=args.allow_subset,
+        min_cases=args.min_cases,
     )
     subject = {
         k: v
