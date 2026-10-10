@@ -78,15 +78,24 @@ tags = ["documentation", "judgement", "seeded-defect"]
 input_text = "You are handing this package to another team. Write the pytest tests that document what it guarantees."
 metadata = { slice = "whole package", targets_defect = "all" }
 
-[[cases]]
-case_id = "qe3-05-consumer-contract"
-fixture_id = "skerry_codec"
-case_weight = 1.0
-title = "The behaviour another team can rely on"
-difficulty = "hard"
-tags = ["contract", "judgement", "seeded-defect"]
-input_text = "Another team is going to build a consumer of this package. Write the pytest tests that pin the behaviour they can rely on."
-metadata = { slice = "whole package", targets_defect = "all" }
+# --- Replication cases, second draft -----------------------------------------
+# Two of the three first-draft replication cases were dropped after calibration
+# on the control alone, and the reasons are recorded here rather than lost:
+#
+#   qe3-05-consumer-contract: INVALID under the rule above. The control caught 5
+#   of 6 defects. Asked to "pin the behaviour they can rely on" it pinned exact
+#   output bytes, and any constant change moves exact bytes.
+#
+#   qe3-07-find-the-bugs: dropped on a ground the rule above did not cover, and
+#   stated as such. "Write tests designed to expose bugs" made the control assert
+#   its own belief that the sequence window was buggy, so its suite went red on
+#   the CLEAN fixture, and the defect scorer correctly refuses a red baseline.
+#   A prompt that asks for tests expected to fail cannot be scored by a contract
+#   that needs a green baseline, in any arm. This one was decided after seeing
+#   the calibration, and it is disclosed as such.
+#
+# qe3-06-gap-review was valid (control caught 3 of 6) and is kept unchanged.
+# The two cases below were written, and this file committed, before they were run.
 
 [[cases]]
 case_id = "qe3-06-gap-review"
@@ -99,11 +108,21 @@ input_text = "Review this package's existing tests for gaps, then write the pyte
 metadata = { slice = "whole package", targets_defect = "all" }
 
 [[cases]]
-case_id = "qe3-07-find-the-bugs"
+case_id = "qe3-08-maintainer"
 fixture_id = "skerry_codec"
 case_weight = 1.0
-title = "There may be bugs the tests miss"
+title = "Tests you would want before changing anything"
 difficulty = "hard"
-tags = ["adversarial", "judgement", "seeded-defect"]
-input_text = "There may be bugs in this package that its tests miss. Write pytest tests designed to expose them."
+tags = ["maintenance", "judgement", "seeded-defect"]
+input_text = "You are about to take over maintaining this package. Write the pytest tests you would want in place before you change anything."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe3-09-ci-suite"
+fixture_id = "skerry_codec"
+case_weight = 1.0
+title = "A suite you would trust to run on every commit"
+difficulty = "hard"
+tags = ["ci", "judgement", "seeded-defect"]
+input_text = "Write a pytest suite for this package that you would be comfortable running in CI on every commit."
 metadata = { slice = "whole package", targets_defect = "all" }
