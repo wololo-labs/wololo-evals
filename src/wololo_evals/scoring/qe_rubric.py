@@ -447,7 +447,7 @@ def changed_line_coverage(
         "COVERAGE_FILE": str(workspace / ".coverage"),
     }
     targets = sorted({p.split("/")[0] for p in changed_lines})
-    subprocess.run(
+    run = subprocess.run(
         [
             sys.executable, "-m", "coverage", "run",
             f"--source={','.join(targets)}", "-m", "pytest", "tests",
@@ -455,6 +455,13 @@ def changed_line_coverage(
         ],
         cwd=workspace, env=env, capture_output=True, text=True, timeout=timeout_s,
     )
+    # pytest: 0 passed, 1 tests failed, anything else = the suite did not run
+    # (usage, collection or internal error), so its coverage means nothing.
+    if run.returncode not in (0, 1):
+        raise QeRubricError(
+            f"the suite did not run (pytest exit {run.returncode}): "
+            f"{(run.stdout or run.stderr).strip()[:400]}"
+        )
     report_path = workspace / "coverage.json"
     proc = subprocess.run(
         [sys.executable, "-m", "coverage", "json", "-o", str(report_path)],
@@ -514,6 +521,7 @@ def changed_line_coverage(
         "considered": considered,
         "missed": sorted(missed),
         "out_of_range": sorted(out_of_range),
+        "suite_failed": run.returncode == 1,
     }
 
 

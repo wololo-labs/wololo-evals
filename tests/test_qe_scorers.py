@@ -391,3 +391,22 @@ def test_a_suite_that_fails_every_run_is_not_flake_resistant(tmp_path):
     assert score == 0.5
     assert details["failing"] == ["tests/test_a.py::test_broken"]
     assert details["unstable"] == []
+
+
+def test_changed_line_coverage_records_a_failing_suite_and_refuses_a_broken_one(tmp_path):
+    # Coverage of a run whose tests failed was scored like any other. A failing
+    # suite is recorded; one that never ran (collection error) is refused.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "mod.py").write_text("def f(x):\n    return x + 1\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_mod.py").write_text(
+        "from pkg.mod import f\n\n\ndef test_f():\n    assert f(1) == 99\n"
+    )
+    _, details = qe_rubric.changed_line_coverage(tmp_path, {"pkg/mod.py": [1, 2]})
+    assert details["suite_failed"] is True
+
+    (tmp_path / "tests" / "test_mod.py").write_text("import nonexistent_module\n")
+    with pytest.raises(qe_rubric.QeRubricError, match="did not run"):
+        qe_rubric.changed_line_coverage(tmp_path, {"pkg/mod.py": [1, 2]})
