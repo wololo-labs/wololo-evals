@@ -267,3 +267,79 @@ effect from a baseline that was not contaminated.
 Round budget 10 USD, measured spend 8.94. The stopped scaled haiku pair cost
 2.94, the first Skerry control 1.99, and the rebuilt Skerry control plus both
 skill arms 4.01 over 9 runs. About 1 USD remains, too little to replicate.
+
+## Replication of the Skerry result
+
+**Instrument validation, not an asset score.** The three original cases were run
+again, fresh and independent of the first run, across all three arms, with the
+cases frozen. They are the pre-registered evidence. The calibration-selected
+cases are not evidence and were not run.
+
+**Verdict: the effect held in direction and in significance, shrank in size, and
+is borderline at its lower bound.**
+
+| Arm | Run | Defect catch | Mutation kill | Rubric | Skill invoked |
+|---|---|---:|---:|---:|---:|
+| no skill | first | 0.333 | 0.822 | 0.980 | n/a |
+| no skill | rerun | 0.611 | 0.815 | 0.974 | n/a |
+| skill, left to choose | first | 1.000 | 0.786 | 0.966 | 3 of 3 |
+| skill, left to choose | rerun | 1.000 | 0.770 | 0.969 | 3 of 3 |
+| skill, named in the prompt | first | 1.000 | 0.788 | 0.947 | 3 of 3 |
+| skill, named in the prompt | rerun | 1.000 | 0.781 | 0.943 | 3 of 3 |
+
+| Gate against the no-skill control, case as the unit | Delta | 95% CI | Significant |
+|---|---:|---|---|
+| first run, left to choose | +0.1445 | [+0.0323, +0.2554] | yes |
+| first run, named | +0.1432 | [+0.0311, +0.2550] | yes |
+| rerun, left to choose | +0.1238 | [+0.0058, +0.2375] | yes |
+| rerun, named | +0.1228 | [+0.0069, +0.2348] | yes |
+
+What held: the skill took defect catch to 1.000 in every case in both runs, was
+invoked 3 of 3 when left to choose both times, and the gate reported a
+significant improvement both times. The small cost to mutation kill rate
+(about 0.04) and rubric reproduced too, so it is a real property of the skill
+and not noise.
+
+What shrank: the composite delta fell from +0.1445 to +0.1238, and the defect
+catch gap from 0.667 to 0.389. The lower bound of the interval fell from +0.032
+to +0.006, which is close enough to zero that three cases cannot be said to
+exclude it comfortably.
+
+Why it shrank: nothing about the skill arms changed. All twelve skill case-runs,
+two runs by two arms by three cases, scored 1.000, so they sit at the ceiling and
+cannot move. The whole difference is the control, which scored 0.333 the first
+time and 0.611 the second on the same three cases. Per case, the control went
+0.50, 0.50, 0.00 and then 0.83, 0.67, 0.33. **A single control run is a noisy
+baseline here**, and the first one looks to have been a low draw. Pooling both
+control runs gives about 0.47, against which the skill's gap is about 0.53.
+
+What this does not settle: the unit is still three cases, so an interval of this
+width is a signal that replicated once, not an established effect. It says
+nothing about `test-writer-pack`, which stays unscored, and none of it is a
+catalogue badge.
+
+### Side note: every calibration run, disclosed
+
+Five further candidate cases were calibrated on the control alone under a rule
+fixed before any run: invalid if the control catches more than half of the six
+defects. Two (07, 08, 09 included below) were written or dropped after seeing
+calibration, so **these cases are calibration-selected and are not evidence**.
+
+| Case | Control catch | Outcome | Reason |
+|---|---:|---|---|
+| qe3-05 consumer contract | 0.833 | dropped | invalid by the rule; asked to pin behaviour, the control pinned exact bytes |
+| qe3-06 gap review | 0.500 | valid, not run | kept, but plan Y runs the originals only |
+| qe3-07 find the bugs | scorer error | dropped | the control wrote tests asserting a belief, red on the clean fixture; dropped after seeing it, on a ground the rule did not cover |
+| qe3-08 maintainer | 0.667 | invalid | written after calibration, and still failed the rule |
+| qe3-09 CI suite | 0.667 | invalid | likewise |
+
+Only one of five candidates passed. Unguided prompts mostly get a control that
+catches more than half the defects on this fixture, which is a finding about how
+hard it is to write a discriminating case, and a warning that the three original
+cases may have been unusually favourable draws on the control side.
+
+### Round accounting
+
+Round budget 8 USD, measured spend 6.89: calibration 1.51, second calibration
+1.16, rerun 4.23 over nine runs. 1.11 USD is kept as reserve and unspent. No run
+read the answer key.
