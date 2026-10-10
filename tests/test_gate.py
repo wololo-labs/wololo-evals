@@ -563,3 +563,15 @@ def test_a_baseline_combo_missing_from_the_candidate_is_refused(tmp_path):
                       combos=[_combo(cases), other])
     v = gate_mod.evaluate(run, base)
     assert v.verdict == "refused" and "haiku" in v.reason
+
+
+def test_a_case_weight_that_differs_between_the_runs_is_refused(tmp_path):
+    # Only the candidate's weight was used, so raising it on an improving case
+    # diluted a regression elsewhere.
+    ids = [f"c{i}" for i in range(6)]
+    cand = [_case(c, 0.95 if c == "c0" else 0.3) for c in ids]
+    base = [_case(c, 0.9) for c in ids]
+    cand[0]["case_weight"] = 50.0
+    run, baseline = _pair(tmp_path, cand, base)
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "refused" and "case_weight" in v.reason and "c0" in v.reason

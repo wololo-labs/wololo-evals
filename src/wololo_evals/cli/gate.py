@@ -682,6 +682,7 @@ def evaluate(
             judge_info,
         )
 
+    reweighted: list[str] = []
     for cand_combo in run.combos:
         base_combo = base_by_key.get(cand_combo.key)
         if base_combo is None:
@@ -694,6 +695,10 @@ def evaluate(
             if base_case is None:
                 unmatched.append(f"{cand_combo.combo_id}:{case_id}")
                 continue
+            w_cand = float(cand_case.get("case_weight", 1.0))
+            w_base = float(base_case.get("case_weight", 1.0))
+            if w_cand != w_base:
+                reweighted.append(f"{cand_combo.combo_id}:{case_id} ({w_base} -> {w_cand})")
             is_quarantined = bool(cand_case.get("quarantined")) or bool(
                 base_case.get("quarantined")
             )
@@ -715,9 +720,17 @@ def evaluate(
                         cand_case.get("signals", []), hard
                     ),
                     quarantined=is_quarantined,
-                    case_weight=float(cand_case.get("case_weight", 1.0)),
+                    case_weight=w_cand,
                 )
             )
+
+    if reweighted:
+        return _refused(
+            run_p, base_p, run, max_regression,
+            "case_weight differs between the runs: " + ", ".join(reweighted[:5])
+            + "; the candidate must not choose how much a case counts",
+            judge_info,
+        )
 
     if not any(not p.quarantined for p in pairs):
         return _refused(
