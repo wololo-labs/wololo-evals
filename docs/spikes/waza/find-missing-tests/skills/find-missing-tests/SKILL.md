@@ -24,9 +24,9 @@ uv run "{{HOME_TOOL_DIR}}/skills/recall/scripts/recall.py" \
 
 **What to do with results:**
 
-- If a returned learning names a constraint, anti-pattern, or prior decision directly relevant to the task — surface it to the user BEFORE proceeding with this skill's main flow.
-- If nothing relevant returns — proceed silently, no need to mention the check.
-- Never block on recall failure. Empty output / non-zero exit is expected when the KB is absent or the subprocess errors — treat it as "no prior art found", not as an error.
+- If a returned learning names a constraint, anti-pattern, or prior decision directly relevant to the task, surface it to the user BEFORE proceeding with this skill's main flow.
+- If nothing relevant returns, proceed silently, no need to mention the check.
+- Never block on recall failure. Empty output / non-zero exit is expected when the KB is absent or the subprocess errors, treat it as "no prior art found", not as an error.
 
 <!-- recall:end -->
 

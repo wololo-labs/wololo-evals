@@ -12,7 +12,7 @@ config:
   parallel: false
   executor: copilot-sdk
   model: claude-sonnet-5.5
-  # Relative to the spec dir. Byte-identical copy of the ainb-toolkit skill (check with cmp).
+  # Relative to the spec dir. Copy of the ainb-toolkit skill with its em-dashes replaced (the only change).
   skill_directories:
     - skills
   # Trigger-precision mode: keep skill discovery, do not inject the SKILL.md body.
