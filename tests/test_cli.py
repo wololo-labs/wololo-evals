@@ -447,6 +447,36 @@ def test_only_cases_restricts_the_run_and_refuses_unknown_ids(tmp_path):
         )
 
 
+def test_the_preamble_is_not_applied_to_a_distractor_case(tmp_path):
+    # A distractor case exists to check the skill stays silent. Telling the
+    # model to use the skill on it makes the forced arm fail activation there
+    # by construction, which measures the preamble and not the skill.
+    mc = _make_project(tmp_path)
+    mc.write_text('prompt_preamble = "Use the demo skill."\n' + mc.read_text())
+
+    seen = {}
+
+    class Spy(FakeAdapter):
+        def run(self, spec):  # noqa: ANN001
+            seen[spec.case.case_id] = dict(spec.extra)
+            return super().run(spec)
+
+    matrix_mod.run_matrix(
+        load_matrix_config(mc), lambda e: Spy(e), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    roles = {}
+    for line in (tmp_path / "benchmarks" / "demo" / "cases.jsonl").read_text().splitlines()[1:]:
+        row = json.loads(line); roles[row["case_id"]] = row["expected_outcome"]
+    distractors = [cid for cid, out in roles.items() if out == "no_activation"]
+    assert distractors, "the fixture casebook has no distractor to check"
+    for cid, extra in seen.items():
+        if cid in distractors:
+            assert "prompt_preamble" not in extra, f"{cid} got the preamble"
+        else:
+            assert extra.get("prompt_preamble") == "Use the demo skill.", f"{cid} lost it"
+
+
 def test_expected_skill_override_reaches_every_case(tmp_path):
     # One benchmark, two assets doing the same job under different slugs: the
     # matrix says which slug this arm ships, so activation is scored against

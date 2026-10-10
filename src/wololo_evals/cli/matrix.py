@@ -348,6 +348,19 @@ def render_plan(p: MatrixPlan) -> str:
 # ---------------------------------------------------------------------------
 # Live / injected execution
 # ---------------------------------------------------------------------------
+def _spec_extra(case: ci.CaseSpec, prompt_preamble: Optional[str]) -> dict:
+    """Per-run extras. The preamble names the asset, so it stays off a case
+    whose point is that the asset must stay silent.
+
+    A distractor case checks for a skill that fires where it should not. Told
+    to use the skill, the forced arm would fail it by construction, and the
+    failure would measure the preamble rather than the skill.
+    """
+    if prompt_preamble and case.expected_outcome != "no_activation":
+        return {"prompt_preamble": prompt_preamble}
+    return {}
+
+
 def _run_with_retry(
     adapter: ci.EngineAdapter,
     spec: ci.RunSpec,
@@ -444,7 +457,7 @@ def _execute_combo(
                     seed=seed,
                     cwd=str(work),
                     caps=ci.RunCaps(),
-                    extra=({"prompt_preamble": prompt_preamble} if prompt_preamble else {}),
+                    extra=_spec_extra(case, prompt_preamble),
                 )
                 if cap is not None and cumulative >= cap:
                     result = ci.RunResult(
