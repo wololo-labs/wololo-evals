@@ -2,7 +2,7 @@
 
 Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, trigger tests, with/without A/B) with wololo-evals as the back half (mechanical scoring, gate)?
 
-**Recommendation: GO for waza as the front half, on Q1, Q3 and Q5.** Auth (Q1), trigger routing (Q3) and the kill-rate join on waza workspaces (Q5) ran end to end on waza output. Q4 no longer supports the verdict: it is unresolved for test-engineer, because whether the with-skills arm loaded the agent cannot be settled from the artifacts. The remaining build is glue items 5 and 6, with glue items 2 and 3 partly open; the complete list is under Open items. See Q4 and Mock verification.
+**Recommendation: GO for waza as the front half, on Q1 and Q5. Q3 is pending a rerun on the current prompts.** Auth (Q1) and the kill-rate join on waza workspaces (Q5) ran end to end on waza output. Q3's numbers came from the earlier prompts, which asked for issue filing, so they do not yet support the verdict. Q4 no longer supports the verdict: it is unresolved for test-engineer, because whether the with-skills arm loaded the agent cannot be settled from the artifacts. The remaining build is glue items 5 and 6, with glue items 2 and 3 partly open; the complete list is under Open items. See Q4 and Mock verification.
 
 ## Verdicts
 
@@ -10,7 +10,7 @@ Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, 
 |---|---|---|---|
 | Q1 | Install, Copilot auth | PASS | waza 0.38.9 installed, checksum verified. Copilot sign-in done. Rerun: `waza models` lists 11 models |
 | Q2 | Well-formed (`check`, `spec verify`, `tokens`) | FAIL (waza flags) | find-missing-tests 665/500 tokens; test-driven-development 2213/500; agent file rejected by `waza check`; spec verify 0/1 covered |
-| Q3 | Does the skill fire (trigger tests) | PASS (weak) | Two identical runs. `skill.invoked` on 2 of 3 positive prompts, 0 of 3 negatives. Accuracy 83.3%, recall 66.7% |
+| Q3 | Does the skill fire (trigger tests) | PASS on earlier prompts only; rerun pending | Two identical runs on the earlier wording. `skill.invoked` on 2 of 3 positive prompts, 0 of 3 negatives. Accuracy 83.3%, recall 66.7% |
 | Q4 | With/without A/B, 3 trials per arm | UNRESOLVED for test-engineer | Rescored gap +0.0099 (pooled SD 0.0157) cannot be read as the agent's effect until it is settled whether the with-skills arm loaded the agent |
 | Q5 | The join (waza output to mutation scorer) | PASS (prototype) | Kill rate computed on each of the 6 full-run workspaces by `grade_kill_rate.py`. Open items: see the complete list under Go / no-go |
 
@@ -166,7 +166,7 @@ Closed: glue 1 (kill-rate sidecar) and glue 4 (keep-workspace, timeout).
 
 ## Go / no-go
 
-**GO: waza as the front half, on Q1, Q3 and Q5.** Auth, trigger routing and the kill-rate join ran on waza output. Q4 no longer supports the verdict: whether its with-skills arm loaded the agent is unresolved, so it says nothing about the agent's effect. The remaining build is the open items above.
+**GO: waza as the front half, on Q1 and Q5; Q3 pending a rerun.** Auth and the kill-rate join ran on waza output. Q3 ran on the earlier prompts, so it does not yet support the verdict. Q4 no longer supports the verdict: whether its with-skills arm loaded the agent is unresolved, so it says nothing about the agent's effect. The remaining build is the open items above.
 
 - Q4 reading: withdrawn as evidence about the agent. The measured gap (+0.0099, pooled SD 0.0157) and the threshold result (all six trials above 0.24, three per arm) are real measurements under the committed scoring, but whether the with-skills arm loaded the agent is unresolved, so they cannot be read as the agent's effect. Per the slice-c session, a capable model writes these tests unaided, which is a separate question. Next: a test that uses the agent as published, which needs a decision on the asset.
 - Build remaining: the Build items in Open items (glue 5, glue 6, glue 2).
