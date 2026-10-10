@@ -45,8 +45,8 @@ def main() -> int:
     # Exclusive create, then rename over the destination. A symlink the agent planted at either
     # name is replaced, never followed, so the write cannot land outside the workspace.
     tmp = ws / ".kill_rate.json.tmp"
-    tmp.unlink(missing_ok=True)  # removes a planted link itself, never its target
     try:
+        tmp.unlink(missing_ok=True)  # removes a planted link itself, never its target
         with open(tmp, "x", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2)
         os.replace(tmp, ws / "kill_rate.json")
