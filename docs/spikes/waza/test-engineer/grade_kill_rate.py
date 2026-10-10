@@ -27,7 +27,15 @@ THRESHOLD = json.loads(QE_TARGET.read_text(encoding="utf-8"))["qe"]["mutation_th
 
 
 def main() -> int:
-    ws = pathlib.Path(os.environ.get("WAZA_WORKSPACE_DIR", ""))
+    raw = os.environ.get("WAZA_WORKSPACE_DIR")
+    if not raw:
+        # An empty path resolves to the working directory, so an unset variable must fail, not fall back.
+        print("WAZA_WORKSPACE_DIR is not set; refusing to grade the working directory", file=sys.stderr)
+        return 2
+    ws = pathlib.Path(raw)
+    if not ws.is_dir():
+        print(f"WAZA_WORKSPACE_DIR is not a directory: {ws}", file=sys.stderr)
+        return 2
     target = FIXTURE / "quoting"
     tests = ws / "tests_generated"
     if not tests.is_dir():
