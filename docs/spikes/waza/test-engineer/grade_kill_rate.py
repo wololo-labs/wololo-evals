@@ -46,6 +46,16 @@ def main() -> int:
     if tests.is_symlink() or any(p.is_symlink() for p in tests.rglob("*")):
         print("tests_generated/ contains a symlink; refusing to score", file=sys.stderr)
         return 2
+    # The scorer stages the shipped tests and the agent's tests into one directory. An agent file that
+    # shares a shipped name overwrites the shipped test, and a conftest.py runs inside the scoring run
+    # and can change every outcome. Refuse both, and anything that is not a plain test_*.py module.
+    shipped = {p.name for p in (FIXTURE / "tests").rglob("*.py")}
+    for p in tests.rglob("*"):
+        if p.is_dir():
+            continue
+        if not p.is_file() or p.suffix != ".py" or not p.name.startswith("test_") or p.name in shipped:
+            print(f"tests_generated/ has a file that may not be scored: {p.relative_to(ws)}", file=sys.stderr)
+            return 2
     try:
         report = run_mutation_analysis(target, [FIXTURE / "tests", tests], timeout_s=800)
     except MutationError as exc:
