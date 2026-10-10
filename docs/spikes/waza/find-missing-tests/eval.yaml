@@ -1,4 +1,8 @@
 # waza front-half spike: eval for the find-missing-tests skill (ainb-toolkit QE pack).
+# ISOLATION: the skill body tells the agent to run `gh issue create`, so this eval must run through
+# run-isolated.sh next to this file. That script removes GH_TOKEN and GITHUB_TOKEN and points GH_CONFIG_DIR
+# at an empty directory, so the gh CLI has no credential. Not covered: Copilot's GitHub MCP tools, which a
+# skill cannot restrict (no tool allow-list for skills). Running `waza run` on this file directly drops the isolation.
 # Run from the repo root once Copilot auth works (see docs/spikes/waza-front-half.md).
 name: find-missing-tests-eval
 description: Spike eval for find-missing-tests. Trigger accuracy lives in trigger_tests.yaml next to this file.
