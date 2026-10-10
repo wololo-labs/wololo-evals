@@ -522,3 +522,17 @@ def test_reported_token_totals_are_totals_not_increments(tmp_path):
     )
     events = normalise_stream("copilot", cop)
     assert (sum(e.tokens_in for e in events), sum(e.tokens_out for e in events)) == (100, 20)
+
+
+@pytest.mark.parametrize("bad", ["[1, 2]", "7", '"[1]"'])
+def test_copilot_arguments_that_are_not_an_object_are_a_parse_error(tmp_path, bad):
+    # Anything but an object became {} and the call kept its name with no
+    # target, so a malformed activation or a target-specific assertion failed
+    # without saying why.
+    raw = tmp_path / "copilot.raw.jsonl"
+    raw.write_text(
+        f'{{"type":"tool_call","name":"activate_skill","arguments":{bad}}}\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(TraceParseError, match="arguments"):
+        normalise_stream("copilot", raw)

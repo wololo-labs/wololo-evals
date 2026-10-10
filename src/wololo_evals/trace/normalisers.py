@@ -527,7 +527,13 @@ class CopilotNormaliser(_BaseNormaliser):
                     raise TraceParseError(
                         f"{self.engine_id}:{lineno}: tool_call.arguments is not JSON: {exc}"
                     ) from exc
-            args = args if isinstance(args, dict) else {}
+            if args is None:
+                args = {}
+            if not isinstance(args, dict):
+                raise TraceParseError(
+                    f"{self.engine_id}:{lineno}: tool_call.arguments must be an "
+                    f"object, got {type(args).__name__}"
+                )
             if name in ("activate_skill", "skill"):
                 yield ("lifecycle", {
                     "name": SKILL_ACTIVATED,
