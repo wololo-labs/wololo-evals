@@ -13,6 +13,7 @@ Pure stdlib (``tomllib``/``json``); the only package import is
 from __future__ import annotations
 
 import json
+import math
 import pathlib
 from typing import Mapping, Optional, Sequence
 
@@ -45,6 +46,15 @@ _ALWAYS = (
     "metadata",
     "assertions",
 )
+
+
+def _weight(value: object, case_id: str) -> float:
+    """A case weight must be a finite number above zero. A negative or zero
+    weight lets the weighted mean leave [0, 1] (1 / 0.5 = 2)."""
+    w = float(value)  # type: ignore[arg-type]
+    if not math.isfinite(w) or w <= 0:
+        raise CasesCompileError(f"case {case_id!r}: case_weight must be > 0, got {value!r}")
+    return w
 
 
 class CasesCompileError(ValueError):
@@ -219,7 +229,7 @@ def _build_row(
     row: dict = {}
     row["case_id"] = case_id
     row["fixture_id"] = case.get("fixture_id")
-    row["case_weight"] = float(case.get("case_weight", 1.0))
+    row["case_weight"] = _weight(case.get("case_weight", 1.0), case_id)
     row["role"] = role
     if "title" in case:
         row["title"] = str(case["title"])
@@ -346,7 +356,7 @@ def load_cases(jsonl_path: str | pathlib.Path) -> list[ci.CaseSpec]:
                 expected_paths=tuple(obj.get("expected_paths", ())),
                 expected_skill=obj.get("expected_skill"),
                 assertions=tuple(obj.get("assertions", ())),
-                case_weight=float(obj.get("case_weight", 1.0)),
+                case_weight=_weight(obj.get("case_weight", 1.0), str(obj["case_id"])),
                 quarantined=bool(obj.get("quarantined", False)),
                 metadata=dict(obj.get("metadata", {})),
             )

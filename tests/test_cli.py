@@ -717,3 +717,19 @@ def test_seeds_below_one_are_refused(tmp_path, n):
     mc.write_text(re.sub(r"(?m)^seeds = .*$", f"seeds = {n}", mc.read_text()))
     with pytest.raises(ValueError, match="seeds"):
         load_matrix_config(mc)
+
+
+@pytest.mark.parametrize("weight", ["0", "-0.5", "nan"])
+def test_a_non_positive_case_weight_is_refused(tmp_path, weight):
+    # A negative weight can push a weighted score above 1 (1 / 0.5 = 2).
+    mc = _make_project(tmp_path)
+    toml = tmp_path / "benchmarks" / "demo" / "cases.toml"
+    toml.write_text(toml.read_text().replace("[[cases]]", f"[[cases]]\ncase_weight = {weight}", 1))
+    with pytest.raises(cases_compile.CasesCompileError, match="case_weight"):
+        cases_compile.compile(toml)
+    row = json.loads((tmp_path / "benchmarks" / "demo" / "cases.jsonl").read_text().splitlines()[1])
+    row["case_weight"] = float(weight)
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text(json.dumps(row) + "\n")
+    with pytest.raises(cases_compile.CasesCompileError, match="case_weight"):
+        cases_compile.load_cases(bad)
