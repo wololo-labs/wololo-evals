@@ -22,7 +22,7 @@ only_cases = ["qe3-01-strengthen", "qe3-03-pre-release", "qe3-04-inherit"]
 max_cost_usd = 1.8
 
 [engines.claude]
-version_range = ">=2.0,<3"
+version_range = ">=2.0.24,<3"
 
 [[models]]
 id = "claude-sonnet-5"

@@ -15,7 +15,7 @@ only_cases = ["qe3-08-maintainer", "qe3-09-ci-suite"]
 max_cost_usd = 1.5
 
 [engines.claude]
-version_range = ">=2.0,<3"
+version_range = ">=2.0.24,<3"
 
 [[models]]
 id = "claude-sonnet-5"

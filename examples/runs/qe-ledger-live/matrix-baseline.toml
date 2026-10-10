@@ -11,7 +11,7 @@ seeds = 1
 max_cost_usd = 6.0
 
 [engines.claude]
-version_range = ">=2.0,<3"
+version_range = ">=2.0.24,<3"
 
 [[models]]
 id = "claude-sonnet-5"

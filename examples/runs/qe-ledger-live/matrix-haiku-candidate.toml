@@ -21,7 +21,7 @@ seeds = 2
 max_cost_usd = 5.0
 
 [engines.claude]
-version_range = ">=2.0,<3"
+version_range = ">=2.0.24,<3"
 
 [[models]]
 id = "claude-haiku-4-5"

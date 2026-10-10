@@ -64,7 +64,7 @@ class FakeExec:
     ``version_out``; each non-version call pops the next queued result (or a
     generic exit-0 with empty output when the queue is empty)."""
 
-    def __init__(self, version_out: str = "claude 1.4.2 (Claude Code)"):
+    def __init__(self, version_out: str = "claude 2.1.0 (Claude Code)"):
         self.version_out = version_out
         self.run_queue: collections.deque[ExecResult] = collections.deque()
         self.calls: list[dict] = []
@@ -262,7 +262,7 @@ def test_run_ok_writes_capture_files_and_parses_usage(tmp_path):
     assert result.cost_usd == pytest.approx(0.0123)
     assert (result.tokens_in, result.tokens_out) == (128, 47)
     assert result.attempts == 1
-    assert result.metadata["cli_version"].startswith("claude 1.4.2")
+    assert result.metadata["cli_version"].startswith("claude 2.1.0")
 
     adv = pathlib.Path(spec.cwd) / ADVISORY_DIR
     assert (adv / "claude.raw.jsonl").read_text() == _CLAUDE_OK_STDOUT
@@ -298,6 +298,18 @@ def test_a_declared_preamble_leads_the_case_prompt(tmp_path):
     plain = FakeExec()
     ClaudeAdapter(exec_fn=plain).run(_spec(tmp_path))
     assert plain.run_calls[0]["argv"][2] == "open the dropdown"
+
+
+def test_claude_refuses_a_cli_older_than_the_flag_it_always_passes(tmp_path):
+    # --setting-sources is passed on every run, and the version floor admitted
+    # any 1.x release. The oldest the changelog evidences working for this use
+    # is 2.0.24 ("project-level skills were not loading when --setting-sources
+    # 'project' was specified" was fixed there); the release that introduced
+    # the flag is not recorded, so the floor is the earliest documented good one.
+    for too_old in ("claude 1.0.60 (Claude Code)", "claude 2.0.23 (Claude Code)"):
+        with pytest.raises(EngineVersionError):
+            ClaudeAdapter(exec_fn=FakeExec(version_out=too_old)).run(_spec(tmp_path))
+    ClaudeAdapter(exec_fn=FakeExec(version_out="claude 2.0.24 (Claude Code)")).run(_spec(tmp_path))
 
 
 def test_claude_runs_on_project_settings_only(tmp_path):
@@ -417,8 +429,8 @@ def test_version_drift_refused_then_allowed(tmp_path):
 
 
 def test_version_range_override_from_spec_extra(tmp_path):
-    fake = FakeExec(version_out="claude 2.0.0")
-    # 2.0.0 is inside the default <3.0.0, but this run pins a tighter range
+    fake = FakeExec(version_out="claude 2.5.0")
+    # 2.5.0 is inside the default range, but this run pins a tighter one
     with pytest.raises(EngineVersionError):
         ClaudeAdapter(exec_fn=fake).run(_spec(tmp_path, extra={"version_range": ">=1.0.0,<2.0.0"}))
 

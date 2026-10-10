@@ -15,7 +15,7 @@ only_cases = ["qe3-05-consumer-contract", "qe3-06-gap-review", "qe3-07-find-the-
 max_cost_usd = 1.8
 
 [engines.claude]
-version_range = ">=2.0,<3"
+version_range = ">=2.0.24,<3"
 
 [[models]]
 id = "claude-sonnet-5"
