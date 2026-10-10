@@ -1,7 +1,14 @@
 # Casebook III, INSTRUMENT VALIDATION over ../../examples/fixtures/skerry-codec.
 #
-# Three cases, not four: the round has a fixed budget, and the codec-only prompt
-# was the one most likely to be answered by round-tripping alone.
+# Replication. Cases 05 to 07 were written, and this file committed, before any
+# model saw them, so they cannot have been tuned to a result.
+#
+# Validity rule, fixed in advance: a new case is calibrated on the no-skill
+# control alone, and it is INVALID if the control catches MORE than half of the
+# six seeded defects on it. An invalid case is replaced, not kept. The control
+# run used to decide that is thrown away for the analysis, and the control is
+# measured again fresh: keeping the calibration run would select on the very
+# outcome being compared, which flatters any difference found afterwards.
 #
 # Skerry is an invented protocol. The prompts below name no rule, no field and
 # no defect: they ask for tests, the way a reviewer would. Whether a suite
@@ -69,4 +76,34 @@ title = "Tests for someone inheriting the package"
 difficulty = "hard"
 tags = ["documentation", "judgement", "seeded-defect"]
 input_text = "You are handing this package to another team. Write the pytest tests that document what it guarantees."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe3-05-consumer-contract"
+fixture_id = "skerry_codec"
+case_weight = 1.0
+title = "The behaviour another team can rely on"
+difficulty = "hard"
+tags = ["contract", "judgement", "seeded-defect"]
+input_text = "Another team is going to build a consumer of this package. Write the pytest tests that pin the behaviour they can rely on."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe3-06-gap-review"
+fixture_id = "skerry_codec"
+case_weight = 1.0
+title = "Review the suite for gaps, then fill them"
+difficulty = "hard"
+tags = ["review", "judgement", "seeded-defect"]
+input_text = "Review this package's existing tests for gaps, then write the pytest tests that fill them."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe3-07-find-the-bugs"
+fixture_id = "skerry_codec"
+case_weight = 1.0
+title = "There may be bugs the tests miss"
+difficulty = "hard"
+tags = ["adversarial", "judgement", "seeded-defect"]
+input_text = "There may be bugs in this package that its tests miss. Write pytest tests designed to expose them."
 metadata = { slice = "whole package", targets_defect = "all" }
