@@ -243,7 +243,7 @@ Succeeded: 1
 Workspace preserved: /tmp/waza-mock-3143906682   (contains quoting/ and tests/ from the spec-relative fixture)
 ```
 
-Not evidence, and not reported as results: the text grader `names_a_missing_test` passed only because the mock echoes the prompt, which contains "missing test". The trigger line (accuracy 100%) is also not evidence: mock invokes no skill.
+Not evidence, and not reported as results: the text grader `names_a_missing_test` (since replaced by `lists_a_missing_test`) passed only because the mock echoes the prompt, which contains "missing test". The trigger line (accuracy 100%) is also not evidence: mock invokes no skill.
 
 **Verdicts**
 
