@@ -20,10 +20,11 @@ import pathlib
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Mapping, Optional, Sequence
 
 from ..core import interfaces as ci
+from ..scoring import mutation
 from . import artefact_writer as aw
 from . import cases_compile
 from .config import AssetEntry, BaselineEntry, Benchmark, MatrixConfig, load_benchmark
@@ -154,9 +155,7 @@ def _materialise_fixture(fixtures_dir: Optional[pathlib.Path], workspace: pathli
     workspace.mkdir(parents=True, exist_ok=True)
     shutil.copytree(
         fixtures_dir, workspace, dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns(
-            "__pycache__", "*.pyc", ".pytest_cache", "mutants", *_ORACLE_FILES
-        ),
+        ignore=shutil.ignore_patterns(*mutation.COPY_IGNORE_PATTERNS, *_ORACLE_FILES),
     )
 
 

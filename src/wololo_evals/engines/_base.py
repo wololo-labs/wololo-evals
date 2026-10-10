@@ -20,7 +20,7 @@ from __future__ import annotations
 import dataclasses
 import pathlib
 import time
-from typing import Callable, Mapping, Optional, Sequence
+from typing import Callable, Optional, Sequence
 
 from ..core.interfaces import (
     ADVISORY_DIR,
@@ -253,7 +253,6 @@ class LiveCliAdapter:
         Both are worth knowing and they are not the same number, so an arm
         declares which it is measuring.
         """
-        case = spec.case
         preamble = str(spec.extra.get("prompt_preamble") or "").strip()
         body = self._case_body(spec)
         return f"{preamble}\n\n{body}" if preamble else body

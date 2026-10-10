@@ -322,6 +322,36 @@ def test_a_run_that_extends_the_shipped_suite_is_what_gets_staged(tmp_path):
     assert "test_boundary" in (ws / "tests" / "test_quotes.py").read_text()
 
 
+def test_every_tree_copy_leaves_out_the_same_scratch_names(tmp_path):
+    # The list of names a copy must not carry (bytecode, caches, the mutation
+    # tool's own state) was written out three times and had already drifted: the
+    # defect scorer's copy was missing "mutants". One constant now serves the
+    # mutation staging, the trial workspace and the defect scorer.
+    from wololo_evals.cli import matrix as matrix_mod
+
+    src = tmp_path / "src"
+    for name in mutation.COPY_IGNORE_PATTERNS:
+        if "*" in name:
+            (src / "pkg").mkdir(parents=True, exist_ok=True)
+            (src / "pkg" / name.replace("*", "stale")).write_text("x")
+        else:
+            (src / name).mkdir(parents=True, exist_ok=True)
+            (src / name / "junk").write_text("x")
+    (src / "keep.py").write_text("x = 1\n")
+
+    staged = tmp_path / "staged"
+    mutation._copy_tree(src, staged)
+    trial = tmp_path / "trial"
+    matrix_mod._materialise_fixture(src, trial)
+
+    for copy in (staged, trial):
+        names = {p.name for p in copy.rglob("*")}
+        assert "keep.py" in names
+        for pattern in mutation.COPY_IGNORE_PATTERNS:
+            stale = pattern.replace("*", "stale")
+            assert stale not in names, f"{copy.name} kept {stale}"
+
+
 def test_the_workspace_digest_is_content_addressed(tmp_path):
     """The grader caches the analysis on this, so two suites that differ must
     never collide and two identical ones must."""
