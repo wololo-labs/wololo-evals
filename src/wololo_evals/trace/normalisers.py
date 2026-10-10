@@ -144,6 +144,9 @@ class _BaseNormaliser:
         self.skipped[str(value)] += 1
 
     def normalise(self, raw_event_path: pathlib.Path) -> list[TraceEvent]:
+        # The registry shares one instance per engine, so per-stream state
+        # starts clean here or the next run's artefact inherits this one's.
+        self.skipped = collections.Counter()
         rows = _read_jsonl(raw_event_path)
         events: list[TraceEvent] = []
         for seq, (lineno, obj) in enumerate(self._iter_emitted(rows)):

@@ -443,3 +443,26 @@ def test_read_revalidates_events(tmp_path):
     )
     with pytest.raises(ValueError, match="not in"):
         read_trace(path)
+
+
+def test_skip_counts_do_not_carry_over_between_streams(tmp_path):
+    # NORMALISERS holds one instance per engine, and the counter was never
+    # cleared, so a later run's artefact reported skips from an earlier one.
+    from wololo_evals.trace.normalisers import ClaudeNormaliser
+
+    noisy = tmp_path / "noisy.raw.jsonl"
+    noisy.write_text(
+        '{"type":"tool_progress"}\n'
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}\n',
+        encoding="utf-8",
+    )
+    clean = tmp_path / "clean.raw.jsonl"
+    clean.write_text(
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}\n',
+        encoding="utf-8",
+    )
+    norm = ClaudeNormaliser()
+    norm.normalise(noisy)
+    assert dict(norm.skipped) == {"tool_progress": 1}
+    norm.normalise(clean)
+    assert dict(norm.skipped) == {}
