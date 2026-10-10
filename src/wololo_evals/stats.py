@@ -1,7 +1,7 @@
 """Statistics engine (SPEC S7, DOCTRINE 15.6: no verdict on n=1).
 
 Uniform policy across suites: verdict-bearing runs execute ``n_trials`` per
-arm (floor 5, DDL-enforced); trials pair by ``(task_fixture, trial_index)``;
+arm (floor 5, enforced at run creation; smoke runs excepted); trials pair by ``(task_fixture, trial_index)``;
 the run's verdict stores mean, stddev, a 95% Student-t confidence interval
 over the paired per-trial differences, wins/losses, and ``low_confidence``
 (CI spanning zero). stdlib only: ``statistics`` + ``math`` + a small t-table,

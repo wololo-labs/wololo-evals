@@ -169,8 +169,10 @@ worker, an OTEL collector on `4318`, and the wololo-deploy canary stub on `8090`
   catch rate, and a four-dimension rule-based `qe-review` rubric, all computed
   at gate time and all at zero spend. See
   [the QE benchmark](#the-qe-benchmark-scoring-a-testing-skill).
-- **Paired-trial statistics**: baseline-versus-treatment arms with a DDL-enforced
-  minimum of five trials per arm, a 95 percent Student-t confidence interval over
+- **Paired-trial statistics**: baseline-versus-treatment arms with a minimum of five
+  trials per arm enforced when a run is created (a smoke run may go below it and
+  is flagged, never verdict-bearing; the published `eval-run` schema accepts
+  `n_trials` of 1 and does not enforce the floor), a 95 percent Student-t confidence interval over
   paired differences, a wins rule and a `low_confidence` flag.
 - **Candidate-versus-baseline gate**: paired bootstrap confidence interval on the
   benchmark-score delta, hard-gate trips, and a four-bucket classification of
