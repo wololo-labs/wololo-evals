@@ -452,7 +452,7 @@ def test_a_guard_on_an_error_only_signal_refuses(tmp_path):
     assert "error-only in run" in verdict.reason
 
     # Unguarded, the same pair is simply not compared on that signal.
-    ungated = gate_mod.evaluate(candidate, baseline)
+    ungated = gate_mod.evaluate(candidate, baseline, min_cases=1)
     assert ungated.verdict == "pass"
     assert "kill_rate" not in {d.evaluator_id for d in ungated.signal_deltas}
 
