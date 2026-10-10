@@ -25,11 +25,15 @@ metrics:
     description: The run names at least one missing test case.
 
 graders:
+  # A real gap list: at least one bullet or numbered item that mentions a test, and no "no missing tests" answer.
+  # Plain "missing test" matched the mock executor's echoed prompt, so it proved nothing.
   - type: text
-    name: names_a_missing_test
+    name: lists_a_missing_test
     config:
       regex_match:
-        - "(?i)missing test"
+        - "(?im)^\\s*(?:[-*]|\\d+[.)])\\s+.*\\btest"
+      regex_not_match:
+        - "(?i)no (missing )?(tests|test cases|gaps)"
 
 tasks:
   - tasks/*.yaml
