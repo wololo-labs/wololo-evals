@@ -409,3 +409,18 @@ def test_changed_line_coverage_records_a_failing_suite_and_refuses_a_broken_one(
     (tmp_path / "tests" / "test_mod.py").write_text("import nonexistent_module\n")
     with pytest.raises(qe_rubric.QeRubricError, match="did not run"):
         qe_rubric.changed_line_coverage(tmp_path, {"pkg/mod.py": [1, 2]})
+
+
+def test_a_defect_path_cannot_leave_the_workspace(tmp_path):
+    from wololo_evals.scoring import defects
+
+    root = tmp_path / "ws"
+    root.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("x = 1\n")
+    bad = defects.SeededDefect(
+        id="d", title="d", file="../outside.py", find="x = 1", replace="x = 2", rationale=""
+    )
+    with pytest.raises(defects.DefectApplyError, match="outside"):
+        defects.apply_defect(root, bad)
+    assert outside.read_text() == "x = 1\n"
