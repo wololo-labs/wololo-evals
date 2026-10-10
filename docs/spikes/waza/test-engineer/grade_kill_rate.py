@@ -17,16 +17,20 @@ import os
 import pathlib
 import sys
 
-from wololo_evals.scoring.mutation import MutationError, run_mutation_analysis
-
 HERE = pathlib.Path(__file__).resolve().parent
 FIXTURE = HERE / "fixtures" / "quoting-service"
 # The gate's own settings: same test set and threshold as benchmarks/qe-skill/qe-target.json.
 QE_TARGET = HERE.parents[3] / "benchmarks" / "qe-skill" / "qe-target.json"
-THRESHOLD = json.loads(QE_TARGET.read_text(encoding="utf-8"))["qe"]["mutation_threshold"]
 
 
 def main() -> int:
+    try:
+        from wololo_evals.scoring.mutation import MutationError, run_mutation_analysis
+
+        threshold = json.loads(QE_TARGET.read_text(encoding="utf-8"))["qe"]["mutation_threshold"]
+    except Exception as exc:  # a missing package or settings file is an infrastructure failure
+        print(f"grader setup failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
     raw = os.environ.get("WAZA_WORKSPACE_DIR")
     if not raw:
         # An empty path resolves to the working directory, so an unset variable must fail, not fall back.
@@ -63,7 +67,7 @@ def main() -> int:
     except MutationError as exc:
         print(f"mutation analysis failed: {exc}", file=sys.stderr)
         return 2
-    payload = {**report.as_dict(), "kill_rate": report.kill_rate, "threshold": THRESHOLD}
+    payload = {**report.as_dict(), "kill_rate": report.kill_rate, "threshold": threshold}
     # Exclusive create, then rename over the destination. A symlink the agent planted at either
     # name is replaced, never followed, so the write cannot land outside the workspace.
     tmp = ws / ".kill_rate.json.tmp"
@@ -76,8 +80,13 @@ def main() -> int:
         print(f"could not write kill_rate.json: {exc}", file=sys.stderr)
         return 2
     print(f"kill_rate={report.kill_rate:.4f} executed={report.kill_rate_executed:.4f}")
-    return 0 if report.kill_rate >= THRESHOLD else 1
+    return 0 if report.kill_rate >= threshold else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        code = main()
+    except Exception as exc:  # anything unexpected is an invalid run, never a below-threshold result
+        print(f"grader error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        code = 2
+    sys.exit(code)
