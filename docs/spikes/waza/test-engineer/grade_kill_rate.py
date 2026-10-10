@@ -12,15 +12,30 @@ treats any non-zero code as a fail, so the code is for the operator, not for waz
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import pathlib
+import shutil
 import sys
+import tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 FIXTURE = HERE / "fixtures" / "quoting-service"
 # The gate's own settings: same test set and threshold as benchmarks/qe-skill/qe-target.json.
 QE_TARGET = HERE.parents[3] / "benchmarks" / "qe-skill" / "qe-target.json"
+# Variables the scorer's mutmut run may keep. Everything else, including tokens, is removed before it runs.
+KEEP_ENV = ("PATH", "LANG", "LC_ALL", "TMPDIR")
+
+
+def tree_digest(root: pathlib.Path) -> str:
+    """Hash every file under root, so a change to the pristine fixture is detectable after a run."""
+    h = hashlib.sha256()
+    for p in sorted(root.rglob("*")):
+        if p.is_file() and not any(part in ("__pycache__", ".pytest_cache") for part in p.parts):
+            h.update(str(p.relative_to(root)).encode())
+            h.update(p.read_bytes())
+    return h.hexdigest()
 
 
 def main() -> int:
@@ -40,7 +55,6 @@ def main() -> int:
     if not ws.is_dir():
         print(f"WAZA_WORKSPACE_DIR is not a directory: {ws}", file=sys.stderr)
         return 2
-    target = FIXTURE / "quoting"
     tests = ws / "tests_generated"
     if not tests.is_dir():
         print(f"missing tests_generated/ under {ws}", file=sys.stderr)
@@ -60,12 +74,29 @@ def main() -> int:
         if not p.is_file() or p.suffix != ".py" or not p.name.startswith("test_") or p.name in shipped:
             print(f"tests_generated/ has a file that may not be scored: {p.relative_to(ws)}", file=sys.stderr)
             return 2
+    # Agent test code runs inside the scorer's mutmut run. Give it a throwaway copy of the code under test,
+    # strip the environment of tokens, and hash the pristine fixture before and after, so a run that changed
+    # the fixture is rejected. This detects tampering; it does not prevent it (see the limitation in the docstring).
+    before = tree_digest(FIXTURE)
+    scratch = pathlib.Path(tempfile.mkdtemp(prefix="grader-"))
     try:
+        shutil.copytree(FIXTURE / "quoting", scratch / "quoting")
+        shutil.copytree(FIXTURE / "tests", scratch / "tests")
+        for key in list(os.environ):
+            if key not in KEEP_ENV:
+                del os.environ[key]
+        os.environ["HOME"] = str(scratch)
         # The scorer applies timeout_s to each mutmut call, and it can make two (run, then export-cicd-stats).
         # 2 x 400 s plus staging stays under waza's 900 s program-grader timeout (eval.yaml).
-        report = run_mutation_analysis(target, [FIXTURE / "tests", tests], timeout_s=400)
+        report = run_mutation_analysis(scratch / "quoting", [scratch / "tests", tests], timeout_s=400)
     except MutationError as exc:
         print(f"mutation analysis failed: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        after = tree_digest(FIXTURE)
+        shutil.rmtree(scratch, ignore_errors=True)
+    if after != before:
+        print("the pristine fixture changed during scoring; this run is invalid", file=sys.stderr)
         return 2
     payload = {**report.as_dict(), "kill_rate": report.kill_rate, "threshold": threshold}
     # Exclusive create, then rename over the destination. A symlink the agent planted at either
