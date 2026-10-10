@@ -15,8 +15,6 @@ config:
   # Relative to the spec dir. Copy of the ainb-toolkit skill with its em-dashes replaced (the only change).
   skill_directories:
     - skills
-  # Trigger-precision mode: keep skill discovery, do not inject the SKILL.md body.
-  inject_skill_body: false
 
 metrics:
   - name: gap_list_produced
