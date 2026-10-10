@@ -61,6 +61,24 @@ class FakeAdapter:
         )
 
 
+class RecordingAdapter(FakeAdapter):
+    """Records where a trial ran and what it could see from there."""
+
+    seen: list = []
+
+    def run(self, spec):  # noqa: ANN001
+        cwd = pathlib.Path(spec.cwd)
+        RecordingAdapter.seen.append(
+            {
+                "cwd": cwd,
+                "git": (cwd / ".git").is_dir(),
+                "had_fixture": (cwd / "pkg" / "mod.py").is_file(),
+            }
+        )
+        (cwd / "made_by_trial.txt").write_text("x", encoding="utf-8")
+        return super().run(spec)
+
+
 def adapter_factory(cost: float = 0.01):
     return lambda engine_id: FakeAdapter(engine_id, cost)
 
@@ -330,24 +348,34 @@ def test_the_answer_key_never_reaches_a_case_workspace(tmp_path):
     assert not list(md.rglob("workspace/*/changed_lines.json"))
 
 
-def test_a_case_workspace_cannot_commit_to_the_host_repository(tmp_path):
-    # A trial's cwd sits inside this repository. One that ran `git commit`
-    # committed its generated tests into the fixture's own shipped suite, the
-    # control baseline, and every later case started from a strong suite.
+def test_trials_run_outside_the_repository_and_leave_a_retained_copy(tmp_path):
+    # A trial runs with --dangerously-skip-permissions, and its cwd used to sit
+    # inside this repository, 16 directories below the root, so `../` reached
+    # the answer key and the skill file. The trial now runs in a throwaway
+    # directory elsewhere; the artefact tree still gets a copy to inspect.
     fixtures = tmp_path / "fixtures"
     (fixtures / "pkg").mkdir(parents=True)
     (fixtures / "pkg" / "mod.py").write_text("VALUE = 1\n")
     mc = _make_project(tmp_path)
     mc.write_text('fixtures_dir = "fixtures"\n' + mc.read_text())
 
+    RecordingAdapter.seen = []
     md = matrix_mod.run_matrix(
-        load_matrix_config(mc), adapter_factory(), make_grader(),
+        load_matrix_config(mc), lambda e: RecordingAdapter(e), make_grader(),
         timestamp="20260719T000000Z",
     )
-    workspaces = {p.parent.parent for p in md.rglob("workspace/*/pkg/mod.py")}
-    assert workspaces, "fixture never reached a case workspace"
-    for ws in workspaces:
-        assert (ws / ".git").is_dir(), f"{ws} is not sealed from the host repository"
+    assert RecordingAdapter.seen, "the adapter never ran"
+    for run in RecordingAdapter.seen:
+        cwd = run["cwd"].resolve()
+        assert tmp_path.resolve() not in cwd.parents, f"{cwd} is inside the project tree"
+        assert md.resolve() not in cwd.parents, f"{cwd} is inside the artefact tree"
+        assert run["had_fixture"], "the fixture was not materialised before the run"
+        assert run["git"], "the trial had no repository of its own"
+        assert not cwd.exists(), f"{cwd} was left behind"
+
+    kept = list(md.rglob("workspace/*/made_by_trial.txt"))
+    assert len(kept) == len(RecordingAdapter.seen), "the artefact tree lost a workspace"
+    assert not list(md.rglob("workspace/*/.git")), "a nested repository was retained"
 
 
 def test_only_cases_restricts_the_run_and_refuses_unknown_ids(tmp_path):

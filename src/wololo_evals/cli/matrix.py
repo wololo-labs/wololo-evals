@@ -14,10 +14,12 @@ stdlib/``tomllib`` — never ``db``/``api``/``jobs``.
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import pathlib
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field, replace
 from typing import Callable, Mapping, Optional, Sequence
 
@@ -156,22 +158,47 @@ def _materialise_fixture(fixtures_dir: Optional[pathlib.Path], workspace: pathli
             "__pycache__", "*.pyc", ".pytest_cache", "mutants", *_ORACLE_FILES
         ),
     )
-    _seal_workspace_git(workspace)
+
+
+def _prepare_workspace(work: pathlib.Path, fixtures_dir: Optional[pathlib.Path]) -> None:
+    """Make ``work`` a pristine trial workspace: the fixture, and its own git.
+
+    Idempotent and destructive on purpose: anything already in ``work`` is
+    removed first, so the same call both prepares a workspace and resets one.
+    """
+    if work.exists():
+        for child in work.iterdir():
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    work.mkdir(parents=True, exist_ok=True)
+    _materialise_fixture(fixtures_dir, work)
+    _seal_workspace_git(work)
+
+
+def _retain_workspace(work: pathlib.Path, dest: pathlib.Path) -> None:
+    """Copy a finished trial's workspace into the artefact tree to be inspected.
+
+    The trial runs somewhere else (see ``_execute_combo``); what stays behind is
+    a copy, without the throwaway repository the trial was given.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(work, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
 
 
 def _seal_workspace_git(workspace: pathlib.Path) -> None:
     """Give the workspace its own git repository, so a trial cannot commit here.
 
-    A trial runs with the workspace as its cwd, and the workspace sits inside
-    this repository's tree. A run that decides to commit its work therefore
-    commits to the branch being used to measure it. That happened: one trial
-    committed its generated tests into the fixture's own shipped suite, which
-    is the control baseline, and every later case in that matrix then started
-    from a strong suite instead of a thin one.
+    A trial once ran inside this repository's tree, and a run that decided to
+    commit its work committed to the branch being used to measure it: one trial
+    put generated tests into the fixture's own shipped suite, which is the
+    control baseline, and every later case then started from a strong suite.
 
-    An empty repository rooted at the workspace makes the trial's git commands
-    land in a throwaway it owns. It is not a sandbox and does not pretend to
-    be; it closes the one path that silently corrupted a measurement.
+    Trials now run in a throwaway directory outside the repository, which
+    closes that path by location. The repository is kept anyway, so that a
+    temp directory that happens to sit inside some other git tree still cannot
+    be committed into. Neither is a sandbox, and neither pretends to be.
     """
     try:
         subprocess.run(
@@ -386,69 +413,82 @@ def _execute_combo(
         seed_outcomes: list[aw.SeedOutcome] = []
         payloads: list[dict] = []
         for seed in range(seeds):
-            spec = ci.RunSpec(
-                run_id=_run_id(combo, case.case_id, seed),
-                asset=snapshot,
-                case=case,
-                engine_id=combo.engine_id,
-                model_id=combo.model_id,
-                prompt_id=combo.prompt_id,
-                seed=seed,
-                cwd=str(ci.artefacts.workspace_dir(run_dir, seed, case.case_id)),
-                caps=ci.RunCaps(),
-                extra=({"prompt_preamble": prompt_preamble} if prompt_preamble else {}),
-            )
-            if cap is not None and cumulative >= cap:
-                result = ci.RunResult(
-                    run_id=spec.run_id,
-                    status="cost_cap_hit",
-                    artefact_dir=str(ci.artefacts.seed_dir(run_dir, seed)),
-                    runtime_seconds=0.0,
+            # The trial runs in a throwaway directory outside the repository.
+            # It used to run in the artefact tree, 16 levels below the repo
+            # root, where `../` reached the answer key and the skill file and
+            # the trial had --dangerously-skip-permissions. Moving it removes
+            # the casual route; it is not a sandbox, and an absolute path still
+            # works. What stays in the artefact tree is a copy, taken after
+            # grading.
+            work = pathlib.Path(tempfile.mkdtemp(prefix="we-trial-")).resolve()
+            try:
+                spec = ci.RunSpec(
+                    run_id=_run_id(combo, case.case_id, seed),
+                    asset=snapshot,
+                    case=case,
+                    engine_id=combo.engine_id,
+                    model_id=combo.model_id,
+                    prompt_id=combo.prompt_id,
+                    seed=seed,
+                    cwd=str(work),
+                    caps=ci.RunCaps(),
+                    extra=({"prompt_preamble": prompt_preamble} if prompt_preamble else {}),
                 )
-                composed = aw.compose_case(
-                    [], benchmark.evaluation_type,
-                    pass_threshold=benchmark.pass_threshold, scored=False,
-                )
-                events.record(
-                    "run_capped", ts=timestamp, run_id=spec.run_id,
-                    combo_id=combo.combo_id, case_id=case.case_id, seed=seed,
-                    status="cost_cap_hit",
-                )
-            else:
-                _materialise_fixture(
-                    fixtures_dir,
-                    ci.artefacts.workspace_dir(run_dir, seed, case.case_id),
-                )
-                ci.artefacts.advisory_dir(run_dir, seed, case.case_id).mkdir(
-                    parents=True, exist_ok=True
-                )
-                adapter = adapter_factory(combo.engine_id)
-                if combo.engine_id not in engine_versions:
-                    try:
-                        engine_versions[combo.engine_id] = adapter.cli_version()
-                    except Exception:  # noqa: BLE001 - version probe is best-effort
-                        engine_versions[combo.engine_id] = "unknown"
-                result = _run_with_retry(adapter, spec)
-                cumulative += result.cost_usd
-                trace: list[ci.TraceEvent] = []
-                if normaliser_factory is not None:
-                    norm = normaliser_factory(combo.engine_id)
-                    if norm is not None:
-                        trace = list(norm.normalise(adapter.raw_event_path(spec)))
-                _write_trace(run_dir, seed, case.case_id, trace)
-                signals = list(grader(spec, result, trace))
-                composed = aw.compose_case(
-                    signals, benchmark.evaluation_type,
-                    pass_threshold=benchmark.pass_threshold,
-                    scored=result.scored, judge_disabled=smoke,
-                )
-                events.record(
-                    "run_finished", ts=timestamp, run_id=spec.run_id,
-                    combo_id=combo.combo_id, case_id=case.case_id, seed=seed,
-                    status=result.status, cost_usd=result.cost_usd,
-                    tokens_in=result.tokens_in, tokens_out=result.tokens_out,
-                    duration_ms=int(result.runtime_seconds * 1000),
-                )
+                if cap is not None and cumulative >= cap:
+                    result = ci.RunResult(
+                        run_id=spec.run_id,
+                        status="cost_cap_hit",
+                        artefact_dir=str(ci.artefacts.seed_dir(run_dir, seed)),
+                        runtime_seconds=0.0,
+                    )
+                    composed = aw.compose_case(
+                        [], benchmark.evaluation_type,
+                        pass_threshold=benchmark.pass_threshold, scored=False,
+                    )
+                    events.record(
+                        "run_capped", ts=timestamp, run_id=spec.run_id,
+                        combo_id=combo.combo_id, case_id=case.case_id, seed=seed,
+                        status="cost_cap_hit",
+                    )
+                else:
+                    _prepare_workspace(work, fixtures_dir)
+                    kept_advisory = ci.artefacts.advisory_dir(run_dir, seed, case.case_id)
+                    kept_advisory.mkdir(parents=True, exist_ok=True)
+                    adapter = adapter_factory(combo.engine_id)
+                    if combo.engine_id not in engine_versions:
+                        try:
+                            engine_versions[combo.engine_id] = adapter.cli_version()
+                        except Exception:  # noqa: BLE001 - version probe is best-effort
+                            engine_versions[combo.engine_id] = "unknown"
+                    result = _run_with_retry(adapter, spec)
+                    cumulative += result.cost_usd
+                    trace: list[ci.TraceEvent] = []
+                    if normaliser_factory is not None:
+                        norm = normaliser_factory(combo.engine_id)
+                        if norm is not None:
+                            trace = list(norm.normalise(adapter.raw_event_path(spec)))
+                    _write_trace(run_dir, seed, case.case_id, trace)
+                    signals = list(grader(spec, result, trace))
+                    composed = aw.compose_case(
+                        signals, benchmark.evaluation_type,
+                        pass_threshold=benchmark.pass_threshold,
+                        scored=result.scored, judge_disabled=smoke,
+                    )
+                    # Only now is the workspace complete: the run, the trace and
+                    # the grading have all written to it.
+                    _retain_workspace(
+                        work, ci.artefacts.workspace_dir(run_dir, seed, case.case_id)
+                    )
+                    result = dataclasses.replace(result, artefact_dir=str(kept_advisory))
+                    events.record(
+                        "run_finished", ts=timestamp, run_id=spec.run_id,
+                        combo_id=combo.combo_id, case_id=case.case_id, seed=seed,
+                        status=result.status, cost_usd=result.cost_usd,
+                        tokens_in=result.tokens_in, tokens_out=result.tokens_out,
+                        duration_ms=int(result.runtime_seconds * 1000),
+                    )
+            finally:
+                shutil.rmtree(work, ignore_errors=True)
             payload = _seed_case_payload(spec, result, composed)
             aw.write_json(ci.artefacts.seed_case_path(run_dir, seed, case.case_id), payload)
             payloads.append(payload)
