@@ -57,7 +57,9 @@ def main() -> int:
             print(f"tests_generated/ has a file that may not be scored: {p.relative_to(ws)}", file=sys.stderr)
             return 2
     try:
-        report = run_mutation_analysis(target, [FIXTURE / "tests", tests], timeout_s=800)
+        # The scorer applies timeout_s to each mutmut call, and it can make two (run, then export-cicd-stats).
+        # 2 x 400 s plus staging stays under waza's 900 s program-grader timeout (eval.yaml).
+        report = run_mutation_analysis(target, [FIXTURE / "tests", tests], timeout_s=400)
     except MutationError as exc:
         print(f"mutation analysis failed: {exc}", file=sys.stderr)
         return 2
