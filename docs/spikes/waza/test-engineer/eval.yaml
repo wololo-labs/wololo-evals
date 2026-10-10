@@ -1,3 +1,8 @@
+# NOT RUNNABLE AS PUBLISHED. The agent file test-engineer.agent.md has a `tools:` line that waza cannot parse,
+# so the agent does not load. On Copilot the with-agent arm then runs exactly like the baseline, and both arms
+# pass silently. Do not read any result from this spec. The line stays unchanged by decision: a test of the agent
+# must use it as its authors wrote it. Run this spec only after the asset parses, or after the decision changes.
+#
 # waza front-half spike, Q4: with/without A/B for the test-engineer agent on one QE task.
 # Run: waza run docs/spikes/waza/test-engineer/eval.yaml --baseline --trials 3 --keep-workspace
 name: test-engineer-ab
