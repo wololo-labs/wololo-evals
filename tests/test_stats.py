@@ -78,7 +78,7 @@ def test_n1_is_flagged_low_confidence():
 
 def test_t_table():
     assert t_critical_95(4) == 2.776
-    assert t_critical_95(100) == 1.960
+    assert t_critical_95(100) >= 1.984  # the true t; the table steps down to the anchor at 60
     with pytest.raises(ValueError):
         t_critical_95(0)
 
@@ -90,3 +90,14 @@ def test_single_arm_knife_edge_visible():
     # comfortably above the bar: confident
     stats = single_arm_stats([0.85, 0.86, 0.84, 0.85, 0.87], pass_bar=0.70)
     assert stats["low_confidence"] is False
+
+
+def test_t_critical_never_understates_beyond_the_table():
+    # Beyond df 30 the function returned the normal 1.960, but t(31) is 2.040,
+    # so the interval was narrower than the 95% it claimed. True values:
+    true = {31: 2.0395, 35: 2.0301, 45: 2.0141, 70: 1.9944, 150: 1.9759}
+    from wololo_evals.stats import t_critical_95
+
+    for df, want in true.items():
+        assert t_critical_95(df) >= want - 1e-3, df
+    assert t_critical_95(10_000) == pytest.approx(1.96, abs=0.001)
