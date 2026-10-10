@@ -593,6 +593,7 @@ def evaluate(
     golden_agreement: Optional[float] = None,
     judge_agreement_min: float = 0.7,
     signal_guards: Sequence[str] = (),
+    allow_subset: bool = False,
 ) -> GateVerdict:
     """Produce the §16.4 gate verdict comparing ``run_dir`` against ``baseline_dir``.
 
@@ -657,6 +658,29 @@ def evaluate(
     unmatched: list[str] = []
     combos_compared: list[str] = []
     hard = _hard_gate_names(run.evaluation_type)
+
+    # A baseline combo or case the candidate never ran is not evidence of no
+    # regression. Omitting the case it would fail used to make it pass.
+    missing: list[str] = []
+    cand_by_key = {c.key: c for c in run.combos}
+    for base_combo in base.combos:
+        cand_combo = cand_by_key.get(base_combo.key)
+        if cand_combo is None:
+            missing.append(f"combo {base_combo.combo_id} ({'/'.join(base_combo.key)})")
+            continue
+        have = set(_case_rows(cand_combo.scorecard))
+        missing.extend(
+            f"{base_combo.combo_id}:{cid}"
+            for cid in _case_rows(base_combo.scorecard) if cid not in have
+        )
+    if missing and not allow_subset:
+        shown = ", ".join(missing[:5]) + (f" (+{len(missing) - 5} more)" if len(missing) > 5 else "")
+        return _refused(
+            run_p, base_p, run, max_regression,
+            f"baseline cases absent from the run: {shown}; pass allow_subset to compare "
+            f"only what both ran",
+            judge_info,
+        )
 
     for cand_combo in run.combos:
         base_combo = base_by_key.get(cand_combo.key)
@@ -786,6 +810,11 @@ def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
         "--max-regression", type=float, default=0.0,
         help="regression tolerance (§16.4, default 0)",
     )
+    parser.add_argument(
+        "--allow-subset", action="store_true",
+        help="compare only the cases both runs have (default: refuse when the "
+             "run omits a baseline case or combo)",
+    )
     parser.add_argument("--confidence", type=float, default=0.95)
     parser.add_argument("--resamples", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=0)
@@ -886,6 +915,7 @@ def run(args) -> int:  # noqa: ANN001 - argparse namespace
         golden_agreement=args.golden_agreement,
         judge_agreement_min=args.judge_agreement_min,
         signal_guards=tuple(args.signal_guard or ()),
+        allow_subset=args.allow_subset,
     )
     subject = {
         k: v

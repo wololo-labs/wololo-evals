@@ -540,3 +540,26 @@ def test_runs_from_different_benchmarks_or_bars_are_refused(tmp_path, change, ne
     v = gate_mod.evaluate(run, baseline)
     assert v.verdict == "refused" and v.exit_code == 2
     assert needle in v.reason
+
+
+def test_baseline_cases_missing_from_the_candidate_are_refused(tmp_path):
+    # Iterating the candidate's cases alone dropped a baseline case the
+    # candidate never ran, so omitting the case it would fail made it pass.
+    base = [_case(f"c{i}", 0.9) for i in range(6)]
+    cand = [_case(f"c{i}", 0.9) for i in range(5)]  # c5 not run
+    run, baseline = _pair(tmp_path, cand, base)
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "refused" and "c5" in v.reason
+    ok = gate_mod.evaluate(run, baseline, allow_subset=True)
+    assert ok.verdict == "pass"
+
+
+def test_a_baseline_combo_missing_from_the_candidate_is_refused(tmp_path):
+    cases = [_case(f"c{i}", 0.9) for i in range(4)]
+    run = _write_run(tmp_path / "cand", evaluation_type="code_change", combos=[_combo(cases)])
+    other = _combo(cases, cid="claude__haiku__default")
+    other["model_id"] = "haiku"
+    base = _write_run(tmp_path / "base", evaluation_type="code_change",
+                      combos=[_combo(cases), other])
+    v = gate_mod.evaluate(run, base)
+    assert v.verdict == "refused" and "haiku" in v.reason
