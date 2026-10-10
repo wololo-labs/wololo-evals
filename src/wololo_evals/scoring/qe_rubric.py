@@ -30,7 +30,6 @@ import pathlib
 import shutil
 import subprocess
 import sys
-import warnings
 import tempfile
 from dataclasses import dataclass, field
 from typing import Mapping, Optional, Sequence
@@ -504,17 +503,15 @@ def changed_line_coverage(
                 covered += 1
             else:
                 missed.append(f"{rel}:{line}")
+    if out_of_range:
+        raise QeRubricError(
+            f"changed-line manifest names lines past the end of the file or before "
+            f"line 1: {sorted(out_of_range)}; regenerate it, it has drifted from "
+            f"its fixture"
+        )
     if not considered:
         raise QeRubricError(
             f"no declared changed line is executable in {sorted(changed_lines)}"
-        )
-    if out_of_range:
-        warnings.warn(
-            f"changed-line manifest names lines past the end of the file or before "
-            f"line 1: {sorted(out_of_range)}. They were ignored; regenerate the "
-            f"manifest, which has drifted from its fixture.",
-            UserWarning,
-            stacklevel=2,
         )
     return covered / considered, {
         "covered": covered,

@@ -273,7 +273,7 @@ def test_a_missing_mutation_tool_is_an_evaluator_error_not_a_zero():
     assert signal.score == 0.0
 
 
-def test_a_changed_line_past_the_end_of_the_file_is_flagged_not_swallowed(tmp_path):
+def test_a_changed_line_past_the_end_of_the_file_is_refused(tmp_path):
     # Lines coverage calls non-executable are dropped from the denominator, and
     # a line number past the end of the file falls into the same bucket. Two
     # shipped manifests drifted that way, listing 87 and 88 in an 86 line file,
@@ -286,12 +286,11 @@ def test_a_changed_line_past_the_end_of_the_file_is_flagged_not_swallowed(tmp_pa
     (tmp_path / "tests" / "test_mod.py").write_text(
         "from pkg.mod import f\n\n\ndef test_f():\n    assert f(1) == 2\n"
     )
-    with pytest.warns(UserWarning, match="past the end"):
-        coverage, details = qe_rubric.changed_line_coverage(
-            tmp_path, {"pkg/mod.py": [1, 2, 3, 40]}
-        )
-    assert coverage == 1.0, "the in-range lines are all executed"
-    assert details["out_of_range"] == ["pkg/mod.py:3", "pkg/mod.py:40"]
+    # A manifest that has drifted from its fixture used to score on the
+    # lines that survived, so 1.0 was still possible. It is now an
+    # evaluator error, never a number.
+    with pytest.raises(qe_rubric.QeRubricError, match="pkg/mod.py:40"):
+        qe_rubric.changed_line_coverage(tmp_path, {"pkg/mod.py": [1, 2, 3, 40]})
 
 
 def test_an_empty_denominator_is_not_a_perfect_score():

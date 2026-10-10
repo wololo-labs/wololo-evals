@@ -378,7 +378,7 @@ corrected check is what the table reports.
 The same review fixed nine further defects, each as its own commit: retries now
 start from a pristine workspace in both the matrix and the adapter, the forced
 preamble stays off distractor cases, two changed-line manifests that listed lines
-past the end of their files are corrected and the scorer now warns on that, the
+past the end of their files are corrected and the scorer now refuses a manifest that does that, the
 Claude CLI floor is raised to the earliest release the changelog evidences for
 `--setting-sources`, the dry run applies the expected-skill override, provenance
 records the preamble, the override and the case filter, an unknown informational
