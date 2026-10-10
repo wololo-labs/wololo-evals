@@ -1,0 +1,24 @@
+# Trigger accuracy for find-missing-tests. Auto-discovered by `waza run` next to eval.yaml.
+skill: find-missing-tests
+
+should_trigger_prompts:
+  - prompt: "Find the missing test cases in this codebase and list them. Do not create any GitHub issues."
+    reason: Direct gap-analysis request, matches the skill description
+    confidence: high
+  - prompt: "What tests are we missing for the payments module? Do not create any GitHub issues."
+    reason: Asks for untested behaviour, the skill's core job
+    confidence: high
+  - prompt: "Audit our test coverage gaps and list them. Do not open any GitHub issues."
+    reason: Coverage audit, no issue filing
+    confidence: medium
+
+should_not_trigger_prompts:
+  - prompt: "Fix the failing login test in auth.spec.ts"
+    reason: Repair an existing test, not gap discovery
+    confidence: high
+  - prompt: "What's the weather like in Lisbon today?"
+    reason: Unrelated question
+    confidence: high
+  - prompt: "Write a four-line haiku about parcel delivery. Do not use any tools."
+    reason: Creative writing with no tool use and no external effect, so a tool-enabled session cannot act on it
+    confidence: high

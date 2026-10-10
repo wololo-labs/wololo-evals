@@ -1,0 +1,12 @@
+{
+  "description": "The lines under review for this fixture: the request-validation path in parse_quote_request plus the pricing rules it guards. The qe-review rubric's changed_line_coverage dimension is scored over exactly these lines, so whole-file coverage cannot hide an untested boundary inside a well-covered module. Non-executable lines in this range (blanks, the docstring) are dropped from the denominator by the scorer, never counted as misses.",
+  "changed_lines": {
+    "quoting/pricing.py": [
+      57, 58, 60, 61, 62, 63, 64, 65, 66,
+      71, 72, 73,
+      78, 79, 80,
+      82,
+      89, 90, 91, 92, 93, 94, 95, 96
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+# Trigger-precision spec for find-missing-tests. Runs trigger_tests.yaml next to it.
+# inject_skill_body is false here only: the skill must be routed to, not handed its body.
+name: find-missing-tests-trigger
+description: Trigger routing for find-missing-tests. Scores skill activation on the prompts in trigger_tests.yaml.
+skill: find-missing-tests
+schemaVersion: "1.0"
+version: "1.0"
+
+config:
+  trials_per_task: 1
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-5.5
+  # Relative to the spec dir. The vendored skill in ../skills, with its em-dashes replaced (the only change).
+  skill_directories:
+    - ../skills
+  inject_skill_body: false
+
+metrics:
+  - name: trigger_accuracy
+    weight: 1.0
+    threshold: 0.8
+    description: Share of trigger prompts routed correctly (trigger_tests.yaml).
+
+tasks:
+  - tasks/*.yaml
