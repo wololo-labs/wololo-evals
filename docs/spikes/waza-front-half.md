@@ -2,7 +2,7 @@
 
 Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, trigger tests, with/without A/B) with wololo-evals as the back half (mechanical scoring, gate)?
 
-**Recommendation: GO for waza as the front half.** Every front-half function ran end to end: auth (Q1), lint (Q2), trigger routing (Q3), paired with/without execution (Q4), and the kill-rate join on waza workspaces (Q5). The remaining build is glue items 5 and 6. The Q4 result (no detectable skill effect at 3 trials per arm) is a fixture limit, not a waza limit. See Go / no-go.
+**Recommendation: GO for waza as the front half.** Every front-half function ran end to end: auth (Q1), lint (Q2), trigger routing (Q3), paired with/without execution (Q4), and the kill-rate join on waza workspaces (Q5). The remaining build is glue items 5 and 6, with glue items 2 and 3 partly open; the complete list is under Open items. The Q4 result (no detectable skill effect at 3 trials per arm) is a fixture limit, not a waza limit. See Go / no-go.
 
 ## Verdicts
 
@@ -12,7 +12,7 @@ Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, 
 | Q2 | Well-formed (`check`, `spec verify`, `tokens`) | FAIL (waza flags) | find-missing-tests 665/500 tokens; test-driven-development 2213/500; agent file rejected by `waza check`; spec verify 0/1 covered |
 | Q3 | Does the skill fire (trigger tests) | PASS (weak) | Two identical runs. `skill.invoked` on 2 of 3 positive prompts, 0 of 3 negatives. Accuracy 83.3%, recall 66.7% |
 | Q4 | With/without A/B, 3 trials per arm | DONE, no detectable skill effect | With skills mean kill rate 0.3785, without 0.3686, gap +0.0099, pooled SD 0.0157 (gate's test set, rescored). waza verdict NEUTRAL (100% vs 100%) |
-| Q5 | The join (waza output to mutation scorer) | PASS (prototype) | Kill rate computed on each of the 6 full-run workspaces by `grade_kill_rate.py`. Four glue items still open |
+| Q5 | The join (waza output to mutation scorer) | PASS (prototype) | Kill rate computed on each of the 6 full-run workspaces by `grade_kill_rate.py`. Open items: see the complete list under Go / no-go |
 
 Spend (AI Credits, as reported by waza; waza gives no USD figure):
 
@@ -129,21 +129,33 @@ kill_rate 0.2373 (strict) · kill_rate_executed 0.4179 · ~5 s
 ### Glue status
 
 1. **Numeric score path.** Done in the prototype: `kill_rate.json` in the workspace.
-2. **Grader entrypoint.** Prototype exists (`grade_kill_rate.py`). Not yet a wrapper for `run_defect_detection` or `score_qe_rubric`.
-3. **Fixed test drop path.** Held in every scored run in this spike (`tests_generated/test_weight_boundary.py`). Waza does not enforce it; the prompt does.
+2. **Grader entrypoint, partly open.** `grade_kill_rate.py` wraps only the mutation scorer. `run_defect_detection` and `score_qe_rubric` are not wrapped.
+3. **Fixed test drop path, partly open.** Held in every scored run in this spike (`tests_generated/test_weight_boundary.py`). Waza does not enforce it; the prompt does.
 4. **Keep workspace and timeout.** Done: `--keep-workspace`, grader timeout 900 s.
 5. **Ingestion, open.** `gate` reads its own run directories. No converter from waza results JSON to that format.
 6. **Name mismatch, open.** Casebook `qe-test-authoring` vs shipped skills. Cause of 0.0833 still open (see Q3).
-7. **New: spec layout rules.** Fixtures and skill directories must sit inside the spec directory, with no `..` and no absolute paths. A skill directory may hold only parseable agent files.
-8. **New: `--task` filter drops trigger tests.** Trigger runs need at least one task to execute.
+7. **Constraint, not open.** Fixtures and skill directories must sit inside the spec directory, with no `..` and no absolute paths. A skill directory may hold only parseable agent files. The specs follow this.
+8. **Constraint, not open.** The `--task` filter drops trigger tests. Trigger runs need at least one task to execute.
+
+### Open items (complete list)
+
+1. Glue 5: ingestion converter from waza results JSON to gate run dirs. Build.
+2. Glue 6: casebook slug or shipped skill. Build. The cause of 0.0833 is open with it.
+3. Glue 2: defect and rubric scorers not wrapped for a waza workspace. Build.
+4. Glue 3: the test drop path is enforced by the prompt only. Design gap.
+5. Q4: whether the agent body reached the model in the with-skills arm is not proven. Evidence gap.
+6. Spend: the USD conversion of 90.64 AI Credits is open, and the $10 cap is unverified. Budget.
+7. Commit 153c8a1 on `slice-c-qe-gate` is not in this clone, so the Q3 correction is unverified here. Evidence gap.
+
+Closed: glue 1 (kill-rate sidecar) and glue 4 (keep-workspace, timeout).
 
 ## Go / no-go
 
-**GO: waza as the front half.** The spike question is whether waza runs the front half, and it does. The remaining build is glue.
+**GO: waza as the front half.** The spike question is whether waza runs the front half, and it does. The remaining build is the open items above.
 
 - Q4 reading: no detectable skill effect at 3 trials per arm (with 0.3785, without 0.3686, gap 0.0099, pooled SD 0.0157). The no-skill arm also passed waza's binary threshold 6 of 6, so this fixture does not separate the arms. This is a fixture limit, not a waza limit. Per the slice-c session, a capable model writes these tests unaided. The next work is a harder fixture where the no-skill arm fails, not more trials on this one.
-- Build remaining: glue item 5 (ingestion converter from waza results JSON to gate run dirs) and glue item 6 (rename the casebook `qe-test-authoring` slug or ship the skill). Item 6 is tied to the open Q3 cause.
-- Spend: 90.65 AI Credits metered across Q3 and Q4. USD conversion is open and the $10 cap is unverified. Model spend is on hold: no more trials.
+- Build remaining: the Build items in Open items (glue 5, glue 6, glue 2).
+- Spend: 90.64 AI Credits metered across Q3 and Q4. USD conversion is open and the $10 cap is unverified. Model spend is on hold: no more trials.
 
 ## Reproduce
 
