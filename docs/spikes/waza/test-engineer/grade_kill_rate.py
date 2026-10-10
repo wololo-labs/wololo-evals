@@ -6,7 +6,9 @@ workspace's quoting/, because the agent can write to the workspace. The suite is
 the shipped tests plus the tests_generated/ the agent wrote, the same set the gate
 scores in benchmarks/qe-skill/qe-target.json. The full report goes to kill_rate.json
 inside the workspace (waza's program grader is binary, so the number needs a
-sidecar), and the grader exits 0 when the kill rate meets the threshold.
+sidecar). Exit codes: 0 when the kill rate meets the threshold, 1 when it is below the
+threshold, 2 for an invalid run or a grader infrastructure failure. waza's program grader
+treats any non-zero code as a fail, so the code is for the operator, not for waza.
 """
 from __future__ import annotations
 
@@ -30,17 +32,17 @@ def main() -> int:
     tests = ws / "tests_generated"
     if not tests.is_dir():
         print(f"missing tests_generated/ under {ws}", file=sys.stderr)
-        return 1
+        return 2
     # The agent writes into this workspace, so it can plant symlinks at any depth. The scorer copies
     # these trees with shutil.copytree, which follows links and would run an outside file as a test.
     if tests.is_symlink() or any(p.is_symlink() for p in tests.rglob("*")):
         print("tests_generated/ contains a symlink; refusing to score", file=sys.stderr)
-        return 1
+        return 2
     try:
         report = run_mutation_analysis(target, [FIXTURE / "tests", tests], timeout_s=800)
     except MutationError as exc:
         print(f"mutation analysis failed: {exc}", file=sys.stderr)
-        return 1
+        return 2
     payload = {**report.as_dict(), "kill_rate": report.kill_rate, "threshold": THRESHOLD}
     # Exclusive create, then rename over the destination. A symlink the agent planted at either
     # name is replaced, never followed, so the write cannot land outside the workspace.
@@ -52,7 +54,7 @@ def main() -> int:
         os.replace(tmp, ws / "kill_rate.json")
     except OSError as exc:
         print(f"could not write kill_rate.json: {exc}", file=sys.stderr)
-        return 1
+        return 2
     print(f"kill_rate={report.kill_rate:.4f} executed={report.kill_rate_executed:.4f}")
     return 0 if report.kill_rate >= THRESHOLD else 1
 
