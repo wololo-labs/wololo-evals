@@ -622,6 +622,10 @@ def run_matrix(
         seeds = 1
 
     matrix_dir = ci.artefacts.matrix_dir(config.output_path, iteration, timestamp)
+    # Reusing a timestamp used to overwrite the earlier run file by file and
+    # leave its old summary beside new artefacts if this one died part way.
+    if matrix_dir.exists() and any(matrix_dir.iterdir()):
+        raise FileExistsError(f"{matrix_dir} already holds a run; pick a new timestamp")
     matrix_dir.mkdir(parents=True, exist_ok=True)
 
     cap = max_cost_usd if max_cost_usd is not None else config.max_cost_usd
