@@ -60,9 +60,12 @@ Flagger/Argo confirm-rollout integration when 06c lands:
    sample_count, observed_at}`. wololo-evals computes the live composite
    ITSELF from the pinned rubric's canary weights; a body containing a
    `composite` field is a 422. Windows dedupe on `(gate_id, window_id)`. The
-   FIRST window a gate receives is the stable / pre-shift cohort: its live
-   composite is frozen once as `baseline_composite` (first-writer wins), so
-   baseline and every later window share one metric space.
+   FIRST window a gate receives is taken to be the stable / pre-shift cohort:
+   its live composite is frozen once as `baseline_composite` (first-writer
+   wins), so baseline and every later window share one metric space. The
+   service does not check that the first window really is pre-shift; a late or
+   post-shift first window becomes the baseline, so the sender must deliver the
+   stable window first.
 3. **Verdict read (Flagger confirm-rollout shape, DOCTRINE 15.5)** —
    `GET /api/v1/canary-gates/:id/verdict` returns
    `{gate_status, live_composite, baseline_composite, windows_observed}`.
