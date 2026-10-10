@@ -3,7 +3,8 @@
 Q5 glue prototype. waza hands over the post-run workspace in WAZA_WORKSPACE_DIR.
 The code under test is the pristine fixture copy next to this file, never the
 workspace's quoting/, because the agent can write to the workspace. The suite is
-the tests_generated/ the agent wrote. The full report goes to kill_rate.json
+the shipped tests plus the tests_generated/ the agent wrote, the same set the gate
+scores in benchmarks/qe-skill/qe-target.json. The full report goes to kill_rate.json
 inside the workspace (waza's program grader is binary, so the number needs a
 sidecar), and the grader exits 0 when the kill rate meets the threshold.
 """
@@ -16,9 +17,11 @@ import sys
 
 from wololo_evals.scoring.mutation import MutationError, run_mutation_analysis
 
-THRESHOLD = 0.24  # benchmarks/qe-skill/qe-target.json: mutation_threshold
 HERE = pathlib.Path(__file__).resolve().parent
 FIXTURE = HERE / "fixtures" / "quoting-service"
+# The gate's own settings: same test set and threshold as benchmarks/qe-skill/qe-target.json.
+QE_TARGET = HERE.parents[3] / "benchmarks" / "qe-skill" / "qe-target.json"
+THRESHOLD = json.loads(QE_TARGET.read_text(encoding="utf-8"))["qe"]["mutation_threshold"]
 
 
 def main() -> int:
@@ -34,7 +37,7 @@ def main() -> int:
         print("tests_generated/ contains a symlink; refusing to score", file=sys.stderr)
         return 1
     try:
-        report = run_mutation_analysis(target, [tests], timeout_s=800)
+        report = run_mutation_analysis(target, [FIXTURE / "tests", tests], timeout_s=800)
     except MutationError as exc:
         print(f"mutation analysis failed: {exc}", file=sys.stderr)
         return 1
