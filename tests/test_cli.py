@@ -422,6 +422,34 @@ def test_trials_run_outside_the_repository_and_leave_a_retained_copy(tmp_path):
     assert not list(md.rglob("workspace/*/.git")), "a nested repository was retained"
 
 
+class CapturingAdapter(FakeAdapter):
+    """Writes its captures where the real adapters do: the trial's advisory dir."""
+
+    def run(self, spec):  # noqa: ANN001
+        adv = pathlib.Path(spec.cwd) / ci.ADVISORY_DIR
+        adv.mkdir(parents=True, exist_ok=True)
+        (adv / f"{self.engine_id}.stdout.log").write_text("out", encoding="utf-8")
+        (adv / f"{self.engine_id}.raw.jsonl").write_text("{}\n", encoding="utf-8")
+        return super().run(spec)
+
+
+def test_engine_captures_survive_at_the_artefact_paths(tmp_path):
+    # The trial directory is deleted after the run, so the captures the engine
+    # wrote there must reach the artefact tree at the paths readers use.
+    mc = _make_project(tmp_path)
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), lambda e: CapturingAdapter(e), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    cases = list(md.rglob("seeds/*/cases/*.json"))
+    assert cases, "no case ran"
+    for case in cases:
+        seed, case_id = int(case.parent.parent.name), case.stem
+        run_dir = case.parent.parent.parent.parent
+        assert ci.artefacts.stdout_path(run_dir, seed, case_id, "claude").is_file()
+        assert ci.artefacts.raw_event_path(run_dir, seed, case_id, "claude").is_file()
+
+
 def test_only_cases_restricts_the_run_and_refuses_unknown_ids(tmp_path):
     # Calibrating a few cases of a casebook on their own means running them
     # without the rest, and a typo must fail loudly rather than run nothing.
