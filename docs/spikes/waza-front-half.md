@@ -113,6 +113,7 @@ Per-trial mutation kill rate on the gate's own terms (shipped tests plus `tests_
 - (a) Q4 for test-engineer is UNRESOLVED. Whether the with-skills arm loaded the agent cannot be settled from the artifacts, so Q4 cannot be read as the agent's effect. The earlier INVALID label overstated the evidence.
 - Artifacts: the three live with-skills runs have status `passed` and `error_msg` null. The mock run failed on the same file through a path the live run did not hit. The live log has no WARN lines, but whether waza prints the Copilot path's skill-resolution warning at the level in use is unverified. Settling it needs a logged session or a fixed agent, and both need model spend, which is on hold. Withdrawn: the earlier wording that the agent was loaded per the trace, and the claim that the `Skill: test-engineer` line showed resolution. That line is the eval's name, and no trace shows the agent body reached the model. On the Copilot path, `buildSkillSystemMessage` (`internal/execution/copilot.go:1046`) logs a warning and injects nothing when the agent fails to parse, so the run continues without the agent body. The warning does not appear in the saved Q4 log, so this is inference from source. [inference]
 - Consequence: Q4 cannot test test-engineer in its published form, so its result says nothing about the agent, either way.
+- Answer key: every Q4 kill rate so far came from workspaces that contained the answer key. The agent's copy held `seeded_defects.json` and a README that described the seeded defects. The key was removed from the spec copies in commit `797de7b`. These runs are not clean measurements of unaided test writing.
 
 ## Q5: the join
 
@@ -137,6 +138,8 @@ kill_rate 0.2373 (strict) · kill_rate_executed 0.4179 · ~5 s
 
 - The shipped suite scores 0.2373 against `mutation_threshold` 0.24 in `benchmarks/qe-skill/qe-target.json`. It fails that threshold by 0.003. [fact]
 - Waza facts: the `program` grader receives the agent output on stdin and `WAZA_WORKSPACE_DIR`, and returns binary pass/fail (`docs/graders/program.md`). Results JSON records `workspace_dir` (`internal/models/outcome.go:215`). [fact]
+
+- Answer key: every Q5 kill rate so far was computed in workspaces that contained the answer key, so none of them is a clean measurement. The 0.2373 baseline is different: it scores the shipped tests alone against the fixture, with no agent workspace involved.
 
 ### Glue status
 
