@@ -300,7 +300,7 @@ and the `task_outcome` slot is where the QE number lives:
 | `qe_rubric` | the weighted `qe-review` composite | 0.8782 | 0.9033 |
 | `qe_assertion_strength` | share of tests making a discriminating expectation | 0.8571 | 0.8959 |
 | `qe_changed_line_coverage` | share of the declared changed lines executed | 0.7368 | 0.7847 |
-| `qe_flake_resistance` | share of tests whose outcome holds across hash seeds | 1.0000 | 1.0000 |
+| `qe_flake_resistance` | share of tests that pass and hold their outcome across hash seeds | 1.0000 | 1.0000 |
 | `qe_no_tautological_assertions` | share of assertions that can actually fail | 1.0000 | 0.9943 |
 
 Baseline is the no-agent arm: the repository's shipped suite, run as it stands.
