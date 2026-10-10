@@ -22,7 +22,7 @@ Spend (AI Credits, as reported by waza; waza gives no USD figure):
 | Q3 trigger, rerun | 1 | 33.24 |
 | Q4 pilot (1 trial per arm) | 2 | 6.04 |
 | Q4 full (3 trials per arm) | 6 | 18.03 |
-| **Total metered** | | **90.65** |
+| **Total metered** | | **90.64** (sum of the rounded rows; unrounded 90.646) |
 
 The earlier Q4 pilot, whose with-skills arm failed on agent parsing, was not metered in this total. Failed setup attempts errored at 0 s and cost nothing. The $10 USD cap cannot be checked from these numbers.
 
@@ -104,7 +104,7 @@ Per-trial mutation kill rate on the gate's own terms (shipped tests plus `tests_
 | **Mean** | **0.3785** (SD 0.0122, range 0.0212) | **0.3686** (SD 0.0185, range 0.0339) |
 
 - Gap, with minus without: **+0.0099**. Pooled SD 0.0157. The gap is smaller than the pooled SD and smaller than either arm's range. At 3 trials per arm this run cannot tell the arms apart. [fact]
-- The earlier figures (0.3461 vs 0.3291, gap 0.0170, best case 85) are withdrawn. They scored `tests_generated` alone against the workspace's own `quoting/`, which is not the gate's quantity. The rescored values come from the same six kept workspaces; no model was called to produce them.
+- The earlier figures (0.3461 vs 0.3291, gap 0.0170, best case 85 of 236) are withdrawn. The original 86 of 236 figure was the no-skill trial 1 under the old scoring, also withdrawn. They scored `tests_generated` alone against the workspace's own `quoting/`, which is not the gate's quantity. The rescored values come from the same six kept workspaces; no model was called to produce them.
 - The rescored values are not directly comparable to the 0.2373 baseline in Q5. That baseline scores the shipped tests alone, against the fixture.
 - waza's own binary grader passed 6 of 6 runs at the 0.24 threshold, and waza reports NEUTRAL (100% vs 100%). Its own metric gives no signal here, so the kill rate is the metric that carries the comparison.
 - Test files differ between arms: different hashes, and in the pilot workspaces 10 vs 14 test functions. Pilot scores were under the withdrawn grader and are not reported.
