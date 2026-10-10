@@ -362,3 +362,19 @@ def test_the_workspace_digest_is_content_addressed(tmp_path):
     assert mutation.workspace_digest(a) == mutation.workspace_digest(b)
     (b / "test_x.py").write_text("assert False\n", encoding="utf-8")
     assert mutation.workspace_digest(a) != mutation.workspace_digest(b)
+
+
+def _strength(tmp_path, body):
+    (tmp_path / "test_mod.py").write_text(
+        "import pytest\nfrom pkg.mod import f\n\n\ndef test_x():\n" + body
+    )
+    return qe_rubric.assertion_strength(tmp_path, "pkg")[0]
+
+
+def test_a_broad_exception_expectation_is_not_a_strong_assertion(tmp_path):
+    # `raises(Exception)` passes for any failure inside the call, an
+    # unrelated TypeError included, so it pins nothing about the target.
+    assert _strength(tmp_path, "    with pytest.raises(Exception):\n        f(1)\n") == 0.0
+    assert _strength(tmp_path, "    with pytest.raises(BaseException):\n        f(1)\n") == 0.0
+    assert _strength(tmp_path, "    with pytest.raises((Exception,)):\n        f(1)\n") == 0.0
+    assert _strength(tmp_path, "    with pytest.raises(ValueError):\n        f(1)\n") == 1.0

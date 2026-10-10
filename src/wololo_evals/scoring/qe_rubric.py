@@ -249,9 +249,26 @@ def _test_functions(tree: ast.Module) -> list[ast.FunctionDef | ast.AsyncFunctio
     ]
 
 
+_BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
+
+
+def _is_broad_expectation(call: ast.Call) -> bool:
+    """``pytest.raises(Exception)``: it passes for any failure inside the
+    block, so it pins nothing about the target."""
+    if not call.args:
+        return False  # `match=`/`expected_exception=` forms: judge as specific
+    arg = call.args[0]
+    kinds = arg.elts if isinstance(arg, (ast.Tuple, ast.List)) else [arg]
+    names = {
+        k.id if isinstance(k, ast.Name) else getattr(k, "attr", None) for k in kinds
+    }
+    return bool(names) and names <= _BROAD_EXCEPTIONS
+
+
 def _raises_blocks(fn: ast.AST, target_names: set[str]) -> int:
-    """``with pytest.raises(...)`` bodies that call into the target: an
-    error-path expectation is a strong assertion even with no ``assert``."""
+    """``with pytest.raises(SomeError)`` bodies that call into the target: an
+    error-path expectation is a strong assertion even with no ``assert``.
+    A blanket ``Exception`` does not count (see :func:`_is_broad_expectation`)."""
     count = 0
     for node in ast.walk(fn):
         if not isinstance(node, ast.With):
@@ -262,6 +279,7 @@ def _raises_blocks(fn: ast.AST, target_names: set[str]) -> int:
                 isinstance(call, ast.Call)
                 and isinstance(call.func, ast.Attribute)
                 and call.func.attr == "raises"
+                and not _is_broad_expectation(call)
                 and any(_references_target(stmt, target_names) for stmt in node.body)
             ):
                 count += 1
