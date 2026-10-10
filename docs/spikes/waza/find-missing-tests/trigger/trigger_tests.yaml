@@ -5,7 +5,7 @@ should_trigger_prompts:
   - prompt: "Find the missing test cases in this codebase and list them. Do not create any GitHub issues."
     reason: Direct gap-analysis request, matches the skill description
     confidence: high
-  - prompt: "What tests are we missing for the payments module?"
+  - prompt: "What tests are we missing for the payments module? Do not create any GitHub issues."
     reason: Asks for untested behaviour, the skill's core job
     confidence: high
   - prompt: "Audit our test coverage gaps and list them. Do not open any GitHub issues."
