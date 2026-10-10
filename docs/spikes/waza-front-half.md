@@ -114,7 +114,16 @@ Per-trial mutation kill rate on the gate's own terms (shipped tests plus `tests_
 
 ## Q5: the join
 
-Post-step, not a waza-native grader. `docs/spikes/waza/test-engineer/grade_kill_rate.py` runs as a waza `program` grader. It reads `WAZA_WORKSPACE_DIR`, scores `tests_generated/` against `quoting/` with `run_mutation_analysis`, writes the full report to `kill_rate.json` in the workspace, and exits 0 at or above 0.24. waza's program grader is binary, so the number travels in the sidecar. The grader ran in about 4.5 s per run.
+Post-step, not a waza-native grader. `docs/spikes/waza/test-engineer/grade_kill_rate.py` runs as a waza `program` grader, with the committed behaviour below:
+
+- Code under test: the pristine fixture copy next to the grader (`fixtures/quoting-service/quoting`), never the workspace's `quoting/`.
+- Test set: the shipped tests from that pristine copy, plus `tests_generated/` from the workspace. This is the gate's set in `benchmarks/qe-skill/qe-target.json`.
+- Threshold: read from `qe-target.json` (0.24).
+- Refusals: an unset or non-directory `WAZA_WORKSPACE_DIR`; any symlink under `tests_generated/`; any file there that is not a plain `test_*.py` module or that shares a shipped name (so no `conftest.py` and no shadowing).
+- Exit codes: 0 at or above threshold, 1 below threshold, 2 invalid run or grader failure.
+- Output: the full report to `kill_rate.json` in the workspace, written through a temp file and rename. waza's program grader is binary, so the number travels in the sidecar. About 4.5 s per run.
+
+The six rescored Q4 workspaces (commit `6945e68`) were scored before the refusal checks were added. Those checks reject only the conftest and shadowing inputs, which the rescored workspaces did not contain, but the numbers were not re-run with the final grader.
 
 Baseline on the fixture with its own shipped tests (no waza):
 
