@@ -467,3 +467,29 @@ def test_a_guard_on_an_absent_signal_still_refuses(tmp_path):
     verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",))
     assert verdict.exit_code == 2
     assert "absent" in verdict.reason
+
+
+@pytest.mark.parametrize("confidence", [0.0, 1.0, -0.1, 1.5, float("nan")])
+def test_bootstrap_rejects_a_confidence_outside_the_open_unit_interval(confidence):
+    # confidence 0 or 1 collapses the percentile band to a point or to the
+    # extremes and was accepted as a real interval.
+    with pytest.raises(ValueError, match="confidence"):
+        ab.paired_bootstrap_ci([0.1, 0.2, 0.3], confidence=confidence)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -1.0, 0.0])
+def test_bootstrap_rejects_unusable_weights_and_deltas(bad):
+    with pytest.raises(ValueError, match="weight"):
+        ab.paired_bootstrap_ci([0.1, 0.2], weights=[1.0, bad])
+    with pytest.raises(ValueError, match="delta"):
+        ab.paired_bootstrap_ci([0.1, float("nan")])
+
+
+def test_comparing_only_quarantined_cases_is_an_error_not_a_neutral_verdict():
+    p = ab.CasePair(
+        case_id="a", baseline_score=1.0, candidate_score=0.0, baseline_passed=True,
+        candidate_passed=False, baseline_hard_failed=False, candidate_hard_failed=False,
+        quarantined=True,
+    )
+    with pytest.raises(ValueError, match="no comparable"):
+        ab.compare([p])

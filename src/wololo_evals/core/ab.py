@@ -156,6 +156,12 @@ def paired_bootstrap_ci(
         weights = [1.0] * n
     elif len(weights) != n:
         raise ValueError(f"weights length {len(weights)} != deltas length {n}")
+    if not 0.0 < confidence < 1.0:  # also rejects NaN
+        raise ValueError(f"confidence must be strictly between 0 and 1, got {confidence}")
+    if not all(math.isfinite(d) for d in deltas):
+        raise ValueError("every delta must be a finite number")
+    if not all(math.isfinite(w) and w > 0 for w in weights):
+        raise ValueError("every weight must be a finite number above zero")
 
     rng = random.Random(seed)
     idxs = range(n)
@@ -237,23 +243,24 @@ def compare(
     """
     gating = [p for p in pairs if not p.quarantined]
     n_quarantined = len(pairs) - len(gating)
+    if not gating:
+        # A neutral CI over nothing reads as "no regression" to a caller that
+        # skips the check the CLI makes. Refuse instead.
+        raise ValueError("no comparable (non-quarantined) cases to compare")
 
-    if gating:
-        deltas = [p.delta for p in gating]
-        weights = [p.case_weight for p in gating]
-        mean_delta = _weighted_mean(deltas, weights)
-        ci_low, ci_high = paired_bootstrap_ci(
-            deltas,
-            resamples=resamples,
-            confidence=confidence,
-            weights=weights,
-            seed=seed,
-        )
-    else:
-        mean_delta = ci_low = ci_high = 0.0
+    deltas = [p.delta for p in gating]
+    weights = [p.case_weight for p in gating]
+    mean_delta = _weighted_mean(deltas, weights)
+    ci_low, ci_high = paired_bootstrap_ci(
+        deltas,
+        resamples=resamples,
+        confidence=confidence,
+        weights=weights,
+        seed=seed,
+    )
 
-    significant_regression = bool(gating) and ci_high < -max_regression
-    significant_improvement = bool(gating) and ci_low > max_regression
+    significant_regression = ci_high < -max_regression
+    significant_improvement = ci_low > max_regression
     hard = tuple(p.case_id for p in gating if p.newly_failing_hard_gate)
 
     return ABVerdict(
