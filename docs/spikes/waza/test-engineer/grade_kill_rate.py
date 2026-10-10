@@ -9,6 +9,12 @@ inside the workspace (waza's program grader is binary, so the number needs a
 sidecar). Exit codes: 0 when the kill rate meets the threshold, 1 when it is below the
 threshold, 2 for an invalid run or a grader infrastructure failure. waza's program grader
 treats any non-zero code as a fail, so the code is for the operator, not for waza.
+
+Known limitation: this grader does not resist gaming. Agent test code runs as a process with this
+user's file and process access. mutmut sets MUTANT_UNDER_TEST at runtime, so a test can read which
+mutant is live and behave differently under it, and the kill rate can be inflated. File-name, symlink
+and environment checks cannot stop that. Resisting it needs process isolation (a container or VM per
+scoring run), which this grader does not have. Do not treat its numbers as tamper-proof.
 """
 from __future__ import annotations
 
