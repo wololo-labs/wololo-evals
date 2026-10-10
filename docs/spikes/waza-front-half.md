@@ -106,7 +106,8 @@ Per-trial mutation kill rate, from `grade_kill_rate.py` on each kept workspace (
 - Gap, with minus without: **+0.0170**. Pooled SD 0.0277. The gap is smaller than the pooled SD and smaller than either arm's range. At 3 trials per arm this run cannot tell the arms apart. [fact]
 - waza's own binary grader passed 6 of 6 runs at the 0.24 threshold, and waza reports NEUTRAL (100% vs 100%). Its own metric gives no signal here, so the kill rate is the metric that carries the comparison.
 - Test files differ between arms (different hashes, 10 vs 14 test functions in the two arms checked), but the kill rate for these two arms matched in the pilot (both 0.3602). Not a general claim.
-- Setup finding: the with-skills arm first failed because waza parses every `.agent.md` in a skill directory. A sibling agent, `playwright-test-generator.agent.md`, does not parse (`tools` given as a string). The spec now points at an isolated directory with only `test-engineer.agent.md`.
+- Setup finding (corrected): an earlier with-skills arm errored once, when the shared ainb-toolkit agents dir was used. The error was a YAML unmarshal failure on `playwright-test-generator.agent.md`. The cause is not established. `test-engineer.agent.md` has the same comma-separated `tools` shape and parses without error: the final run log has no parse warnings and prints `Skill: test-engineer`. The playwright file's exact failing field was not isolated, and that log was overwritten.
+- Was test-engineer loaded in the with-skills arm? Evidence it was resolved: `Skill: test-engineer` printed and no parse warning appeared, so waza had the agent definition. Not shown: a per-session record that the agent body reached the model. The results digest holds only bash tool calls and names no skill. So Q4 cannot fully separate "not loaded" from "no effect". The resolution evidence points to loaded, but that is not proof.
 
 ## Q5: the join
 
