@@ -19,6 +19,6 @@ should_not_trigger_prompts:
   - prompt: "What's the weather like in Lisbon today?"
     reason: Unrelated question
     confidence: high
-  - prompt: "Deploy the staging build to Azure"
-    reason: Deployment task
+  - prompt: "Write a four-line haiku about parcel delivery. Do not use any tools."
+    reason: Creative writing with no tool use and no external effect, so a tool-enabled session cannot act on it
     confidence: high
