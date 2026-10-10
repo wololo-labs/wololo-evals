@@ -280,11 +280,14 @@ waza check $Q/skills/test-driven-development
 waza tokens count $Q/agents/test-engineer.agent.md
 waza spec verify $Q/skills/find-missing-tests docs/spikes/waza/find-missing-tests/eval.yaml
 
-# Q3: trigger tests. --task filter drops all tests, so use a scratch spec dir
-#     with trigger_tests.yaml, eval.yaml and a no-tool carrier task (tasks/noop.yaml).
-waza run <scratch-spec>/eval.yaml -v --output-dir <out>
+# Q3: trigger tests, in their own spec (trigger/eval.yaml, inject_skill_body false, no-tool carrier task)
+waza run docs/spikes/waza/find-missing-tests/trigger/eval.yaml -v --output-dir <out>
 
-# Q4 + Q5: A/B on the test-engineer task, grader writes kill_rate.json per workspace
+# find-missing-tests eval: run only through the isolation wrapper (no GitHub credential for the agent)
+docs/spikes/waza/find-missing-tests/run-isolated.sh -v --output-dir <out>
+
+# Q4 + Q5: A/B on the test-engineer task. NOT RUNNABLE AS PUBLISHED: the agent does not parse, so
+# this command will not produce a valid Q4 result until the spec's top comment is resolved.
 waza run docs/spikes/waza/test-engineer/eval.yaml --baseline --trials 3 --keep-workspace -v --output-dir <out>
 
 # Q5 baseline: scorer on the fixture (venv with the mutation extra)
