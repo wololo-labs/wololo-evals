@@ -606,6 +606,12 @@ def run_matrix(
     """
     benchmark = load_benchmark(config.benchmark_dir)
     _validate_engines(config, benchmark)
+    toml = config.benchmark_dir / "cases.toml"
+    if toml.is_file():
+        # Editing cases.toml without recompiling left the run on the old cases.
+        fresh, why = cases_compile.check(toml, config.benchmark_dir / "cases.jsonl")
+        if not fresh:
+            raise ValueError(f"stale compiled casebook: {why}")
     all_cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
     all_cases = _select_cases(config, all_cases)
     combos = build_combos(config)

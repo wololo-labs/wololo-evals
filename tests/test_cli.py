@@ -757,3 +757,14 @@ def test_a_finished_output_directory_is_not_overwritten(tmp_path):
     matrix_mod.run_matrix(load_matrix_config(mc), adapter_factory(), make_grader(), **kw)
     with pytest.raises(FileExistsError, match="already holds"):
         matrix_mod.run_matrix(load_matrix_config(mc), adapter_factory(), make_grader(), **kw)
+
+
+def test_a_stale_compiled_casebook_is_refused(tmp_path):
+    mc = _make_project(tmp_path)
+    toml = tmp_path / "benchmarks" / "demo" / "cases.toml"
+    toml.write_text(toml.read_text().replace("explains the risk", "explains the danger"))
+    with pytest.raises(ValueError, match="stale"):
+        matrix_mod.run_matrix(
+            load_matrix_config(mc), adapter_factory(), make_grader(),
+            timestamp="20260719T000000Z",
+        )
