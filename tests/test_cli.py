@@ -350,6 +350,27 @@ def test_a_case_workspace_cannot_commit_to_the_host_repository(tmp_path):
         assert (ws / ".git").is_dir(), f"{ws} is not sealed from the host repository"
 
 
+def test_only_cases_restricts_the_run_and_refuses_unknown_ids(tmp_path):
+    # Calibrating a few cases of a casebook on their own means running them
+    # without the rest, and a typo must fail loudly rather than run nothing.
+    mc = _make_project(tmp_path)
+    mc.write_text('only_cases = ["c1"]\n' + mc.read_text())
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    ran = {p.stem for p in md.rglob("seeds/*/cases/*.json")}
+    assert ran == {"c1"}
+
+    bad = _make_project(tmp_path / "bad")
+    bad.write_text('only_cases = ["no-such-case"]\n' + bad.read_text())
+    with pytest.raises(ValueError, match="unknown case ids"):
+        matrix_mod.run_matrix(
+            load_matrix_config(bad), adapter_factory(), make_grader(),
+            timestamp="20260719T000000Z",
+        )
+
+
 def test_expected_skill_override_reaches_every_case(tmp_path):
     # One benchmark, two assets doing the same job under different slugs: the
     # matrix says which slug this arm ships, so activation is scored against

@@ -92,6 +92,10 @@ class MatrixConfig:
     #: preamble naming the asset scores its contents, no preamble scores
     #: discovery too.
     prompt_preamble: Optional[str] = None
+    #: Run only these case ids. Lets one casebook be calibrated a few cases at a
+    #: time, for instance a control run on cases that have not been measured
+    #: yet, without copying the casebook.
+    only_cases: Sequence[str] = ()
     models: Sequence[ModelEntry] = ()
     prompts: Sequence[PromptEntry] = ()
     baselines: Sequence[BaselineEntry] = ()
@@ -185,6 +189,7 @@ def load_matrix_config(path: str | pathlib.Path) -> MatrixConfig:
         fixtures_dir=data.get("fixtures_dir"),
         expected_skill=data.get("expected_skill"),
         prompt_preamble=data.get("prompt_preamble"),
+        only_cases=tuple(str(x) for x in data.get("only_cases", ())),
         models=tuple(models),
         prompts=tuple(prompts),
         baselines=tuple(baselines),

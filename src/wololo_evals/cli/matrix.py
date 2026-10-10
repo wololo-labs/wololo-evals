@@ -484,6 +484,12 @@ def run_matrix(
     benchmark = load_benchmark(config.benchmark_dir)
     _validate_engines(config, benchmark)
     all_cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    if config.only_cases:
+        wanted = set(config.only_cases)
+        unknown = wanted - {case.case_id for case in all_cases}
+        if unknown:
+            raise ValueError(f"only_cases names unknown case ids: {sorted(unknown)}")
+        all_cases = [case for case in all_cases if case.case_id in wanted]
     if config.expected_skill:
         # The benchmark names the skill it was written around; the asset under
         # evaluation may ship the same capability under its own slug, and
