@@ -382,7 +382,8 @@ def _pytest_outcomes(
 def flake_resistance(
     workspace: pathlib.Path, *, repeats: int = _REPEATS, timeout_s: int = _DEFAULT_TIMEOUT_S
 ) -> tuple[float, dict]:
-    """Share of tests whose outcome is identical across ``repeats`` runs.
+    """Share of tests that pass identically across ``repeats`` runs. A test that
+    fails or errors on every run does not count: it is stable, not healthy.
 
     Each run gets a different ``PYTHONHASHSEED``, which is what shakes out the
     common flake source in generated suites: an expectation that depends on
@@ -407,11 +408,19 @@ def flake_resistance(
         tid for tid in ids
         if len({r.get(tid, "MISSING") for r in runs}) > 1
     )
-    score = ((len(ids) - len(unstable)) / len(ids)) if ids else 0.0
+    # A test that fails or errors on every run is stable but not healthy, so it
+    # is not resistant either; counting it as one scored a broken suite 1.0.
+    failing = sorted(
+        tid for tid in ids
+        if tid not in unstable and runs[0].get(tid) in ("FAILED", "ERROR")
+    )
+    bad = len(unstable) + len(failing)
+    score = ((len(ids) - bad) / len(ids)) if ids else 0.0
     return score, {
         "repeats": repeats,
         "tests": len(ids),
         "unstable": unstable,
+        "failing": failing,
         "outcomes": runs[0],
     }
 

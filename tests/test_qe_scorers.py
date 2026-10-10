@@ -378,3 +378,16 @@ def test_a_broad_exception_expectation_is_not_a_strong_assertion(tmp_path):
     assert _strength(tmp_path, "    with pytest.raises(BaseException):\n        f(1)\n") == 0.0
     assert _strength(tmp_path, "    with pytest.raises((Exception,)):\n        f(1)\n") == 0.0
     assert _strength(tmp_path, "    with pytest.raises(ValueError):\n        f(1)\n") == 1.0
+
+
+def test_a_suite_that_fails_every_run_is_not_flake_resistant(tmp_path):
+    # Failing identically on every seed is stable, not healthy. It used to
+    # score 1.0 on flake_resistance.
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_a.py").write_text(
+        "def test_ok():\n    assert True\n\n\ndef test_broken():\n    assert False\n"
+    )
+    score, details = qe_rubric.flake_resistance(tmp_path, repeats=2)
+    assert score == 0.5
+    assert details["failing"] == ["tests/test_a.py::test_broken"]
+    assert details["unstable"] == []
