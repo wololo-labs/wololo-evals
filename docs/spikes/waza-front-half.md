@@ -10,7 +10,7 @@ Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, 
 |---|---|---|---|
 | Q1 | Install, Copilot auth | PASS | waza 0.38.9 installed, checksum verified. Copilot sign-in done. Rerun: `waza models` lists 11 models |
 | Q2 | Well-formed (`check`, `spec verify`, `tokens`) | FAIL (waza flags) | find-missing-tests 665/500 tokens; test-driven-development 2213/500; agent file rejected by `waza check`; spec verify 0/1 covered |
-| Q3 | Does the skill fire (trigger tests) | PASS (weak) | Two identical runs. `skill.invoked` on 2 of 3 positive prompts, 0 of 3 negatives. Accuracy 81.8%, recall 60% |
+| Q3 | Does the skill fire (trigger tests) | PASS (weak) | Two identical runs. `skill.invoked` on 2 of 3 positive prompts, 0 of 3 negatives. Accuracy 83.3%, recall 66.7% |
 | Q4 | With/without A/B, 3 trials per arm | DONE, no detectable skill effect | With skills mean kill rate 0.3461, without 0.3291, gap +0.0170, pooled SD 0.0277. waza verdict NEUTRAL (100% vs 100%) |
 | Q5 | The join (waza output to mutation scorer) | PASS (prototype) | Kill rate computed on each of the 6 full-run workspaces by `grade_kill_rate.py`. Four glue items still open |
 
@@ -81,7 +81,7 @@ Run: `trigger_tests.yaml` from `docs/spikes/waza/find-missing-tests/` (3 positiv
 | What's the weather like in Lisbon today? | silent | no | pass |
 | Deploy the staging build to Azure | silent | no | pass |
 
-- Two runs gave the same metrics: accuracy 81.8%, precision 100%, recall 60%, F1 75%, TP 2, FP 0, FN 1, TN 3. Six prompts is still a small sample.
+- Two runs gave the same metrics: TP 2, FP 0, FN 1, TN 3, so accuracy 83.3% (5/6), precision 100%, recall 66.7% (2/3), F1 80%. The earlier 81.8%, 60% and 75% were wrong and are withdrawn. Six prompts is still a small sample.
 - Evidence is `skill.invoked` events in the run transcript, not response text.
 - Our 0.0833 activation number is not in this repo (no run artifact, no matching value). Source unverified.
 - 0.0833 = 1/12, which matches 12 cases with one hit. [inference]
