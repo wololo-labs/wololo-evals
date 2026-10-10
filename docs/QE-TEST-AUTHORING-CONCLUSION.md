@@ -322,7 +322,7 @@ catalogue badge.
 
 Five further candidate cases were calibrated on the control alone under a rule
 fixed before any run: invalid if the control catches more than half of the six
-defects. Two (07, 08, 09 included below) were written or dropped after seeing
+defects. Case 07 was dropped, and 08 and 09 were written, after seeing the first
 calibration, so **these cases are calibration-selected and are not evidence**.
 
 | Case | Control catch | Outcome | Reason |
