@@ -493,3 +493,24 @@ def test_comparing_only_quarantined_cases_is_an_error_not_a_neutral_verdict():
     )
     with pytest.raises(ValueError, match="no comparable"):
         ab.compare([p])
+
+
+def test_duplicate_case_ids_in_a_scorecard_are_refused(tmp_path):
+    # A dict keyed by case_id kept the last row, so a failing duplicate could
+    # hide behind a passing one.
+    cand = [_case("c0", 0.2), _case("c0", 0.95), _case("c1", 0.9), _case("c2", 0.9)]
+    base = [_case(f"c{i}", 0.9) for i in range(3)]
+    run, baseline = _pair(tmp_path, cand, base)
+    with pytest.raises(gate_mod.GateError, match="duplicate case_id"):
+        gate_mod.evaluate(run, baseline)
+
+
+def test_an_unknown_signal_verdict_is_refused_not_scored(tmp_path):
+    # Anything other than pass/fail/skipped/evaluator_error was averaged in,
+    # with a missing score read as 0.0.
+    cand = [_case(f"c{i}", 0.9) for i in range(4)]
+    cand[0]["signals"][0]["verdict"] = "errored"
+    base = [_case(f"c{i}", 0.9) for i in range(4)]
+    run, baseline = _pair(tmp_path, cand, base)
+    with pytest.raises(gate_mod.GateError, match="unknown verdict 'errored'"):
+        gate_mod.evaluate(run, baseline)

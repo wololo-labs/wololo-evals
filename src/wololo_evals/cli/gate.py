@@ -189,6 +189,7 @@ def _load_run(run_dir: str | pathlib.Path) -> _RunView:
             raise GateError(f"combo {combo.get('combo_id')!r} scorecard missing: {sc_path}")
         sc = json.loads(sc_path.read_text(encoding="utf-8"))
         judge_disabled = judge_disabled or bool(sc.get("judge_disabled"))
+        _check_scorecard(sc, sc_path)
         for case in sc.get("cases", []):
             if _case_has_active_judge(case.get("signals", [])):
                 has_active_judge = True
@@ -213,6 +214,28 @@ def _load_run(run_dir: str | pathlib.Path) -> _RunView:
         has_active_judge=has_active_judge,
         combos=tuple(combos),
     )
+
+
+def _check_scorecard(sc: Mapping[str, object], path: pathlib.Path) -> None:
+    """Refuse a scorecard whose rows cannot be read unambiguously.
+
+    A repeated case_id kept only the last row, so a failing duplicate hid
+    behind a passing one; a verdict outside the known set was averaged in with
+    a missing score read as 0.0.
+    """
+    seen: set[str] = set()
+    for case in sc.get("cases", []):
+        cid = str(case.get("case_id"))
+        if cid in seen:
+            raise GateError(f"{path}: duplicate case_id {cid!r}")
+        seen.add(cid)
+        for signal in case.get("signals", []):
+            verdict = signal.get("verdict")
+            if verdict not in ci.SIGNAL_VERDICTS:
+                raise GateError(
+                    f"{path}: case {cid!r} signal {signal.get('evaluator_id')!r} "
+                    f"has unknown verdict {verdict!r}"
+                )
 
 
 def _case_rows(sc: Mapping[str, object]) -> dict[str, Mapping[str, object]]:
