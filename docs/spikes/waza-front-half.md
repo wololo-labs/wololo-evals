@@ -11,7 +11,7 @@ Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, 
 | Q1 | Install, Copilot auth | PASS | waza 0.38.9 installed, checksum verified. Copilot sign-in done. Rerun: `waza models` lists 11 models |
 | Q2 | Well-formed (`check`, `spec verify`, `tokens`) | FAIL (waza flags) | find-missing-tests 665/500 tokens; test-driven-development 2213/500; agent file rejected by `waza check`; spec verify 0/1 covered |
 | Q3 | Does the skill fire (trigger tests) | PASS (weak) | Two identical runs. `skill.invoked` on 2 of 3 positive prompts, 0 of 3 negatives. Accuracy 83.3%, recall 66.7% |
-| Q4 | With/without A/B, 3 trials per arm | DONE, no detectable skill effect | With skills mean kill rate 0.3461, without 0.3291, gap +0.0170, pooled SD 0.0277. waza verdict NEUTRAL (100% vs 100%) |
+| Q4 | With/without A/B, 3 trials per arm | DONE, no detectable skill effect | With skills mean kill rate 0.3785, without 0.3686, gap +0.0099, pooled SD 0.0157 (gate's test set, rescored). waza verdict NEUTRAL (100% vs 100%) |
 | Q5 | The join (waza output to mutation scorer) | PASS (prototype) | Kill rate computed on each of the 6 full-run workspaces by `grade_kill_rate.py`. Four glue items still open |
 
 Spend (AI Credits, as reported by waza; waza gives no USD figure):
@@ -94,18 +94,20 @@ Run: `trigger_tests.yaml` from `docs/spikes/waza/find-missing-tests/` (3 positiv
 
 Spec: `docs/spikes/waza/test-engineer/eval.yaml`. Task: write pytest tests for the `weight_grams` boundary in `quoting/`, into `tests_generated/`. Model `claude-sonnet-5.5`, `--baseline --trials 3 --keep-workspace`. The task forbids touching `quoting/` and filing issues.
 
-Per-trial mutation kill rate, from `grade_kill_rate.py` on each kept workspace (computed, 85 of 236 mutants killed in the best case):
+Per-trial mutation kill rate on the gate's own terms (shipped tests plus `tests_generated`, scored against the pristine fixture), from the fixed `grade_kill_rate.py` on each kept workspace. Computed. Best case is 92 of 236 mutants killed (no-skill trial 1, 0.3898).
 
 | Trial | With skills | Without skills |
 |---|---|---|
-| 1 | 0.3178 | 0.3644 |
-| 2 | 0.3602 | 0.3093 |
-| 3 | 0.3602 | 0.3136 |
-| **Mean** | **0.3461** (SD 0.0245, range 0.0424) | **0.3291** (SD 0.0306, range 0.0551) |
+| 1 | 0.3644 (86/236) | 0.3898 (92/236) |
+| 2 | 0.3856 (91/236) | 0.3559 (84/236) |
+| 3 | 0.3856 (91/236) | 0.3602 (85/236) |
+| **Mean** | **0.3785** (SD 0.0122, range 0.0212) | **0.3686** (SD 0.0185, range 0.0339) |
 
-- Gap, with minus without: **+0.0170**. Pooled SD 0.0277. The gap is smaller than the pooled SD and smaller than either arm's range. At 3 trials per arm this run cannot tell the arms apart. [fact]
+- Gap, with minus without: **+0.0099**. Pooled SD 0.0157. The gap is smaller than the pooled SD and smaller than either arm's range. At 3 trials per arm this run cannot tell the arms apart. [fact]
+- The earlier figures (0.3461 vs 0.3291, gap 0.0170, best case 85) are withdrawn. They scored `tests_generated` alone against the workspace's own `quoting/`, which is not the gate's quantity. The rescored values come from the same six kept workspaces; no model was called to produce them.
+- The rescored values are not directly comparable to the 0.2373 baseline in Q5. That baseline scores the shipped tests alone, against the fixture.
 - waza's own binary grader passed 6 of 6 runs at the 0.24 threshold, and waza reports NEUTRAL (100% vs 100%). Its own metric gives no signal here, so the kill rate is the metric that carries the comparison.
-- Test files differ between arms (different hashes, 10 vs 14 test functions in the two arms checked), but the kill rate for these two arms matched in the pilot (both 0.3602). Not a general claim.
+- Test files differ between arms: different hashes, and in the pilot workspaces 10 vs 14 test functions. Pilot scores were under the withdrawn grader and are not reported.
 - Setup finding (corrected): an earlier with-skills arm errored once, when the shared ainb-toolkit agents dir was used. The error was a YAML unmarshal failure on `playwright-test-generator.agent.md`. The cause is not established. `test-engineer.agent.md` has the same comma-separated `tools` shape and parses without error: the final run log has no parse warnings and prints `Skill: test-engineer`. The playwright file's exact failing field was not isolated, and that log was overwritten.
 - Was test-engineer loaded in the with-skills arm? Evidence it was resolved: `Skill: test-engineer` printed and no parse warning appeared, so waza had the agent definition. Not shown: a per-session record that the agent body reached the model. The results digest holds only bash tool calls and names no skill. So Q4 cannot fully separate "not loaded" from "no effect". The resolution evidence points to loaded, but that is not proof.
 
@@ -139,7 +141,7 @@ kill_rate 0.2373 (strict) · kill_rate_executed 0.4179 · ~5 s
 
 **GO: waza as the front half.** The spike question is whether waza runs the front half, and it does. The remaining build is glue.
 
-- Q4 reading: no detectable skill effect at 3 trials per arm (with 0.3461, without 0.3291, gap 0.0170, pooled SD 0.0277). The no-skill arm also passed waza's binary threshold 6 of 6, so this fixture does not separate the arms. This is a fixture limit, not a waza limit. Per the slice-c session, a capable model writes these tests unaided. The next work is a harder fixture where the no-skill arm fails, not more trials on this one.
+- Q4 reading: no detectable skill effect at 3 trials per arm (with 0.3785, without 0.3686, gap 0.0099, pooled SD 0.0157). The no-skill arm also passed waza's binary threshold 6 of 6, so this fixture does not separate the arms. This is a fixture limit, not a waza limit. Per the slice-c session, a capable model writes these tests unaided. The next work is a harder fixture where the no-skill arm fails, not more trials on this one.
 - Build remaining: glue item 5 (ingestion converter from waza results JSON to gate run dirs) and glue item 6 (rename the casebook `qe-test-authoring` slug or ship the skill). Item 6 is tied to the open Q3 cause.
 - Spend: 90.65 AI Credits metered across Q3 and Q4. USD conversion is open and the $10 cap is unverified. Model spend is on hold: no more trials.
 
