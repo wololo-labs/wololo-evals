@@ -490,6 +490,36 @@ def test_the_dry_run_applies_the_expected_skill_override(tmp_path):
     assert {s.case.expected_skill for s in matrix_mod.expand(cfg)} == {"arm-skill"}
 
 
+def test_provenance_records_what_distinguishes_one_arm_from_another(tmp_path):
+    # Two arms differ by the preamble, the skill id they score against and the
+    # cases they ran. None of that was written to matrix_summary.json, so a
+    # finished run could not say which arm it had been.
+    mc = _make_project(tmp_path)
+    mc.write_text(
+        'prompt_preamble = "Use the demo skill."\n'
+        'expected_skill = "arm-skill"\n'
+        'only_cases = ["c1"]\n' + mc.read_text()
+    )
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    arm = json.loads((md / "matrix_summary.json").read_text())["provenance"]["arm"]
+    assert arm["prompt_preamble"] == "Use the demo skill."
+    assert arm["expected_skill"] == "arm-skill"
+    assert arm["only_cases"] == ["c1"]
+    assert arm["cases_run"] == ["c1"]
+
+    plain = _make_project(tmp_path / "plain")
+    md2 = matrix_mod.run_matrix(
+        load_matrix_config(plain), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    arm2 = json.loads((md2 / "matrix_summary.json").read_text())["provenance"]["arm"]
+    assert arm2["prompt_preamble"] is None and arm2["expected_skill"] is None
+    assert arm2["only_cases"] == [] and len(arm2["cases_run"]) == 2
+
+
 def test_expected_skill_override_reaches_every_case(tmp_path):
     # One benchmark, two assets doing the same job under different slugs: the
     # matrix says which slug this arm ships, so activation is scored against

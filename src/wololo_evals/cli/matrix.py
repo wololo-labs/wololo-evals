@@ -658,7 +658,8 @@ def run_matrix(
         baselines=[b.id for b in config.baselines],
         combos=combo_records,
         provenance=_provenance(
-            config, benchmark, engine_versions, harness_version, cache_mode, smoke
+            config, benchmark, engine_versions, harness_version, cache_mode, smoke,
+            cases_run=[case.case_id for case in all_cases],
         ),
         workflow=config.workflow,
     )
@@ -701,6 +702,7 @@ def _provenance(
     harness_version: str,
     cache_mode: str,
     smoke: bool,
+    cases_run: Sequence[str] = (),
 ) -> dict:
     return {
         "harness_version": harness_version,
@@ -712,6 +714,16 @@ def _provenance(
             "disabled": smoke,
         },
         "fixture_digests": {},
+        # What distinguishes one arm from another. Two arms can share a config
+        # filename stem, a benchmark and a model; they differ by these, and a
+        # finished run has to be able to say which one it was.
+        "arm": {
+            "prompt_preamble": config.prompt_preamble,
+            "expected_skill": config.expected_skill,
+            "only_cases": list(config.only_cases),
+            "cases_run": list(cases_run),
+            "fixtures_dir": config.fixtures_dir,
+        },
         "hermetic": True,
         "exfiltration_scan_scope": "advisory",
         "repro_command": f"wololo-evals-cli matrix --config {config.matrix_id}.toml",
