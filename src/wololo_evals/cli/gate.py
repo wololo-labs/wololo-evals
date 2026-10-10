@@ -150,6 +150,7 @@ class _RunView:
     pass_threshold: float
     benchmark_path: Optional[str]
     benchmark_id: str
+    benchmark_id_declared: bool
     judge_disabled: bool
     has_active_judge: bool
     combos: Sequence[_ComboView]
@@ -210,6 +211,7 @@ def _load_run(run_dir: str | pathlib.Path) -> _RunView:
         pass_threshold=pass_threshold,
         benchmark_path=str(benchmark_path) if benchmark_path else None,
         benchmark_id=benchmark_id,
+        benchmark_id_declared=bool(summary.get("benchmark_id")),
         judge_disabled=judge_disabled,
         has_active_judge=has_active_judge,
         combos=tuple(combos),
@@ -535,6 +537,26 @@ class GateVerdict:
         return "\n".join(lines)
 
 
+def _incomparable(run: _RunView, base: _RunView) -> str:
+    if run.evaluation_type != base.evaluation_type:
+        return (
+            f"evaluation_type {run.evaluation_type!r} (run) vs "
+            f"{base.evaluation_type!r} (baseline)"
+        )
+    if run.pass_threshold != base.pass_threshold:
+        return (
+            f"pass_threshold {run.pass_threshold} (run) vs "
+            f"{base.pass_threshold} (baseline)"
+        )
+    if (
+        run.benchmark_id_declared
+        and base.benchmark_id_declared
+        and run.benchmark_id != base.benchmark_id
+    ):
+        return f"benchmark {run.benchmark_id!r} (run) vs {base.benchmark_id!r} (baseline)"
+    return ""
+
+
 def _refused(
     run_dir: pathlib.Path,
     baseline_dir: pathlib.Path,
@@ -581,6 +603,17 @@ def evaluate(
     run = _load_run(run_dir)
     base = _load_run(baseline_dir)
     run_p, base_p = pathlib.Path(run_dir), pathlib.Path(baseline_dir)
+
+    # Two runs are comparable only on one bar. Each case is classified against
+    # its own run's threshold, so a mismatch changes the buckets silently.
+    mismatch = _incomparable(run, base)
+    if mismatch:
+        return _refused(
+            run_p, base_p, run, max_regression,
+            f"runs are not comparable: {mismatch}",
+            {"participates": False, "agreement": None,
+             "agreement_min": judge_agreement_min, "calibrated": True},
+        )
 
     # --- judge-input guards (§16.4 / §17) ---
     family = ci.GATE_FAMILY_WEIGHTS.get(run.evaluation_type, {})

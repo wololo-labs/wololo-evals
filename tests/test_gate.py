@@ -514,3 +514,29 @@ def test_an_unknown_signal_verdict_is_refused_not_scored(tmp_path):
     run, baseline = _pair(tmp_path, cand, base)
     with pytest.raises(gate_mod.GateError, match="unknown verdict 'errored'"):
         gate_mod.evaluate(run, baseline)
+
+
+def _tweak_summary(run_dir, **changes):
+    path = pathlib.Path(run_dir) / "matrix_summary.json"
+    data = json.loads(path.read_text())
+    data.update(changes)
+    path.write_text(json.dumps(data))
+
+
+@pytest.mark.parametrize(
+    "change,needle",
+    [
+        ({"evaluation_type": "skill_behaviour"}, "evaluation_type"),
+        ({"pass_threshold": 0.5}, "pass_threshold"),
+        ({"benchmark_id": "other"}, "benchmark"),
+    ],
+)
+def test_runs_from_different_benchmarks_or_bars_are_refused(tmp_path, change, needle):
+    # Matching on engine/model/prompt alone let a verdict compare two runs that
+    # were scored on different bars and report a bucket for each against its own.
+    ids = [f"c{i}" for i in range(6)]
+    run, baseline = _pair(tmp_path, [_case(c, 0.9) for c in ids], [_case(c, 0.9) for c in ids])
+    _tweak_summary(run, **change)
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "refused" and v.exit_code == 2
+    assert needle in v.reason
