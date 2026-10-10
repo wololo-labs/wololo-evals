@@ -1,0 +1,170 @@
+{
+ "first-control": {
+  "dir": "examples/runs/qe-skerry-live/out/control/iterations/001/matrix-20261009T224714Z",
+  "composite": 0.8371885015776398,
+  "cases": {
+   "qe3-01-strengthen": {
+    "defects": 0.5,
+    "kill": 0.8333333333333334,
+    "rubric": 0.9809577922077921,
+    "left_alone": 1.0
+   },
+   "qe3-03-pre-release": {
+    "defects": 0.5,
+    "kill": 0.8333333333333334,
+    "rubric": 0.9776119402985074,
+    "left_alone": 1.0
+   },
+   "qe3-04-inherit": {
+    "defects": 0.0,
+    "kill": 0.7990196078431373,
+    "rubric": 0.9818783068783068,
+    "left_alone": 1.0
+   }
+  },
+  "invoked": 0,
+  "n": 3,
+  "cost": 1.3483954000000002,
+  "key": 0
+ },
+ "first-natural": {
+  "dir": "examples/runs/qe-skerry-live/out/natural/iterations/001/matrix-20261009T225542Z",
+  "composite": 0.9816395408384774,
+  "cases": {
+   "qe3-01-strengthen": {
+    "defects": 1.0,
+    "kill": 0.7990196078431373,
+    "rubric": 0.9512464387464388,
+    "left_alone": 1.0
+   },
+   "qe3-03-pre-release": {
+    "defects": 1.0,
+    "kill": 0.7990196078431373,
+    "rubric": 0.9962962962962962,
+    "left_alone": 1.0
+   },
+   "qe3-04-inherit": {
+    "defects": 1.0,
+    "kill": 0.7598039215686274,
+    "rubric": 0.951015531660693,
+    "left_alone": 1.0
+   }
+  },
+  "invoked": 3,
+  "n": 3,
+  "cost": 1.244786,
+  "key": 0
+ },
+ "first-forced": {
+  "dir": "examples/runs/qe-skerry-live/out/forced/iterations/001/matrix-20261009T230202Z",
+  "composite": 0.980369678800928,
+  "cases": {
+   "qe3-01-strengthen": {
+    "defects": 1.0,
+    "kill": 0.7892156862745098,
+    "rubric": 0.9569312169312169,
+    "left_alone": 1.0
+   },
+   "qe3-03-pre-release": {
+    "defects": 1.0,
+    "kill": 0.7794117647058824,
+    "rubric": 0.951015531660693,
+    "left_alone": 1.0
+   },
+   "qe3-04-inherit": {
+    "defects": 1.0,
+    "kill": 0.7941176470588235,
+    "rubric": 0.9342801448064606,
+    "left_alone": 1.0
+   }
+  },
+  "invoked": 3,
+  "n": 3,
+  "cost": 1.4160708,
+  "key": 0
+ },
+ "rerun-control": {
+  "dir": "examples/runs/qe-skerry-live/out/rerun-control/iterations/001/matrix-20261010T001855Z",
+  "composite": 0.8568032121191163,
+  "cases": {
+   "qe3-01-strengthen": {
+    "defects": 0.8333333333333334,
+    "kill": 0.8382352941176471,
+    "rubric": 0.9732142857142857,
+    "left_alone": 1.0
+   },
+   "qe3-03-pre-release": {
+    "defects": 0.6666666666666666,
+    "kill": 0.8186274509803921,
+    "rubric": 0.9781818181818182,
+    "left_alone": 1.0
+   },
+   "qe3-04-inherit": {
+    "defects": 0.3333333333333333,
+    "kill": 0.7892156862745098,
+    "rubric": 0.9697222222222222,
+    "left_alone": 1.0
+   }
+  },
+  "invoked": 0,
+  "n": 3,
+  "cost": 1.6679266,
+  "key": 0
+ },
+ "rerun-natural": {
+  "dir": "examples/runs/qe-skerry-live/out/rerun-natural/iterations/001/matrix-20261010T002845Z",
+  "composite": 0.9806484939654875,
+  "cases": {
+   "qe3-01-strengthen": {
+    "defects": 1.0,
+    "kill": 0.7745098039215687,
+    "rubric": 0.9481812169312169,
+    "left_alone": 1.0
+   },
+   "qe3-03-pre-release": {
+    "defects": 1.0,
+    "kill": 0.7450980392156863,
+    "rubric": 0.974074074074074,
+    "left_alone": 1.0
+   },
+   "qe3-04-inherit": {
+    "defects": 1.0,
+    "kill": 0.7892156862745098,
+    "rubric": 0.9851851851851852,
+    "left_alone": 1.0
+   }
+  },
+  "invoked": 3,
+  "n": 3,
+  "cost": 1.2100296000000001,
+  "key": 0
+ },
+ "rerun-forced": {
+  "dir": "examples/runs/qe-skerry-live/out/rerun-forced/iterations/001/matrix-20261010T003451Z",
+  "composite": 0.9795684965745809,
+  "cases": {
+   "qe3-01-strengthen": {
+    "defects": 1.0,
+    "kill": 0.7941176470588235,
+    "rubric": 0.9439814814814814,
+    "left_alone": 1.0
+   },
+   "qe3-03-pre-release": {
+    "defects": 1.0,
+    "kill": 0.7794117647058824,
+    "rubric": 0.9337850045167119,
+    "left_alone": 1.0
+   },
+   "qe3-04-inherit": {
+    "defects": 1.0,
+    "kill": 0.7696078431372549,
+    "rubric": 0.9516203703703704,
+    "left_alone": 1.0
+   }
+  },
+  "invoked": 3,
+  "n": 3,
+  "cost": 1.3511804,
+  "key": 0
+ }
+}

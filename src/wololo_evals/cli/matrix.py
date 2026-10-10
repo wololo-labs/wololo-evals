@@ -14,12 +14,17 @@ stdlib/``tomllib`` — never ``db``/``api``/``jobs``.
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import pathlib
-from dataclasses import dataclass, field
+import shutil
+import subprocess
+import tempfile
+from dataclasses import dataclass
 from typing import Callable, Mapping, Optional, Sequence
 
 from ..core import interfaces as ci
+from ..scoring import mutation
 from . import artefact_writer as aw
 from . import cases_compile
 from .config import AssetEntry, BaselineEntry, Benchmark, MatrixConfig, load_benchmark
@@ -123,6 +128,88 @@ def _snapshot(entry: Optional[AssetEntry], base_dir: pathlib.Path) -> ci.AssetSn
     )
 
 
+#: Files the scorers read to grade a run. They sit next to the fixture so the
+#: manifests stay beside the code they describe, but they must never reach a
+#: case workspace: the defect manifest is the answer key, and its rationales
+#: name the rules a good suite is meant to discover. The scorers resolve these
+#: benchmark-relative, against the committed copy, so withholding them from the
+#: workspace costs nothing.
+_ORACLE_FILES = ("seeded_defects.json", "changed_lines.json")
+
+
+def _materialise_fixture(fixtures_dir: Optional[pathlib.Path], workspace: pathlib.Path) -> None:
+    """Copy the benchmark's fixture tree into one case workspace.
+
+    A live run has to be able to read the code it is asked to write tests for.
+    The replay engine re-materialises a workspace from its recording, so this
+    is the live path's equivalent: one pristine copy per case, never shared, so
+    a run that edits the code under test cannot affect the next case. The
+    scorers still resolve their target benchmark-relative, against the
+    committed fixture, so a tampered copy lowers the score rather than moving
+    the yardstick.
+    """
+    if fixtures_dir is None:
+        return
+    if not fixtures_dir.is_dir():
+        raise ValueError(f"fixtures_dir {fixtures_dir} is not a directory")
+    workspace.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        fixtures_dir, workspace, dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(*mutation.COPY_IGNORE_PATTERNS, *_ORACLE_FILES),
+    )
+
+
+def _prepare_workspace(work: pathlib.Path, fixtures_dir: Optional[pathlib.Path]) -> None:
+    """Make ``work`` a pristine trial workspace: the fixture, and its own git.
+
+    Idempotent and destructive on purpose: anything already in ``work`` is
+    removed first, so the same call both prepares a workspace and resets one.
+    """
+    if work.exists():
+        for child in work.iterdir():
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    work.mkdir(parents=True, exist_ok=True)
+    _materialise_fixture(fixtures_dir, work)
+    _seal_workspace_git(work)
+
+
+def _retain_workspace(work: pathlib.Path, dest: pathlib.Path) -> None:
+    """Copy a finished trial's workspace into the artefact tree to be inspected.
+
+    The trial runs somewhere else (see ``_execute_combo``); what stays behind is
+    a copy, without the throwaway repository the trial was given.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(work, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
+
+
+def _seal_workspace_git(workspace: pathlib.Path) -> None:
+    """Give the workspace its own git repository, so a trial cannot commit here.
+
+    A trial once ran inside this repository's tree, and a run that decided to
+    commit its work committed to the branch being used to measure it: one trial
+    put generated tests into the fixture's own shipped suite, which is the
+    control baseline, and every later case then started from a strong suite.
+
+    Trials now run in a throwaway directory outside the repository, which
+    closes that path by location. The repository is kept anyway, so that a
+    temp directory that happens to sit inside some other git tree still cannot
+    be committed into. Neither is a sandbox, and neither pretends to be.
+    """
+    try:
+        subprocess.run(
+            ["git", "init", "-q"], cwd=workspace, check=True,
+            capture_output=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(
+            f"could not seal workspace {workspace} from the host repository: {exc}"
+        ) from exc
+
+
 def _baseline_snapshot(baseline: BaselineEntry) -> ci.AssetSnapshot:
     body = baseline.inline or ""
     ref = ci.AssetRef(kind="custom_prompt", id=baseline.id, inline_body=body)
@@ -149,6 +236,34 @@ def _validate_engines(config: MatrixConfig, benchmark: Benchmark) -> None:
                 )
 
 
+def _select_cases(config: MatrixConfig, cases):
+    """Everything the casebook goes through before a case becomes a run.
+
+    ``only_cases`` restricts which cases run, and ``expected_skill`` replaces
+    the benchmark's skill id with the arm's. The plan, the expansion and the run
+    all call this one function, so a dry run can never promise something the
+    real run does differently: both of these once lived only in ``run_matrix``,
+    and a dry run reported six cases and the benchmark's own skill id before a
+    run of three cases under another.
+    """
+    selected = list(cases)
+    if config.only_cases:
+        wanted = set(config.only_cases)
+        unknown = wanted - {case.case_id for case in selected}
+        if unknown:
+            raise ValueError(f"only_cases names unknown case ids: {sorted(unknown)}")
+        selected = [case for case in selected if case.case_id in wanted]
+    if config.expected_skill:
+        # The benchmark names the skill it was written around; the asset under
+        # evaluation may ship the same capability under its own slug, and
+        # `trace:used_skill` with no argument reads the case's expectation.
+        selected = [
+            dataclasses.replace(case, expected_skill=config.expected_skill)
+            for case in selected
+        ]
+    return selected
+
+
 def expand(config: MatrixConfig) -> list[ci.RunSpec]:
     """Full ``(engine, model, prompt, asset, case, seed)`` cross-product (§13).
 
@@ -158,7 +273,9 @@ def expand(config: MatrixConfig) -> list[ci.RunSpec]:
     """
     benchmark = load_benchmark(config.benchmark_dir)
     _validate_engines(config, benchmark)
-    cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    cases = _select_cases(
+        config, cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    )
     combos = build_combos(config)
 
     specs: list[ci.RunSpec] = []
@@ -208,7 +325,9 @@ def plan(config: MatrixConfig) -> MatrixPlan:
     """Build the dry-run plan without touching any engine."""
     benchmark = load_benchmark(config.benchmark_dir)
     _validate_engines(config, benchmark)
-    cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    cases = _select_cases(
+        config, cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    )
     combos = build_combos(config)
     specs = expand(config)
     return MatrixPlan(
@@ -240,10 +359,35 @@ def render_plan(p: MatrixPlan) -> str:
 # ---------------------------------------------------------------------------
 # Live / injected execution
 # ---------------------------------------------------------------------------
-def _run_with_retry(adapter: ci.EngineAdapter, spec: ci.RunSpec) -> ci.RunResult:
-    """Execute a spec, retrying once on ``infra_fail`` (§14.2)."""
+def _spec_extra(case: ci.CaseSpec, prompt_preamble: Optional[str]) -> dict:
+    """Per-run extras. The preamble names the asset, so it stays off a case
+    whose point is that the asset must stay silent.
+
+    A distractor case checks for a skill that fires where it should not. Told
+    to use the skill, the forced arm would fail it by construction, and the
+    failure would measure the preamble rather than the skill.
+    """
+    if prompt_preamble and case.expected_outcome != "no_activation":
+        return {"prompt_preamble": prompt_preamble}
+    return {}
+
+
+def _run_with_retry(
+    adapter: ci.EngineAdapter,
+    spec: ci.RunSpec,
+    reset: Optional[Callable[[], None]] = None,
+) -> ci.RunResult:
+    """Execute a spec, retrying once on ``infra_fail`` (§14.2).
+
+    ``reset`` puts the workspace back as it was before the first attempt. It
+    runs before the retry, because a failed attempt may have edited the code
+    under test or half-written a suite, and a retry that starts from that is
+    scored as though it started clean.
+    """
     result = adapter.run(spec)
     if result.status == "infra_fail":
+        if reset is not None:
+            reset()
         result = adapter.run(spec)
     return result
 
@@ -288,6 +432,8 @@ def _execute_combo(
     cumulative: float,
     smoke: bool,
     engine_versions: dict[str, str],
+    fixtures_dir: Optional[pathlib.Path] = None,
+    prompt_preamble: Optional[str] = None,
 ) -> float:
     """Run one combo's cases x seeds, write its seed/case/scorecard artefacts
     under ``run_dir``, append events, and return the new cumulative spend."""
@@ -303,65 +449,97 @@ def _execute_combo(
         seed_outcomes: list[aw.SeedOutcome] = []
         payloads: list[dict] = []
         for seed in range(seeds):
-            spec = ci.RunSpec(
-                run_id=_run_id(combo, case.case_id, seed),
-                asset=snapshot,
-                case=case,
-                engine_id=combo.engine_id,
-                model_id=combo.model_id,
-                prompt_id=combo.prompt_id,
-                seed=seed,
-                cwd=str(ci.artefacts.workspace_dir(run_dir, seed, case.case_id)),
-                caps=ci.RunCaps(),
-            )
-            if cap is not None and cumulative >= cap:
-                result = ci.RunResult(
-                    run_id=spec.run_id,
-                    status="cost_cap_hit",
-                    artefact_dir=str(ci.artefacts.seed_dir(run_dir, seed)),
-                    runtime_seconds=0.0,
+            # The trial runs in a throwaway directory outside the repository.
+            # It used to run in the artefact tree, 16 levels below the repo
+            # root, where `../` reached the answer key and the skill file and
+            # the trial had --dangerously-skip-permissions. Moving it removes
+            # the casual route; it is not a sandbox, and an absolute path still
+            # works. What stays in the artefact tree is a copy, taken after
+            # grading.
+            work = pathlib.Path(tempfile.mkdtemp(prefix="we-trial-")).resolve()
+            trace_skipped: dict = {}
+            try:
+                spec = ci.RunSpec(
+                    run_id=_run_id(combo, case.case_id, seed),
+                    asset=snapshot,
+                    case=case,
+                    engine_id=combo.engine_id,
+                    model_id=combo.model_id,
+                    prompt_id=combo.prompt_id,
+                    seed=seed,
+                    cwd=str(work),
+                    caps=ci.RunCaps(),
+                    extra=_spec_extra(case, prompt_preamble),
                 )
-                composed = aw.compose_case(
-                    [], benchmark.evaluation_type,
-                    pass_threshold=benchmark.pass_threshold, scored=False,
-                )
-                events.record(
-                    "run_capped", ts=timestamp, run_id=spec.run_id,
-                    combo_id=combo.combo_id, case_id=case.case_id, seed=seed,
-                    status="cost_cap_hit",
-                )
-            else:
-                ci.artefacts.advisory_dir(run_dir, seed, case.case_id).mkdir(
-                    parents=True, exist_ok=True
-                )
-                adapter = adapter_factory(combo.engine_id)
-                if combo.engine_id not in engine_versions:
-                    try:
-                        engine_versions[combo.engine_id] = adapter.cli_version()
-                    except Exception:  # noqa: BLE001 - version probe is best-effort
-                        engine_versions[combo.engine_id] = "unknown"
-                result = _run_with_retry(adapter, spec)
-                cumulative += result.cost_usd
-                trace: list[ci.TraceEvent] = []
-                if normaliser_factory is not None:
-                    norm = normaliser_factory(combo.engine_id)
-                    if norm is not None:
-                        trace = list(norm.normalise(adapter.raw_event_path(spec)))
-                _write_trace(run_dir, seed, case.case_id, trace)
-                signals = list(grader(spec, result, trace))
-                composed = aw.compose_case(
-                    signals, benchmark.evaluation_type,
-                    pass_threshold=benchmark.pass_threshold,
-                    scored=result.scored, judge_disabled=smoke,
-                )
-                events.record(
-                    "run_finished", ts=timestamp, run_id=spec.run_id,
-                    combo_id=combo.combo_id, case_id=case.case_id, seed=seed,
-                    status=result.status, cost_usd=result.cost_usd,
-                    tokens_in=result.tokens_in, tokens_out=result.tokens_out,
-                    duration_ms=int(result.runtime_seconds * 1000),
-                )
+                if cap is not None and cumulative >= cap:
+                    result = ci.RunResult(
+                        run_id=spec.run_id,
+                        status="cost_cap_hit",
+                        artefact_dir=str(ci.artefacts.seed_dir(run_dir, seed)),
+                        runtime_seconds=0.0,
+                    )
+                    composed = aw.compose_case(
+                        [], benchmark.evaluation_type,
+                        pass_threshold=benchmark.pass_threshold, scored=False,
+                    )
+                    events.record(
+                        "run_capped", ts=timestamp, run_id=spec.run_id,
+                        combo_id=combo.combo_id, case_id=case.case_id, seed=seed,
+                        status="cost_cap_hit",
+                    )
+                else:
+                    _prepare_workspace(work, fixtures_dir)
+                    kept_advisory = ci.artefacts.advisory_dir(run_dir, seed, case.case_id)
+                    kept_advisory.mkdir(parents=True, exist_ok=True)
+                    adapter = adapter_factory(combo.engine_id)
+                    if combo.engine_id not in engine_versions:
+                        try:
+                            engine_versions[combo.engine_id] = adapter.cli_version()
+                        except Exception:  # noqa: BLE001 - version probe is best-effort
+                            engine_versions[combo.engine_id] = "unknown"
+                    def _reset(_spec=None, _work=work, _fx=fixtures_dir):  # noqa: ANN001
+                        _prepare_workspace(_work, _fx)
+
+                    # The adapter retries on its own as well, so it gets the
+                    # same reset hook if it has the slot for one.
+                    if hasattr(adapter, "reset_workspace"):
+                        adapter.reset_workspace = _reset
+                    result = _run_with_retry(adapter, spec, reset=_reset)
+                    cumulative += result.cost_usd
+                    trace: list[ci.TraceEvent] = []
+                    if normaliser_factory is not None:
+                        norm = normaliser_factory(combo.engine_id)
+                        if norm is not None:
+                            trace = list(norm.normalise(adapter.raw_event_path(spec)))
+                            trace_skipped = dict(getattr(norm, "skipped", None) or {})
+                    _write_trace(run_dir, seed, case.case_id, trace)
+                    signals = list(grader(spec, result, trace))
+                    composed = aw.compose_case(
+                        signals, benchmark.evaluation_type,
+                        pass_threshold=benchmark.pass_threshold,
+                        scored=result.scored, judge_disabled=smoke,
+                    )
+                    # Only now is the workspace complete: the run, the trace and
+                    # the grading have all written to it.
+                    _retain_workspace(
+                        work, ci.artefacts.workspace_dir(run_dir, seed, case.case_id)
+                    )
+                    result = dataclasses.replace(result, artefact_dir=str(kept_advisory))
+                    events.record(
+                        "run_finished", ts=timestamp, run_id=spec.run_id,
+                        combo_id=combo.combo_id, case_id=case.case_id, seed=seed,
+                        status=result.status, cost_usd=result.cost_usd,
+                        tokens_in=result.tokens_in, tokens_out=result.tokens_out,
+                        duration_ms=int(result.runtime_seconds * 1000),
+                    )
+            finally:
+                shutil.rmtree(work, ignore_errors=True)
             payload = _seed_case_payload(spec, result, composed)
+            if trace_skipped:
+                # Event types the normaliser did not recognise and skipped. Left
+                # out of the payload when there were none, so only a run that
+                # actually skipped something carries the key.
+                payload["trace_skipped_event_types"] = trace_skipped
             aw.write_json(ci.artefacts.seed_case_path(run_dir, seed, case.case_id), payload)
             payloads.append(payload)
             seed_outcomes.append(aw.SeedOutcome(seed=seed, result=result, composed=composed))
@@ -416,6 +594,7 @@ def run_matrix(
     benchmark = load_benchmark(config.benchmark_dir)
     _validate_engines(config, benchmark)
     all_cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    all_cases = _select_cases(config, all_cases)
     combos = build_combos(config)
     seeds = config.seeds
 
@@ -448,6 +627,12 @@ def run_matrix(
             normaliser_factory=normaliser_factory, events=events,
             timestamp=timestamp, cap=cap, cumulative=cumulative, smoke=smoke,
             engine_versions=engine_versions,
+            fixtures_dir=(
+                (config.base_dir / config.fixtures_dir).resolve()
+                if config.fixtures_dir
+                else None
+            ),
+            prompt_preamble=config.prompt_preamble,
         )
         scorecard_path = ci.artefacts.scorecard_path(run_dir)
         combo_records.append(
@@ -479,7 +664,8 @@ def run_matrix(
         baselines=[b.id for b in config.baselines],
         combos=combo_records,
         provenance=_provenance(
-            config, benchmark, engine_versions, harness_version, cache_mode, smoke
+            config, benchmark, engine_versions, harness_version, cache_mode, smoke,
+            cases_run=[case.case_id for case in all_cases],
         ),
         workflow=config.workflow,
     )
@@ -522,6 +708,7 @@ def _provenance(
     harness_version: str,
     cache_mode: str,
     smoke: bool,
+    cases_run: Sequence[str] = (),
 ) -> dict:
     return {
         "harness_version": harness_version,
@@ -533,6 +720,16 @@ def _provenance(
             "disabled": smoke,
         },
         "fixture_digests": {},
+        # What distinguishes one arm from another. Two arms can share a config
+        # filename stem, a benchmark and a model; they differ by these, and a
+        # finished run has to be able to say which one it was.
+        "arm": {
+            "prompt_preamble": config.prompt_preamble,
+            "expected_skill": config.expected_skill,
+            "only_cases": list(config.only_cases),
+            "cases_run": list(cases_run),
+            "fixtures_dir": config.fixtures_dir,
+        },
         "hermetic": True,
         "exfiltration_scan_scope": "advisory",
         "repro_command": f"wololo-evals-cli matrix --config {config.matrix_id}.toml",

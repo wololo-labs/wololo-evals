@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0.0",
+  "id": "qe-skill-iii",
+  "evaluation_type": "skill_behaviour",
+  "description": "INSTRUMENT VALIDATION, never an asset score. Can this eval detect a skill effect at all? Three unguided cases over examples/fixtures/skerry-codec, an invented frame protocol whose constants a model cannot know. The seeded defects are internally consistent violations of the protocol: each changes a value that encode and decode, or a conversion and its inverse, share, so the mutant round-trips and nothing in the code reveals it. A round-trip-only suite catches none of them and a suite built from the protocol's own vectors catches all of them, both checked before any model was run. No rule appears in a comment, a prompt or a file name, and the answer key is withheld from the workspace. The skill under test carries the constants. The no-skill frontier control is calibrated first. Activation is not asserted, so the composite is quality only; routing is read from the traces.",
+  "pass_threshold": 0.7,
+  "engines": ["claude", "codex", "copilot", "replay"]
+}

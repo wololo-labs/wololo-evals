@@ -36,7 +36,10 @@ from __future__ import annotations
 
 import json
 import pathlib
-from dataclasses import dataclass, field
+import re
+import sys
+from datetime import date, datetime, timezone
+from dataclasses import dataclass, field, replace
 from typing import Mapping, Optional, Sequence
 
 from ..core import ab
@@ -364,6 +367,17 @@ class GateVerdict:
     judge: Mapping[str, object]
     signal_deltas: Sequence[SignalDelta] = ()
     guarded_regressions: Sequence[str] = ()
+    #: Which asset this verdict is about: ``{"repo", "path", "commit"}``, all
+    #: operator-declared. A verdict that does not name its subject cannot be
+    #: published next to an asset, because nothing in it says which asset it
+    #: measured or at which commit; a catalogue reading it could only guess.
+    subject: Mapping[str, str] = field(default_factory=dict)
+    #: Date the gate ran, ``YYYY-MM-DD``.
+    recorded: Optional[str] = None
+    #: URL of the run, pinned to a wololo-evals commit.
+    source: Optional[str] = None
+    #: How reachable that URL is for a reader; ``internal`` needs repo access.
+    source_visibility: Optional[str] = None
 
     @property
     def exit_code(self) -> int:
@@ -391,6 +405,17 @@ class GateVerdict:
             "signals": [d.as_json() for d in self.signal_deltas],
             "guarded_regressions": list(self.guarded_regressions),
         }
+        # Publication block: what a catalogue needs to show whose score this
+        # is, when it was taken and where to read the run. Each key stays
+        # absent when undeclared rather than landing as a null to be guessed at.
+        if self.subject:
+            payload["subject"] = dict(self.subject)
+        if self.recorded:
+            payload["recorded"] = self.recorded
+        if self.source:
+            payload["source"] = self.source
+        if self.source_visibility:
+            payload["sourceVisibility"] = self.source_visibility
         if v is not None:
             payload["stats"] = {
                 "mean_delta": v.mean_delta,
@@ -723,9 +748,77 @@ def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
         ),
     )
     parser.add_argument("-o", "--out", default=None, help="JSON verdict output path")
+    parser.add_argument(
+        "--subject-repo", default=None, metavar="URL",
+        help="the asset repository this verdict is about (recorded in subject)",
+    )
+    parser.add_argument(
+        "--subject-path", default=None, metavar="PATH",
+        help="the asset's path inside that repository, e.g. packages/<pack>",
+    )
+    parser.add_argument(
+        "--subject-commit", default=None, metavar="SHA",
+        help="the asset commit measured, so a catalogue can show a stale score",
+    )
+    parser.add_argument(
+        "--source", default=None, metavar="URL",
+        help="URL of this run, pinned to a wololo-evals commit",
+    )
+    parser.add_argument(
+        "--source-visibility", default=None, choices=("public", "internal"),
+        help="how reachable that URL is for a reader",
+    )
+    parser.add_argument(
+        "--recorded", default=None, metavar="YYYY-MM-DD",
+        help="date the gate ran (default: today, UTC)",
+    )
+
+
+def validate_publication(args) -> list[str]:  # noqa: ANN001 - argparse namespace
+    """Problems with the publication fields, empty when they are consistent.
+
+    The report is published beside an asset and read as it stands, so a field
+    that contradicts another is worse than an absent one: a visibility label
+    with no link, a date that is not a date, or a subject naming no commit all
+    used to reach disk with exit 0 and read as valid.
+    """
+    problems: list[str] = []
+    if args.source_visibility and not args.source:
+        problems.append("--source-visibility needs --source: a label for a link that is not there")
+    if args.source and not re.match(r"^https?://\S+$", args.source):
+        problems.append(f"--source must be an http(s) URL, got {args.source!r}")
+    if args.recorded:
+        valid = bool(re.match(r"^\d{4}-\d{2}-\d{2}$", args.recorded))
+        if valid:
+            try:
+                date.fromisoformat(args.recorded)
+            except ValueError:
+                valid = False
+        if not valid:
+            problems.append(f"--recorded must be a YYYY-MM-DD date, got {args.recorded!r}")
+    named = [n for n in ("subject_repo", "subject_path", "subject_commit") if getattr(args, n)]
+    if named:
+        for needed in ("subject_repo", "subject_commit"):
+            if not getattr(args, needed):
+                flag = "--" + needed.replace("_", "-")
+                problems.append(
+                    f"a subject needs {flag}: without it the score cannot be tied to "
+                    f"an asset or shown to have gone stale"
+                )
+        if args.subject_commit and not re.match(r"^[0-9a-fA-F]{7,40}$", args.subject_commit):
+            problems.append(
+                f"--subject-commit must be a commit hash (7 to 40 hex digits), "
+                f"got {args.subject_commit!r}"
+            )
+    return problems
 
 
 def run(args) -> int:  # noqa: ANN001 - argparse namespace
+    problems = validate_publication(args)
+    if problems:
+        for problem in problems:
+            print(f"gate: {problem}", file=sys.stderr)
+        return _EXIT_REFUSED
     verdict = evaluate(
         args.run,
         args.baseline,
@@ -737,6 +830,22 @@ def run(args) -> int:  # noqa: ANN001 - argparse namespace
         golden_agreement=args.golden_agreement,
         judge_agreement_min=args.judge_agreement_min,
         signal_guards=tuple(args.signal_guard or ()),
+    )
+    subject = {
+        k: v
+        for k, v in (
+            ("repo", args.subject_repo),
+            ("path", args.subject_path),
+            ("commit", args.subject_commit),
+        )
+        if v
+    }
+    verdict = replace(
+        verdict,
+        subject=subject,
+        recorded=args.recorded or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        source=args.source,
+        source_visibility=args.source_visibility,
     )
     out = pathlib.Path(args.out) if args.out else pathlib.Path(args.run) / "gate_verdict.json"
     out.parent.mkdir(parents=True, exist_ok=True)

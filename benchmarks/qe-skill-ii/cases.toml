@@ -1,0 +1,144 @@
+# Casebook II, over ../../examples/fixtures/ledger-service.
+#
+# The first attempt at this casebook named the slice each case should test:
+# "how the ledger rounds", "what happens on a retry". The control passed it at
+# 0.8669, because naming the slice hands over the defect's location. A model
+# pointed at the rounding code writes a rounding boundary test and catches the
+# rounding defect; nothing was left for an asset to add.
+#
+# So the cases here ask for what a reviewer actually asks for, and are scored
+# on the catch rate across EVERY seeded defect rather than the one the prompt
+# pointed at. Finding which parts of a ledger are worth pinning is the work.
+#
+# Two further departures from casebook I, kept:
+#
+#   No activation assertion. `activation_correct` is worth 25 of the 100 family
+#   points, enough that forcing a skill to run moved casebook I's composite
+#   +0.2710 while every quality signal fell. Slot weights renormalise over the
+#   slots that receive signals, so leaving it unasserted makes this composite
+#   quality only. Routing is read from the traces and reported separately.
+#
+#   No `output.*` assertion. A live run has no mechanism to report structured
+#   output about itself, so that assertion can only ever be an evaluator error.
+#
+# `cases compile` turns this into cases.jsonl; keep the two in sync
+# (`cases compile --check`).
+
+version = 2
+
+[defaults]
+expected_skill = "test-writer-fixer"
+metadata_file = "qe-target.json"
+assertions = [
+  "read_before_writing_tests",
+  "left_the_code_under_test_alone",
+  "suite_is_stable",
+  "no_vacuous_assertions",
+  "catches_most_defects",
+]
+
+[defaults.assertion_weights]
+read_before_writing_tests = 1.0
+left_the_code_under_test_alone = 2.0
+suite_is_stable = 1.0
+no_vacuous_assertions = 1.0
+catches_most_defects = 4.0
+kills_most_mutants = 2.0
+
+[assertions]
+# --- trace_conformance slot ---------------------------------------------------
+read_before_writing_tests = "trace:require_order(read, write)"
+# Editing the code under test until the new tests pass destroys the thing being
+# measured, so it outweighs every quality signal.
+left_the_code_under_test_alone = "trace:deny_tools(edit:ledger/*, write:ledger/*)"
+
+# --- task_outcome slot (code:, over what the scorers just computed) ----------
+suite_is_stable = "code:qe.rubric.flake_resistance == 1.0"
+no_vacuous_assertions = "code:qe.rubric.no_tautological_assertions >= 0.75"
+# The question, weighted 4.0: across all six planted defects, not the one the
+# prompt happened to mention. The shipped suite scores 0.0 here.
+catches_most_defects = "code:qe.defects.catch_rate >= 0.5"
+kills_most_mutants = "code:qe.mutation.kill_rate >= 0.5"
+
+# =============================================================================
+# Cases
+# =============================================================================
+[[cases]]
+case_id = "qe2-01-strengthen-the-suite"
+fixture_id = "ledger_service"
+case_weight = 2.0
+title = "The suite is thin: make it catch something"
+difficulty = "hard"
+tags = ["coverage", "judgement", "seeded-defect"]
+input_text = "This ledger package has a test suite that passes but is very thin. Strengthen it with pytest tests that would actually catch a regression in this code."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-02-money-handling"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "Money handling, without being told where the edges are"
+difficulty = "hard"
+tags = ["money", "judgement", "seeded-defect"]
+input_text = "Write pytest tests for the money handling in this ledger package. Pin the behaviour a finance team would care about if it changed."
+metadata = { slice = "money", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-03-posting-lifecycle"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "The posting lifecycle, as a caller drives it"
+difficulty = "hard"
+tags = ["sequence", "judgement", "seeded-defect"]
+input_text = "Write pytest tests for the posting lifecycle in this ledger package, the way a caller would actually drive it over the life of an account."
+metadata = { slice = "postings", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-04-review-before-release"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "A pre-release review of the whole package"
+difficulty = "hard"
+tags = ["review", "judgement", "seeded-defect"]
+input_text = "This ledger package is going into a release. Add the pytest tests you would want in place before it ships."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-05-regression-guard"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "Tests that would fail if someone changed the arithmetic"
+difficulty = "hard"
+tags = ["regression", "judgement", "seeded-defect"]
+input_text = "Add pytest tests to this ledger package that would fail if someone changed its arithmetic without meaning to."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-06-handover"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "Tests for someone inheriting the module"
+difficulty = "hard"
+tags = ["documentation", "judgement", "seeded-defect"]
+input_text = "You are handing this ledger package to another team. Write the pytest tests that document what it guarantees."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-07-edge-cases"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "The inputs nobody tried"
+difficulty = "hard"
+tags = ["edges", "judgement", "seeded-defect"]
+input_text = "Write pytest tests for this ledger package covering the inputs and sequences its current tests do not."
+metadata = { slice = "whole package", targets_defect = "all" }
+
+[[cases]]
+case_id = "qe2-08-audit"
+fixture_id = "ledger_service"
+case_weight = 1.0
+title = "An auditor asks what the balance is guaranteed to be"
+difficulty = "hard"
+tags = ["invariants", "judgement", "seeded-defect"]
+input_text = "An auditor wants to know the balance on this ledger can be trusted. Write pytest tests that establish it."
+metadata = { slice = "invariants", targets_defect = "all" }

@@ -28,8 +28,10 @@ Imports: ``core.interfaces`` + stdlib only. No database, no vendor SDK.
 """
 from __future__ import annotations
 
+import collections
 import hashlib
 import json
+import logging
 import pathlib
 from typing import Mapping, Optional
 
@@ -48,6 +50,9 @@ __all__ = [
     "get_normaliser",
     "normalise_stream",
 ]
+
+
+_LOG = logging.getLogger(__name__)
 
 
 class TraceParseError(ValueError):
@@ -112,8 +117,31 @@ class _BaseNormaliser:
     """
 
     engine_id: str = ""
-    #: recognised top-level discriminators; anything else is fatal.
+    #: recognised top-level discriminators.
     _known: frozenset[str] = frozenset()
+
+    def __init__(self, *, strict: bool = False) -> None:
+        #: When True an unrecognised discriminator fails the parse. The default
+        #: skips it, because a CLI adds informational lines over time and
+        #: throwing away a run that has already been paid for over one is a
+        #: poor trade. It is not silent: each new type is logged and every one
+        #: is counted in :attr:`skipped`, which the matrix records.
+        self.strict = strict
+        self.skipped: collections.Counter[str] = collections.Counter()
+
+    def _unknown(self, lineno: int, field: str, value) -> None:
+        """Decide what an unrecognised discriminator means. Called from ``_emit``."""
+        if self.strict:
+            raise TraceParseError(
+                f"{self.engine_id}:{lineno}: unknown {field} {value!r} "
+                f"(known: {sorted(self._known)})"
+            )
+        if self.skipped[str(value)] == 0:
+            _LOG.warning(
+                "%s:%s: skipping unknown %s %r (known: %s)",
+                self.engine_id, lineno, field, value, sorted(self._known),
+            )
+        self.skipped[str(value)] += 1
 
     def normalise(self, raw_event_path: pathlib.Path) -> list[TraceEvent]:
         rows = _read_jsonl(raw_event_path)
@@ -176,7 +204,12 @@ class ClaudeNormaliser(_BaseNormaliser):
     """
 
     engine_id = "claude"
-    _known = frozenset({"system", "assistant", "user", "result"})
+    #: ``rate_limit_event`` is the CLI telling the operator about throttling.
+    #: It carries no trajectory, but it is a real line a live stream emits, and
+    #: refusing it threw away a whole run that had already been paid for.
+    _known = frozenset({"system", "assistant", "user", "result", "rate_limit_event"})
+    #: Known types that describe the session rather than the run.
+    _ignored = frozenset({"system", "rate_limit_event"})
 
     #: native Claude Code tool names → normalised verbs.
     _VERBS = {
@@ -194,12 +227,10 @@ class ClaudeNormaliser(_BaseNormaliser):
     def _emit(self, lineno, obj):
         etype = obj.get("type")
         if etype not in self._known:
-            raise TraceParseError(
-                f"{self.engine_id}:{lineno}: unknown event type {etype!r} "
-                f"(known: {sorted(self._known)})"
-            )
-        if etype == "system":
-            return  # init handshake carries no trajectory event
+            self._unknown(lineno, "event type", etype)
+            return
+        if etype in self._ignored:
+            return  # session chatter: no trajectory event to record
         if etype == "result":
             usage = obj.get("usage") or {}
             yield ("__tokens__", {
@@ -321,10 +352,8 @@ class CodexNormaliser(_BaseNormaliser):
             )
         mtype = msg.get("type")
         if mtype not in self._known:
-            raise TraceParseError(
-                f"{self.engine_id}:{lineno}: unknown msg.type {mtype!r} "
-                f"(known: {sorted(self._known)})"
-            )
+            self._unknown(lineno, "msg.type", mtype)
+            return
         if mtype in ("task_started", "task_complete"):
             return
         if mtype == "skill_activated":
@@ -438,10 +467,8 @@ class CopilotNormaliser(_BaseNormaliser):
     def _emit(self, lineno, obj):
         etype = obj.get("type")
         if etype not in self._known:
-            raise TraceParseError(
-                f"{self.engine_id}:{lineno}: unknown event type {etype!r} "
-                f"(known: {sorted(self._known)})"
-            )
+            self._unknown(lineno, "event type", etype)
+            return
         if etype == "done":
             return
         if etype == "assistant_message":

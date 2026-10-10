@@ -54,7 +54,11 @@ explains_what_the_tests_pin = 1.0
 
 [assertions]
 # --- activation_correct slot -------------------------------------------------
-used_qe_skill = "trace:used_skill(qe-test-authoring)"
+# No skill id in the assertion: it falls back to the case's expected_skill,
+# which a matrix config can override. The benchmark asks whether the asset
+# under evaluation fired, and two assets that do the same job are entitled to
+# different slugs.
+used_qe_skill = "trace:used_skill()"
 
 # --- trace_conformance slot --------------------------------------------------
 read_before_writing_tests = "trace:require_order(read, write)"

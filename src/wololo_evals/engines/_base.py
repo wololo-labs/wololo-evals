@@ -20,7 +20,7 @@ from __future__ import annotations
 import dataclasses
 import pathlib
 import time
-from typing import Mapping, Optional, Sequence
+from typing import Callable, Optional, Sequence
 
 from ..core.interfaces import (
     ADVISORY_DIR,
@@ -44,6 +44,10 @@ class LiveCliAdapter:
     version_argv: Sequence[str] = ("--version",)
     default_version_range: str = "*"
     allowed_models: frozenset[str] = frozenset()
+    #: Workspace-relative directory this CLI discovers project skills in.
+    #: Empty means the engine has no such directory and a skill asset mounts
+    #: at the workspace root.
+    skill_mount_prefix: str = ""
 
     def __init__(
         self,
@@ -55,6 +59,11 @@ class LiveCliAdapter:
         self._exec = exec_fn
         self._normaliser = normaliser
         self._version_range_override = version_range
+        #: Optional. Called before the adapter's own infra_fail retry to put the
+        #: workspace back as it was before the first attempt. Without it the
+        #: retry runs in whatever the failed attempt left behind, which is the
+        #: behaviour this hook exists to avoid.
+        self.reset_workspace: Optional[Callable[[RunSpec], None]] = None
 
     # ------------------------------------------------------------------ #
     # EngineAdapter surface
@@ -90,9 +99,7 @@ class LiveCliAdapter:
         self._check_model(spec)
 
         # Materialise asset + prompt into the workspace.
-        self._mount_asset(spec)
-        prompt = self._compose_prompt(spec)
-        (adv / "prompt.md").write_text(prompt, encoding="utf-8")
+        self._stage(spec)
 
         env = env_minimise.build_env(self.engine_id, spec.env)
         argv = list(self.build_command(spec))
@@ -109,6 +116,12 @@ class LiveCliAdapter:
             res = self._exec(argv, env=env, cwd=spec.cwd, timeout=timeout)
             status = self._classify(res)
             if status == "infra_fail" and attempts == 1:
+                if self.reset_workspace is not None:
+                    # A failed attempt may have written anywhere. Start the
+                    # retry from the workspace as it was, with the asset and
+                    # the prompt put back.
+                    self.reset_workspace(spec)
+                    self._stage(spec)
                 continue
             break
 
@@ -199,11 +212,31 @@ class LiveCliAdapter:
                 f"allow-list {sorted(self.allowed_models)}"
             )
 
+    def _stage(self, spec: RunSpec) -> None:
+        """Put the asset and the prompt into the workspace.
+
+        Run once before the first attempt, and again after a reset, because a
+        reset empties the workspace and the retry needs both back.
+        """
+        adv = self._advisory_dir(spec)
+        adv.mkdir(parents=True, exist_ok=True)
+        self._mount_asset(spec)
+        (adv / "prompt.md").write_text(self._compose_prompt(spec), encoding="utf-8")
+
     def _mount_asset(self, spec: RunSpec) -> None:
         """Write ``AssetSnapshot.files`` into the run workspace, path-traversal
         checked exactly like the wave-1 load-profile stage (harness-seam.md
-        §3): no absolute paths, no ``..`` escape."""
+        §3): no absolute paths, no ``..`` escape.
+
+        An ``agent_skill`` asset lands under :attr:`skill_mount_prefix`, the
+        directory this CLI discovers project skills in. Dropped at the
+        workspace root it is just a markdown file the harness never loads, and
+        the run would score zero on activation for a packaging reason rather
+        than anything about the skill.
+        """
         base = pathlib.Path(spec.cwd)
+        if spec.asset.ref.kind == "agent_skill" and self.skill_mount_prefix:
+            base = base / self.skill_mount_prefix
         for rel, content in spec.asset.files.items():
             if rel.startswith("/") or ".." in pathlib.PurePosixPath(rel).parts:
                 raise ValueError(f"unsafe asset file path {rel!r}")
@@ -212,6 +245,19 @@ class LiveCliAdapter:
             dest.write_text(str(content), encoding="utf-8")
 
     def _compose_prompt(self, spec: RunSpec) -> str:
+        """The case prompt, after any declared preamble.
+
+        A preamble exists for one reason: to separate what an asset *contains*
+        from whether a model *routes* to it. Told to use a skill, a run scores
+        the skill's instructions; left to choose, it scores discovery as well.
+        Both are worth knowing and they are not the same number, so an arm
+        declares which it is measuring.
+        """
+        preamble = str(spec.extra.get("prompt_preamble") or "").strip()
+        body = self._case_body(spec)
+        return f"{preamble}\n\n{body}" if preamble else body
+
+    def _case_body(self, spec: RunSpec) -> str:
         case = spec.case
         if case.turns is None:
             return case.input_text

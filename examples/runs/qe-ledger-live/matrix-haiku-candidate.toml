@@ -1,0 +1,37 @@
+# INSTRUMENT VALIDATION. Not an asset score, and never a catalogue badge.
+#
+# Question: can this eval detect a skill effect at all? Every frontier pair came
+# back inside the noise, and the first weaker-model pair (four cases, one seed)
+# had a CI about 0.017 wide against a delta of 0.005, which is a power problem
+# and not an answer. This runs the same pair with eight cases and two seeds.
+#
+# haiku-4-5 on both arms, skill against no skill. If the gate cannot show an
+# effect here, with headroom present and power added, the instrument is the
+# finding and the report names where. If it can, that licenses confidence in
+# the instrument and says nothing about what a consumer's model would score.
+#
+# Workspaces are sealed from the host repository: an earlier pair was
+# corrupted by a trial committing into the control baseline.
+schema_version = "2.0.0"
+benchmark = "../../../benchmarks/qe-skill-ii"
+output_dir = "out/haiku-candidate"
+fixtures_dir = "../../fixtures/ledger-service"
+expected_skill = "test-writer-fixer"
+seeds = 2
+max_cost_usd = 5.0
+
+[engines.claude]
+version_range = ">=2.0.24,<3"
+
+[[models]]
+id = "claude-haiku-4-5"
+engine = "claude"
+model = "claude-haiku-4-5"
+
+[[prompts]]
+id = "qe-skill-ii"
+
+[[assets]]
+id = "test-writer-pack"
+kind = "agent_skill"
+path = "../../../../ainb-toolkit/packages/test-writer-pack/.apm/skills"

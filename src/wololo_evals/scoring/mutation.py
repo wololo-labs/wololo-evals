@@ -46,6 +46,7 @@ from typing import Mapping, Optional, Sequence
 from wololo_evals.core.interfaces import ScoredSignal
 
 __all__ = [
+    "COPY_IGNORE_PATTERNS",
     "MutationError",
     "MutationToolMissing",
     "MutationReport",
@@ -64,6 +65,12 @@ MUTATION_SLOT = "task_outcome"
 
 #: Stable signal id so ``gate`` can pair the metric across two runs.
 MUTATION_EVALUATOR_ID = "mutation_kill_rate"
+
+#: Names a copy of a source tree must not carry: bytecode, caches, and the
+#: mutation tool's own state. Written out in three places before and already
+#: drifted (the defect scorer's copy lacked "mutants"); the trial workspace and
+#: the defect scorer use this one.
+COPY_IGNORE_PATTERNS = ("__pycache__", "*.pyc", ".pytest_cache", "mutants")
 
 _STATS_FILE = pathlib.Path("mutants") / "mutmut-cicd-stats.json"
 _DEFAULT_TIMEOUT_S = 600
@@ -180,7 +187,7 @@ def workspace_digest(*roots: pathlib.Path) -> str:
 def _copy_tree(src: pathlib.Path, dest: pathlib.Path) -> None:
     shutil.copytree(
         src, dest, dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache", "mutants"),
+        ignore=shutil.ignore_patterns(*COPY_IGNORE_PATTERNS),
     )
 
 

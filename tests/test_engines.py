@@ -64,7 +64,7 @@ class FakeExec:
     ``version_out``; each non-version call pops the next queued result (or a
     generic exit-0 with empty output when the queue is empty)."""
 
-    def __init__(self, version_out: str = "claude 1.4.2 (Claude Code)"):
+    def __init__(self, version_out: str = "claude 2.1.0 (Claude Code)"):
         self.version_out = version_out
         self.run_queue: collections.deque[ExecResult] = collections.deque()
         self.calls: list[dict] = []
@@ -220,6 +220,16 @@ def test_build_env_keeps_only_own_token_strips_the_rest():
         assert forbidden not in env
 
 
+def test_build_env_keeps_the_identity_a_credential_lookup_needs():
+    # Dropping USER does not fail loudly: the CLI starts, finds no stored
+    # credential and reports "Not logged in", which reads as a missing token
+    # rather than a missing username.
+    env = build_env(
+        "claude", {}, source_env={"PATH": "/usr/bin", "HOME": "/h", "USER": "agent"}
+    )
+    assert env["USER"] == "agent"
+
+
 def test_build_env_declared_run_env_cannot_reintroduce_forbidden_tokens():
     env = build_env(
         "codex",
@@ -252,7 +262,7 @@ def test_run_ok_writes_capture_files_and_parses_usage(tmp_path):
     assert result.cost_usd == pytest.approx(0.0123)
     assert (result.tokens_in, result.tokens_out) == (128, 47)
     assert result.attempts == 1
-    assert result.metadata["cli_version"].startswith("claude 1.4.2")
+    assert result.metadata["cli_version"].startswith("claude 2.1.0")
 
     adv = pathlib.Path(spec.cwd) / ADVISORY_DIR
     assert (adv / "claude.raw.jsonl").read_text() == _CLAUDE_OK_STDOUT
@@ -274,15 +284,94 @@ def test_run_minimises_env_no_foreign_tokens_reach_subprocess(tmp_path, monkeypa
     assert "GITHUB_TOKEN" not in run_env
 
 
+def test_a_declared_preamble_leads_the_case_prompt(tmp_path):
+    # The preamble is how an arm says whether it is scoring the asset's
+    # contents or also whether the model finds it. Without it the prompt is
+    # the case text alone.
+    fake = FakeExec()
+    spec = _spec(tmp_path, extra={"prompt_preamble": "Use the test-writer-fixer skill."})
+    ClaudeAdapter(exec_fn=fake).run(spec)
+    prompt = fake.run_calls[0]["argv"][2]
+    assert prompt.startswith("Use the test-writer-fixer skill.")
+    assert prompt.rstrip().endswith("open the dropdown")
+
+    plain = FakeExec()
+    ClaudeAdapter(exec_fn=plain).run(_spec(tmp_path))
+    assert plain.run_calls[0]["argv"][2] == "open the dropdown"
+
+
+def test_claude_refuses_a_cli_older_than_the_flag_it_always_passes(tmp_path):
+    # --setting-sources is passed on every run, and the version floor admitted
+    # any 1.x release. The oldest the changelog evidences working for this use
+    # is 2.0.24 ("project-level skills were not loading when --setting-sources
+    # 'project' was specified" was fixed there); the release that introduced
+    # the flag is not recorded, so the floor is the earliest documented good one.
+    for too_old in ("claude 1.0.60 (Claude Code)", "claude 2.0.23 (Claude Code)"):
+        with pytest.raises(EngineVersionError):
+            ClaudeAdapter(exec_fn=FakeExec(version_out=too_old)).run(_spec(tmp_path))
+    ClaudeAdapter(exec_fn=FakeExec(version_out="claude 2.0.24 (Claude Code)")).run(_spec(tmp_path))
+
+
+def test_claude_runs_on_project_settings_only(tmp_path):
+    # Without this the trial inherits the operator's own skills and memory, so
+    # it measures their installation and the asset competes with hundreds of
+    # unrelated skills for the model's attention.
+    fake = FakeExec()
+    spec = _spec(tmp_path)
+    ClaudeAdapter(exec_fn=fake).run(spec)
+    argv = fake.run_calls[0]["argv"]
+    assert "--setting-sources" in argv
+    assert argv[argv.index("--setting-sources") + 1] == "project"
+
+
 def test_run_mounts_asset_files_with_traversal_guard(tmp_path):
     fake = FakeExec()
-    spec = _spec(tmp_path, asset=_asset(files={"skills/dropdowns/SKILL.md": "# skill"}))
+    spec = _spec(tmp_path, asset=_asset(files={"dropdowns/SKILL.md": "# skill"}))
     ClaudeAdapter(exec_fn=fake).run(spec)
-    assert (pathlib.Path(spec.cwd) / "skills" / "dropdowns" / "SKILL.md").read_text() == "# skill"
+    # a skill lands where the CLI looks for skills, not at the workspace root
+    mounted = pathlib.Path(spec.cwd) / ".claude" / "skills" / "dropdowns" / "SKILL.md"
+    assert mounted.read_text() == "# skill"
 
     bad = _spec(tmp_path, asset=_asset(files={"../escape.md": "x"}))
     with pytest.raises(ValueError):
         ClaudeAdapter(exec_fn=fake).run(bad)
+
+
+def test_an_adapter_retry_starts_from_a_pristine_workspace(tmp_path):
+    # The adapter retries an infra_fail once by itself. That retry ran in the
+    # directory the failed attempt had written to.
+    import shutil
+
+    calls = {"n": 0}
+    seen = []
+
+    def exec_fn(argv, *, env, cwd, timeout=None):
+        if "--version" in argv:
+            return ExecResult(0, "claude 2.1.0 (Claude Code)", "")
+        calls["n"] += 1
+        root = pathlib.Path(cwd)
+        seen.append(
+            {
+                "stray": (root / "stray.txt").exists(),
+                "skill": (root / ".claude" / "skills" / "dropdowns" / "SKILL.md").is_file(),
+            }
+        )
+        if calls["n"] == 1:
+            (root / "stray.txt").write_text("left by the failed attempt")
+            return ExecResult(1, "", "boom")
+        return ExecResult(0, _CLAUDE_OK_STDOUT, "")
+
+    def wipe(spec):
+        for child in pathlib.Path(spec.cwd).iterdir():
+            shutil.rmtree(child) if child.is_dir() else child.unlink()
+
+    adapter = ClaudeAdapter(exec_fn=exec_fn)
+    adapter.reset_workspace = wipe
+    adapter.run(_spec(tmp_path, asset=_asset(files={"dropdowns/SKILL.md": "# skill"})))
+
+    assert len(seen) == 2, "expected one retry"
+    assert not seen[1]["stray"], "the retry saw the failed attempt's leftovers"
+    assert seen[1]["skill"], "the retry lost the mounted skill"
 
 
 def test_infra_fail_is_retried_once_then_succeeds(tmp_path):
@@ -340,8 +429,8 @@ def test_version_drift_refused_then_allowed(tmp_path):
 
 
 def test_version_range_override_from_spec_extra(tmp_path):
-    fake = FakeExec(version_out="claude 2.0.0")
-    # 2.0.0 is inside the default <3.0.0, but this run pins a tighter range
+    fake = FakeExec(version_out="claude 2.5.0")
+    # 2.5.0 is inside the default range, but this run pins a tighter one
     with pytest.raises(EngineVersionError):
         ClaudeAdapter(exec_fn=fake).run(_spec(tmp_path, extra={"version_range": ">=1.0.0,<2.0.0"}))
 

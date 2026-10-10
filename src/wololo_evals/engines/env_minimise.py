@@ -51,6 +51,11 @@ FORBIDDEN_ENV_VARS: frozenset[str] = frozenset(
 SAFE_BASELINE_VARS: tuple[str, ...] = (
     "PATH",
     "HOME",
+    # Not decoration: on macOS the CLI resolves its stored credential through
+    # the login keychain, and without USER that lookup fails and the run comes
+    # back "Not logged in" with no token missing anywhere. A username is not a
+    # secret.
+    "USER",
     "LANG",
     "LC_ALL",
     "TMPDIR",

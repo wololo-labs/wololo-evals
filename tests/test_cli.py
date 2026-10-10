@@ -61,6 +61,24 @@ class FakeAdapter:
         )
 
 
+class RecordingAdapter(FakeAdapter):
+    """Records where a trial ran and what it could see from there."""
+
+    seen: list = []
+
+    def run(self, spec):  # noqa: ANN001
+        cwd = pathlib.Path(spec.cwd)
+        RecordingAdapter.seen.append(
+            {
+                "cwd": cwd,
+                "git": (cwd / ".git").is_dir(),
+                "had_fixture": (cwd / "pkg" / "mod.py").is_file(),
+            }
+        )
+        (cwd / "made_by_trial.txt").write_text("x", encoding="utf-8")
+        return super().run(spec)
+
+
 def adapter_factory(cost: float = 0.01):
     return lambda engine_id: FakeAdapter(engine_id, cost)
 
@@ -287,6 +305,304 @@ def test_pass_at_k_identities():
 # --------------------------------------------------------------------------
 # §15 artefact tree (injected adapter + grader)
 # --------------------------------------------------------------------------
+def test_fixtures_dir_lands_one_copy_per_case_workspace(tmp_path):
+    # A live run can only write tests for code it can read, so the fixture tree
+    # is materialised into every case workspace, one pristine copy each.
+    fixtures = tmp_path / "fixtures"
+    (fixtures / "quoting").mkdir(parents=True)
+    (fixtures / "quoting" / "pricing.py").write_text("RATE = 1\n")
+    mc = _make_project(tmp_path)
+    # top-level key, so it has to go in before the first table
+    mc.write_text('fixtures_dir = "fixtures"\n' + mc.read_text())
+
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    copies = sorted(md.rglob("workspace/*/quoting/pricing.py"))
+    assert copies, "fixture never reached a case workspace"
+    # one per case x seed x combo, and each one is its own copy
+    assert len({p.parent.parent for p in copies}) == len(copies)
+    assert all(p.read_text() == "RATE = 1\n" for p in copies)
+
+
+def test_the_answer_key_never_reaches_a_case_workspace(tmp_path):
+    # About half of the first live runs ran `cat seeded_defects.json`: the
+    # manifest is copied beside the fixture, and its rationales name the very
+    # rules a good suite is supposed to find. Withheld from the workspace, the
+    # scorers still read the committed copy benchmark-relative.
+    fixtures = tmp_path / "fixtures"
+    (fixtures / "pkg").mkdir(parents=True)
+    (fixtures / "pkg" / "mod.py").write_text("VALUE = 1\n")
+    (fixtures / "seeded_defects.json").write_text("{}")
+    (fixtures / "changed_lines.json").write_text("{}")
+    mc = _make_project(tmp_path)
+    mc.write_text('fixtures_dir = "fixtures"\n' + mc.read_text())
+
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    assert list(md.rglob("workspace/*/pkg/mod.py")), "fixture never reached a workspace"
+    assert not list(md.rglob("workspace/*/seeded_defects.json"))
+    assert not list(md.rglob("workspace/*/changed_lines.json"))
+
+
+class FlakyAdapter(FakeAdapter):
+    """Fails its first attempt at each case after leaving a mess behind."""
+
+    log: list = []
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._attempt: dict = {}
+
+    def run(self, spec):  # noqa: ANN001
+        cwd = pathlib.Path(spec.cwd)
+        n = self._attempt[spec.case.case_id] = self._attempt.get(spec.case.case_id, 0) + 1
+        FlakyAdapter.log.append(
+            {"attempt": n, "stray": (cwd / "stray.txt").exists(), "fixture": (cwd / "pkg" / "mod.py").is_file()}
+        )
+        if n == 1:
+            (cwd / "stray.txt").write_text("left behind by a failed attempt")
+            (cwd / "pkg" / "mod.py").write_text("VALUE = 'corrupted'\n")
+            return ci.RunResult(run_id=spec.run_id, status="infra_fail", artefact_dir=spec.cwd, runtime_seconds=0.1)
+        return super().run(spec)
+
+
+def test_a_matrix_retry_starts_from_a_pristine_workspace(tmp_path):
+    # An infra_fail retry used to run in the workspace the failed attempt had
+    # already written to, so the second attempt could start from edited code
+    # or a half-written suite and be scored as if it had started clean.
+    fixtures = tmp_path / "fixtures"
+    (fixtures / "pkg").mkdir(parents=True)
+    (fixtures / "pkg" / "mod.py").write_text("VALUE = 1\n")
+    mc = _make_project(tmp_path)
+    mc.write_text('fixtures_dir = "fixtures"\n' + mc.read_text())
+
+    FlakyAdapter.log = []
+    matrix_mod.run_matrix(
+        load_matrix_config(mc), lambda e: FlakyAdapter(e), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    retries = [r for r in FlakyAdapter.log if r["attempt"] == 2]
+    assert retries, "no retry happened"
+    for r in retries:
+        assert not r["stray"], "the retry saw the failed attempt's leftovers"
+        assert r["fixture"], "the retry did not get the fixture back"
+
+
+def test_trials_run_outside_the_repository_and_leave_a_retained_copy(tmp_path):
+    # A trial runs with --dangerously-skip-permissions, and its cwd used to sit
+    # inside this repository, 16 directories below the root, so `../` reached
+    # the answer key and the skill file. The trial now runs in a throwaway
+    # directory elsewhere; the artefact tree still gets a copy to inspect.
+    fixtures = tmp_path / "fixtures"
+    (fixtures / "pkg").mkdir(parents=True)
+    (fixtures / "pkg" / "mod.py").write_text("VALUE = 1\n")
+    mc = _make_project(tmp_path)
+    mc.write_text('fixtures_dir = "fixtures"\n' + mc.read_text())
+
+    RecordingAdapter.seen = []
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), lambda e: RecordingAdapter(e), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    assert RecordingAdapter.seen, "the adapter never ran"
+    for run in RecordingAdapter.seen:
+        cwd = run["cwd"].resolve()
+        assert tmp_path.resolve() not in cwd.parents, f"{cwd} is inside the project tree"
+        assert md.resolve() not in cwd.parents, f"{cwd} is inside the artefact tree"
+        assert run["had_fixture"], "the fixture was not materialised before the run"
+        assert run["git"], "the trial had no repository of its own"
+        assert not cwd.exists(), f"{cwd} was left behind"
+
+    kept = list(md.rglob("workspace/*/made_by_trial.txt"))
+    assert len(kept) == len(RecordingAdapter.seen), "the artefact tree lost a workspace"
+    assert not list(md.rglob("workspace/*/.git")), "a nested repository was retained"
+
+
+class CapturingAdapter(FakeAdapter):
+    """Writes its captures where the real adapters do: the trial's advisory dir."""
+
+    def run(self, spec):  # noqa: ANN001
+        adv = pathlib.Path(spec.cwd) / ci.ADVISORY_DIR
+        adv.mkdir(parents=True, exist_ok=True)
+        (adv / f"{self.engine_id}.stdout.log").write_text("out", encoding="utf-8")
+        (adv / f"{self.engine_id}.raw.jsonl").write_text("{}\n", encoding="utf-8")
+        return super().run(spec)
+
+
+def test_engine_captures_survive_at_the_artefact_paths(tmp_path):
+    # The trial directory is deleted after the run, so the captures the engine
+    # wrote there must reach the artefact tree at the paths readers use.
+    mc = _make_project(tmp_path)
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), lambda e: CapturingAdapter(e), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    cases = list(md.rglob("seeds/*/cases/*.json"))
+    assert cases, "no case ran"
+    for case in cases:
+        seed, case_id = int(case.parent.parent.name), case.stem
+        run_dir = case.parent.parent.parent.parent
+        assert ci.artefacts.stdout_path(run_dir, seed, case_id, "claude").is_file()
+        assert ci.artefacts.raw_event_path(run_dir, seed, case_id, "claude").is_file()
+
+
+def test_only_cases_restricts_the_run_and_refuses_unknown_ids(tmp_path):
+    # Calibrating a few cases of a casebook on their own means running them
+    # without the rest, and a typo must fail loudly rather than run nothing.
+    mc = _make_project(tmp_path)
+    mc.write_text('only_cases = ["c1"]\n' + mc.read_text())
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    ran = {p.stem for p in md.rglob("seeds/*/cases/*.json")}
+    assert ran == {"c1"}
+    # the dry run must agree with the run, or it would promise a different spend
+    planned = matrix_mod.plan(load_matrix_config(mc))
+    assert planned.n_cases == 1
+    assert {spec.case.case_id for spec in planned.specs} == {"c1"}
+
+    bad = _make_project(tmp_path / "bad")
+    bad.write_text('only_cases = ["no-such-case"]\n' + bad.read_text())
+    with pytest.raises(ValueError, match="unknown case ids"):
+        matrix_mod.run_matrix(
+            load_matrix_config(bad), adapter_factory(), make_grader(),
+            timestamp="20260719T000000Z",
+        )
+
+
+def test_the_preamble_is_not_applied_to_a_distractor_case(tmp_path):
+    # A distractor case exists to check the skill stays silent. Telling the
+    # model to use the skill on it makes the forced arm fail activation there
+    # by construction, which measures the preamble and not the skill.
+    mc = _make_project(tmp_path)
+    mc.write_text('prompt_preamble = "Use the demo skill."\n' + mc.read_text())
+
+    seen = {}
+
+    class Spy(FakeAdapter):
+        def run(self, spec):  # noqa: ANN001
+            seen[spec.case.case_id] = dict(spec.extra)
+            return super().run(spec)
+
+    matrix_mod.run_matrix(
+        load_matrix_config(mc), lambda e: Spy(e), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    roles = {}
+    for line in (tmp_path / "benchmarks" / "demo" / "cases.jsonl").read_text().splitlines()[1:]:
+        row = json.loads(line); roles[row["case_id"]] = row["expected_outcome"]
+    distractors = [cid for cid, out in roles.items() if out == "no_activation"]
+    assert distractors, "the fixture casebook has no distractor to check"
+    for cid, extra in seen.items():
+        if cid in distractors:
+            assert "prompt_preamble" not in extra, f"{cid} got the preamble"
+        else:
+            assert extra.get("prompt_preamble") == "Use the demo skill.", f"{cid} lost it"
+
+
+def test_the_dry_run_applies_the_expected_skill_override(tmp_path):
+    # expand() and plan() read the casebook without the override that
+    # run_matrix applies, so a dry run showed the benchmark's own skill id while
+    # the real run used the arm's. A plan has to promise what the run does.
+    mc = _make_project(tmp_path)
+    mc.write_text('expected_skill = "arm-skill"\n' + mc.read_text())
+    cfg = load_matrix_config(mc)
+    planned = matrix_mod.plan(cfg)
+    assert planned.specs, "no runs planned"
+    assert {s.case.expected_skill for s in planned.specs} == {"arm-skill"}
+    assert {s.case.expected_skill for s in matrix_mod.expand(cfg)} == {"arm-skill"}
+
+
+def test_provenance_records_what_distinguishes_one_arm_from_another(tmp_path):
+    # Two arms differ by the preamble, the skill id they score against and the
+    # cases they ran. None of that was written to matrix_summary.json, so a
+    # finished run could not say which arm it had been.
+    mc = _make_project(tmp_path)
+    mc.write_text(
+        'prompt_preamble = "Use the demo skill."\n'
+        'expected_skill = "arm-skill"\n'
+        'only_cases = ["c1"]\n' + mc.read_text()
+    )
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    arm = json.loads((md / "matrix_summary.json").read_text())["provenance"]["arm"]
+    assert arm["prompt_preamble"] == "Use the demo skill."
+    assert arm["expected_skill"] == "arm-skill"
+    assert arm["only_cases"] == ["c1"]
+    assert arm["cases_run"] == ["c1"]
+
+    plain = _make_project(tmp_path / "plain")
+    md2 = matrix_mod.run_matrix(
+        load_matrix_config(plain), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    arm2 = json.loads((md2 / "matrix_summary.json").read_text())["provenance"]["arm"]
+    assert arm2["prompt_preamble"] is None and arm2["expected_skill"] is None
+    assert arm2["only_cases"] == [] and len(arm2["cases_run"]) == 2
+
+
+def test_skipped_event_types_are_recorded_in_the_case_artefact(tmp_path):
+    # Skipping an unknown event type is only acceptable if it stays visible.
+    class SkippingNormaliser:
+        skipped = {"tool_progress": 2}
+
+        def normalise(self, path):  # noqa: ANN001
+            return [ci.TraceEvent(seq=0, ts_ms=0, kind="tool_call", name="read", target="a")]
+
+    mc = _make_project(tmp_path)
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z", normaliser_factory=lambda e: SkippingNormaliser(),
+    )
+    payloads = [json.loads(p.read_text()) for p in md.rglob("seeds/*/cases/*.json")]
+    assert payloads and all(p["trace_skipped_event_types"] == {"tool_progress": 2} for p in payloads)
+
+    clean = matrix_mod.run_matrix(
+        load_matrix_config(_make_project(tmp_path / "clean")), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    assert not any(
+        "trace_skipped_event_types" in json.loads(p.read_text())
+        for p in clean.rglob("seeds/*/cases/*.json")
+    )
+
+
+def test_expected_skill_override_reaches_every_case(tmp_path):
+    # One benchmark, two assets doing the same job under different slugs: the
+    # matrix says which slug this arm ships, so activation is scored against
+    # the asset under evaluation rather than the benchmark's first author.
+    mc = _make_project(tmp_path)
+    mc.write_text('expected_skill = "test-writer-fixer"\n' + mc.read_text())
+    cfg = load_matrix_config(mc)
+    assert cfg.expected_skill == "test-writer-fixer"
+
+    seen: list[object] = []
+    factory = adapter_factory()
+
+    def recording_factory(engine_id):
+        adapter = factory(engine_id)
+        run = adapter.run
+
+        def spy(spec):
+            seen.append(spec.case.expected_skill)
+            return run(spec)
+
+        adapter.run = spy
+        return adapter
+
+    matrix_mod.run_matrix(
+        cfg, recording_factory, make_grader(), timestamp="20260719T000000Z"
+    )
+    assert seen and set(seen) == {"test-writer-fixer"}
+
+
 def test_run_matrix_writes_artefact_tree(tmp_path):
     cfg = load_matrix_config(_make_project(tmp_path))
     md = matrix_mod.run_matrix(

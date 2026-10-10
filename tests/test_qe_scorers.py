@@ -273,8 +273,83 @@ def test_a_missing_mutation_tool_is_an_evaluator_error_not_a_zero():
     assert signal.score == 0.0
 
 
+def test_a_changed_line_past_the_end_of_the_file_is_flagged_not_swallowed(tmp_path):
+    # Lines coverage calls non-executable are dropped from the denominator, and
+    # a line number past the end of the file falls into the same bucket. Two
+    # shipped manifests drifted that way, listing 87 and 88 in an 86 line file,
+    # and nothing said so: a typo in a manifest scores exactly like a blank line.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "mod.py").write_text("def f(x):\n    return x + 1\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_mod.py").write_text(
+        "from pkg.mod import f\n\n\ndef test_f():\n    assert f(1) == 2\n"
+    )
+    with pytest.warns(UserWarning, match="past the end"):
+        coverage, details = qe_rubric.changed_line_coverage(
+            tmp_path, {"pkg/mod.py": [1, 2, 3, 40]}
+        )
+    assert coverage == 1.0, "the in-range lines are all executed"
+    assert details["out_of_range"] == ["pkg/mod.py:3", "pkg/mod.py:40"]
+
+
 def test_an_empty_denominator_is_not_a_perfect_score():
     assert mutation.MutationReport(killed=0, survived=0).kill_rate == 0.0
+
+
+def test_a_run_that_extends_the_shipped_suite_is_what_gets_staged(tmp_path):
+    """A run is free to add its tests to the suite already there rather than a
+    new file. Later paths win, so the workspace copy is what gets measured and
+    the committed one is only the fallback."""
+    pkg = tmp_path / "quoting"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+
+    shipped = tmp_path / "shipped"
+    shipped.mkdir()
+    (shipped / "test_quotes.py").write_text("def test_a():\n    assert True\n", encoding="utf-8")
+
+    after_the_run = tmp_path / "workspace-tests"
+    after_the_run.mkdir()
+    (after_the_run / "test_quotes.py").write_text(
+        "def test_a():\n    assert True\n\n\ndef test_boundary():\n    assert True\n",
+        encoding="utf-8",
+    )
+
+    ws = tmp_path / "staged"
+    mutation.stage_analysis_workspace(ws, pkg, [shipped, after_the_run])
+    assert "test_boundary" in (ws / "tests" / "test_quotes.py").read_text()
+
+
+def test_every_tree_copy_leaves_out_the_same_scratch_names(tmp_path):
+    # The list of names a copy must not carry (bytecode, caches, the mutation
+    # tool's own state) was written out three times and had already drifted: the
+    # defect scorer's copy was missing "mutants". One constant now serves the
+    # mutation staging, the trial workspace and the defect scorer.
+    from wololo_evals.cli import matrix as matrix_mod
+
+    src = tmp_path / "src"
+    for name in mutation.COPY_IGNORE_PATTERNS:
+        if "*" in name:
+            (src / "pkg").mkdir(parents=True, exist_ok=True)
+            (src / "pkg" / name.replace("*", "stale")).write_text("x")
+        else:
+            (src / name).mkdir(parents=True, exist_ok=True)
+            (src / name / "junk").write_text("x")
+    (src / "keep.py").write_text("x = 1\n")
+
+    staged = tmp_path / "staged"
+    mutation._copy_tree(src, staged)
+    trial = tmp_path / "trial"
+    matrix_mod._materialise_fixture(src, trial)
+
+    for copy in (staged, trial):
+        names = {p.name for p in copy.rglob("*")}
+        assert "keep.py" in names
+        for pattern in mutation.COPY_IGNORE_PATTERNS:
+            stale = pattern.replace("*", "stale")
+            assert stale not in names, f"{copy.name} kept {stale}"
 
 
 def test_the_workspace_digest_is_content_addressed(tmp_path):

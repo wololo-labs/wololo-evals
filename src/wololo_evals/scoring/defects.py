@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Mapping, Optional, Sequence
 
 from wololo_evals.core.interfaces import ScoredSignal
-from wololo_evals.scoring.mutation import stage_analysis_workspace
+from wololo_evals.scoring.mutation import COPY_IGNORE_PATTERNS, stage_analysis_workspace
 
 __all__ = [
     "DEFECT_EVALUATOR_ID",
@@ -199,7 +199,7 @@ def run_defect_detection(
             planted = root / f"defect-{defect.id}"
             shutil.copytree(
                 clean, planted,
-                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache"),
+                ignore=shutil.ignore_patterns(*COPY_IGNORE_PATTERNS),
             )
             apply_defect(planted, defect)
             (caught if _suite_fails(planted, timeout_s) else missed).append(defect.id)

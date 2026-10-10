@@ -1,0 +1,15 @@
+{
+  "fixture": "examples/fixtures/ledger-service",
+  "qe": {
+    "target": "../../examples/fixtures/ledger-service/ledger",
+    "tests": [
+      "../../examples/fixtures/ledger-service/tests",
+      "tests",
+      "tests_generated"
+    ],
+    "changed_lines_file": "../../examples/fixtures/ledger-service/changed_lines.json",
+    "defects_file": "../../examples/fixtures/ledger-service/seeded_defects.json",
+    "mutation_threshold": 0.3,
+    "defect_threshold": 0.5
+  }
+}

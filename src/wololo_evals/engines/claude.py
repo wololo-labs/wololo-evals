@@ -20,10 +20,21 @@ __all__ = ["ClaudeAdapter"]
 class ClaudeAdapter(LiveCliAdapter):
     engine_id = "claude"
     binary = "claude"
-    default_version_range = ">=1.0.0,<3.0.0"
+    #: Floor is 2.0.24, the earliest release whose changelog records the
+    #: `--setting-sources project` behaviour this adapter relies on working
+    #: ("project-level skills were not loading when --setting-sources 'project'
+    #: was specified" was fixed there). The release that introduced the flag is
+    #: not recorded, so this is the earliest documented good one, not a claim
+    #: about the first. Every run passes the flag, so a CLI below the floor is
+    #: refused rather than started and left to fail or silently ignore it.
+    default_version_range = ">=2.0.24,<3.0.0"
+    #: Where Claude Code discovers a project's own skills.
+    skill_mount_prefix = ".claude/skills"
     #: §6.2 allow-list for the ``claude`` engine.
     allowed_models = frozenset(
         {
+            "claude-opus-5",
+            "claude-sonnet-5",
             "claude-opus-4-7",
             "claude-opus-4-6",
             "claude-sonnet-4-6",
@@ -36,6 +47,11 @@ class ClaudeAdapter(LiveCliAdapter):
             self.binary,
             "-p",
             self._compose_prompt(spec),
+            # Project settings only: without this the trial inherits the
+            # operator's user-level skills and memory, and the asset under
+            # evaluation is one of hundreds competing to be chosen.
+            "--setting-sources",
+            "project",
             "--output-format",
             "stream-json",
             "--verbose",
