@@ -325,6 +325,43 @@ def test_run_mounts_asset_files_with_traversal_guard(tmp_path):
         ClaudeAdapter(exec_fn=fake).run(bad)
 
 
+def test_an_adapter_retry_starts_from_a_pristine_workspace(tmp_path):
+    # The adapter retries an infra_fail once by itself. That retry ran in the
+    # directory the failed attempt had written to.
+    import shutil
+
+    calls = {"n": 0}
+    seen = []
+
+    def exec_fn(argv, *, env, cwd, timeout=None):
+        if "--version" in argv:
+            return ExecResult(0, "claude 2.1.0 (Claude Code)", "")
+        calls["n"] += 1
+        root = pathlib.Path(cwd)
+        seen.append(
+            {
+                "stray": (root / "stray.txt").exists(),
+                "skill": (root / ".claude" / "skills" / "dropdowns" / "SKILL.md").is_file(),
+            }
+        )
+        if calls["n"] == 1:
+            (root / "stray.txt").write_text("left by the failed attempt")
+            return ExecResult(1, "", "boom")
+        return ExecResult(0, _CLAUDE_OK_STDOUT, "")
+
+    def wipe(spec):
+        for child in pathlib.Path(spec.cwd).iterdir():
+            shutil.rmtree(child) if child.is_dir() else child.unlink()
+
+    adapter = ClaudeAdapter(exec_fn=exec_fn)
+    adapter.reset_workspace = wipe
+    adapter.run(_spec(tmp_path, asset=_asset(files={"dropdowns/SKILL.md": "# skill"})))
+
+    assert len(seen) == 2, "expected one retry"
+    assert not seen[1]["stray"], "the retry saw the failed attempt's leftovers"
+    assert seen[1]["skill"], "the retry lost the mounted skill"
+
+
 def test_infra_fail_is_retried_once_then_succeeds(tmp_path):
     fake = FakeExec().enqueue(
         ExecResult(1, "", "boom"),  # first attempt crashes

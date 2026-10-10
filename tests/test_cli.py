@@ -348,6 +348,50 @@ def test_the_answer_key_never_reaches_a_case_workspace(tmp_path):
     assert not list(md.rglob("workspace/*/changed_lines.json"))
 
 
+class FlakyAdapter(FakeAdapter):
+    """Fails its first attempt at each case after leaving a mess behind."""
+
+    log: list = []
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._attempt: dict = {}
+
+    def run(self, spec):  # noqa: ANN001
+        cwd = pathlib.Path(spec.cwd)
+        n = self._attempt[spec.case.case_id] = self._attempt.get(spec.case.case_id, 0) + 1
+        FlakyAdapter.log.append(
+            {"attempt": n, "stray": (cwd / "stray.txt").exists(), "fixture": (cwd / "pkg" / "mod.py").is_file()}
+        )
+        if n == 1:
+            (cwd / "stray.txt").write_text("left behind by a failed attempt")
+            (cwd / "pkg" / "mod.py").write_text("VALUE = 'corrupted'\n")
+            return ci.RunResult(run_id=spec.run_id, status="infra_fail", artefact_dir=spec.cwd, runtime_seconds=0.1)
+        return super().run(spec)
+
+
+def test_a_matrix_retry_starts_from_a_pristine_workspace(tmp_path):
+    # An infra_fail retry used to run in the workspace the failed attempt had
+    # already written to, so the second attempt could start from edited code
+    # or a half-written suite and be scored as if it had started clean.
+    fixtures = tmp_path / "fixtures"
+    (fixtures / "pkg").mkdir(parents=True)
+    (fixtures / "pkg" / "mod.py").write_text("VALUE = 1\n")
+    mc = _make_project(tmp_path)
+    mc.write_text('fixtures_dir = "fixtures"\n' + mc.read_text())
+
+    FlakyAdapter.log = []
+    matrix_mod.run_matrix(
+        load_matrix_config(mc), lambda e: FlakyAdapter(e), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    retries = [r for r in FlakyAdapter.log if r["attempt"] == 2]
+    assert retries, "no retry happened"
+    for r in retries:
+        assert not r["stray"], "the retry saw the failed attempt's leftovers"
+        assert r["fixture"], "the retry did not get the fixture back"
+
+
 def test_trials_run_outside_the_repository_and_leave_a_retained_copy(tmp_path):
     # A trial runs with --dangerously-skip-permissions, and its cwd used to sit
     # inside this repository, 16 directories below the root, so `../` reached

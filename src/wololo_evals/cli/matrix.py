@@ -348,10 +348,22 @@ def render_plan(p: MatrixPlan) -> str:
 # ---------------------------------------------------------------------------
 # Live / injected execution
 # ---------------------------------------------------------------------------
-def _run_with_retry(adapter: ci.EngineAdapter, spec: ci.RunSpec) -> ci.RunResult:
-    """Execute a spec, retrying once on ``infra_fail`` (§14.2)."""
+def _run_with_retry(
+    adapter: ci.EngineAdapter,
+    spec: ci.RunSpec,
+    reset: Optional[Callable[[], None]] = None,
+) -> ci.RunResult:
+    """Execute a spec, retrying once on ``infra_fail`` (§14.2).
+
+    ``reset`` puts the workspace back as it was before the first attempt. It
+    runs before the retry, because a failed attempt may have edited the code
+    under test or half-written a suite, and a retry that starts from that is
+    scored as though it started clean.
+    """
     result = adapter.run(spec)
     if result.status == "infra_fail":
+        if reset is not None:
+            reset()
         result = adapter.run(spec)
     return result
 
@@ -460,7 +472,14 @@ def _execute_combo(
                             engine_versions[combo.engine_id] = adapter.cli_version()
                         except Exception:  # noqa: BLE001 - version probe is best-effort
                             engine_versions[combo.engine_id] = "unknown"
-                    result = _run_with_retry(adapter, spec)
+                    def _reset(_spec=None, _work=work, _fx=fixtures_dir):  # noqa: ANN001
+                        _prepare_workspace(_work, _fx)
+
+                    # The adapter retries on its own as well, so it gets the
+                    # same reset hook if it has the slot for one.
+                    if hasattr(adapter, "reset_workspace"):
+                        adapter.reset_workspace = _reset
+                    result = _run_with_retry(adapter, spec, reset=_reset)
                     cumulative += result.cost_usd
                     trace: list[ci.TraceEvent] = []
                     if normaliser_factory is not None:
