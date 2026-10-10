@@ -477,6 +477,19 @@ def test_the_preamble_is_not_applied_to_a_distractor_case(tmp_path):
             assert extra.get("prompt_preamble") == "Use the demo skill.", f"{cid} lost it"
 
 
+def test_the_dry_run_applies_the_expected_skill_override(tmp_path):
+    # expand() and plan() read the casebook without the override that
+    # run_matrix applies, so a dry run showed the benchmark's own skill id while
+    # the real run used the arm's. A plan has to promise what the run does.
+    mc = _make_project(tmp_path)
+    mc.write_text('expected_skill = "arm-skill"\n' + mc.read_text())
+    cfg = load_matrix_config(mc)
+    planned = matrix_mod.plan(cfg)
+    assert planned.specs, "no runs planned"
+    assert {s.case.expected_skill for s in planned.specs} == {"arm-skill"}
+    assert {s.case.expected_skill for s in matrix_mod.expand(cfg)} == {"arm-skill"}
+
+
 def test_expected_skill_override_reaches_every_case(tmp_path):
     # One benchmark, two assets doing the same job under different slugs: the
     # matrix says which slug this arm ships, so activation is scored against

@@ -20,7 +20,7 @@ import pathlib
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Callable, Mapping, Optional, Sequence
 
 from ..core import interfaces as ci
@@ -238,19 +238,31 @@ def _validate_engines(config: MatrixConfig, benchmark: Benchmark) -> None:
 
 
 def _select_cases(config: MatrixConfig, cases):
-    """Apply ``only_cases``, so a plan and a run can never disagree.
+    """Everything the casebook goes through before a case becomes a run.
 
-    The dry run and the real run once counted differently for exactly this
-    reason: the filter lived in one and not the other, and a dry run reporting
-    six cases would have preceded a run of three.
+    ``only_cases`` restricts which cases run, and ``expected_skill`` replaces
+    the benchmark's skill id with the arm's. The plan, the expansion and the run
+    all call this one function, so a dry run can never promise something the
+    real run does differently: both of these once lived only in ``run_matrix``,
+    and a dry run reported six cases and the benchmark's own skill id before a
+    run of three cases under another.
     """
-    if not config.only_cases:
-        return list(cases)
-    wanted = set(config.only_cases)
-    unknown = wanted - {case.case_id for case in cases}
-    if unknown:
-        raise ValueError(f"only_cases names unknown case ids: {sorted(unknown)}")
-    return [case for case in cases if case.case_id in wanted]
+    selected = list(cases)
+    if config.only_cases:
+        wanted = set(config.only_cases)
+        unknown = wanted - {case.case_id for case in selected}
+        if unknown:
+            raise ValueError(f"only_cases names unknown case ids: {sorted(unknown)}")
+        selected = [case for case in selected if case.case_id in wanted]
+    if config.expected_skill:
+        # The benchmark names the skill it was written around; the asset under
+        # evaluation may ship the same capability under its own slug, and
+        # `trace:used_skill` with no argument reads the case's expectation.
+        selected = [
+            dataclasses.replace(case, expected_skill=config.expected_skill)
+            for case in selected
+        ]
+    return selected
 
 
 def expand(config: MatrixConfig) -> list[ci.RunSpec]:
@@ -577,13 +589,6 @@ def run_matrix(
     _validate_engines(config, benchmark)
     all_cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
     all_cases = _select_cases(config, all_cases)
-    if config.expected_skill:
-        # The benchmark names the skill it was written around; the asset under
-        # evaluation may ship the same capability under its own slug, and
-        # `trace:used_skill` with no argument reads the case's expectation.
-        all_cases = [
-            replace(case, expected_skill=config.expected_skill) for case in all_cases
-        ]
     combos = build_combos(config)
     seeds = config.seeds
 
