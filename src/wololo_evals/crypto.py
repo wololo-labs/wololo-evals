@@ -10,6 +10,7 @@ appears in audit rows, OTEL attributes, or logs.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import pathlib
@@ -52,32 +53,47 @@ class EnvelopeCipher:
 
     def _save(self, ring: dict) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self._path.with_suffix(".tmp")
+        tmp = self._path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
         tmp.write_text(json.dumps(ring, indent=2, sort_keys=True))
         os.replace(tmp, self._path)
 
+    def _flock(self):
+        """Exclusive lock on a sidecar file, so the load-modify-save of the
+        ring is atomic across service processes, not only across threads."""
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self._path.with_suffix(".lock"), os.O_CREAT | os.O_RDWR, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        return fd
+
     def _data_key(self, tenant_id: str) -> tuple[bytes, str]:
         with self._lock:
-            ring = self._load()
-            entry = ring.get(tenant_id)
-            if entry is None:
-                data_key = AESGCM.generate_key(bit_length=256)
-                nonce = secrets.token_bytes(_NONCE_LEN)
-                wrapped = self._master.encrypt(nonce, data_key, tenant_id.encode())
-                entry = {
-                    "key_id": self._master_key_id,
-                    "nonce_hex": nonce.hex(),
-                    "wrapped_hex": wrapped.hex(),
-                }
-                ring[tenant_id] = entry
-                self._save(ring)
-                return data_key, entry["key_id"]
-            data_key = self._master.decrypt(
-                bytes.fromhex(entry["nonce_hex"]),
-                bytes.fromhex(entry["wrapped_hex"]),
-                tenant_id.encode(),
-            )
+            fd = self._flock()
+            try:
+                return self._data_key_locked(tenant_id)
+            finally:
+                os.close(fd)  # closing releases the flock
+
+    def _data_key_locked(self, tenant_id: str) -> tuple[bytes, str]:
+        ring = self._load()
+        entry = ring.get(tenant_id)
+        if entry is None:
+            data_key = AESGCM.generate_key(bit_length=256)
+            nonce = secrets.token_bytes(_NONCE_LEN)
+            wrapped = self._master.encrypt(nonce, data_key, tenant_id.encode())
+            entry = {
+                "key_id": self._master_key_id,
+                "nonce_hex": nonce.hex(),
+                "wrapped_hex": wrapped.hex(),
+            }
+            ring[tenant_id] = entry
+            self._save(ring)
             return data_key, entry["key_id"]
+        data_key = self._master.decrypt(
+            bytes.fromhex(entry["nonce_hex"]),
+            bytes.fromhex(entry["wrapped_hex"]),
+            tenant_id.encode(),
+        )
+        return data_key, entry["key_id"]
 
     # -- payload envelope ---------------------------------------------------
     def encrypt_payload(self, tenant_id: str, payload: dict) -> tuple[bytes, str, str]:

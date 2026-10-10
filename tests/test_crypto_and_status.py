@@ -92,3 +92,36 @@ async def test_n_trials_floor_enforced_in_ddl(app_engine):
                 )
             )
         assert "n_trials" in str(exc.value)
+
+
+def _mint_keys(path, names, barrier):  # noqa: D103
+    from wololo_evals.crypto import EnvelopeCipher
+
+    cipher = EnvelopeCipher("aa" * 32, "test-master-1", path)
+    barrier.wait()
+    for n in names:
+        cipher.encrypt_payload(n, {"x": 1})
+
+
+def test_concurrent_processes_do_not_lose_each_others_tenant_keys(tmp_path):
+    # The keyring lock was a threading.Lock, which serialises one process.
+    # Two service processes both loaded the old ring and the last writer won,
+    # leaving ciphertext whose wrapped key no longer existed.
+    import multiprocessing as mp
+
+    from wololo_evals.crypto import EnvelopeCipher
+
+    ctx = mp.get_context("fork")
+    path = str(tmp_path / "keyring.json")
+    barrier = ctx.Barrier(6)
+    groups = [[f"t{p}-{i}" for i in range(8)] for p in range(6)]
+    procs = [ctx.Process(target=_mint_keys, args=(path, g, barrier)) for g in groups]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join(60)
+        assert p.exitcode == 0
+    import json
+
+    ring = json.loads(open(path).read())
+    assert sorted(ring) == sorted(n for g in groups for n in g)
