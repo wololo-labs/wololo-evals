@@ -210,6 +210,22 @@ def _validate_engines(config: MatrixConfig, benchmark: Benchmark) -> None:
                 )
 
 
+def _select_cases(config: MatrixConfig, cases):
+    """Apply ``only_cases``, so a plan and a run can never disagree.
+
+    The dry run and the real run once counted differently for exactly this
+    reason: the filter lived in one and not the other, and a dry run reporting
+    six cases would have preceded a run of three.
+    """
+    if not config.only_cases:
+        return list(cases)
+    wanted = set(config.only_cases)
+    unknown = wanted - {case.case_id for case in cases}
+    if unknown:
+        raise ValueError(f"only_cases names unknown case ids: {sorted(unknown)}")
+    return [case for case in cases if case.case_id in wanted]
+
+
 def expand(config: MatrixConfig) -> list[ci.RunSpec]:
     """Full ``(engine, model, prompt, asset, case, seed)`` cross-product (§13).
 
@@ -219,7 +235,9 @@ def expand(config: MatrixConfig) -> list[ci.RunSpec]:
     """
     benchmark = load_benchmark(config.benchmark_dir)
     _validate_engines(config, benchmark)
-    cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    cases = _select_cases(
+        config, cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    )
     combos = build_combos(config)
 
     specs: list[ci.RunSpec] = []
@@ -269,7 +287,9 @@ def plan(config: MatrixConfig) -> MatrixPlan:
     """Build the dry-run plan without touching any engine."""
     benchmark = load_benchmark(config.benchmark_dir)
     _validate_engines(config, benchmark)
-    cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    cases = _select_cases(
+        config, cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
+    )
     combos = build_combos(config)
     specs = expand(config)
     return MatrixPlan(
@@ -484,12 +504,7 @@ def run_matrix(
     benchmark = load_benchmark(config.benchmark_dir)
     _validate_engines(config, benchmark)
     all_cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
-    if config.only_cases:
-        wanted = set(config.only_cases)
-        unknown = wanted - {case.case_id for case in all_cases}
-        if unknown:
-            raise ValueError(f"only_cases names unknown case ids: {sorted(unknown)}")
-        all_cases = [case for case in all_cases if case.case_id in wanted]
+    all_cases = _select_cases(config, all_cases)
     if config.expected_skill:
         # The benchmark names the skill it was written around; the asset under
         # evaluation may ship the same capability under its own slug, and

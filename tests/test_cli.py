@@ -361,6 +361,10 @@ def test_only_cases_restricts_the_run_and_refuses_unknown_ids(tmp_path):
     )
     ran = {p.stem for p in md.rglob("seeds/*/cases/*.json")}
     assert ran == {"c1"}
+    # the dry run must agree with the run, or it would promise a different spend
+    planned = matrix_mod.plan(load_matrix_config(mc))
+    assert planned.n_cases == 1
+    assert {spec.case.case_id for spec in planned.specs} == {"c1"}
 
     bad = _make_project(tmp_path / "bad")
     bad.write_text('only_cases = ["no-such-case"]\n' + bad.read_text())
