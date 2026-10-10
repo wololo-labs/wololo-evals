@@ -343,3 +343,45 @@ cases may have been unusually favourable draws on the control side.
 Round budget 8 USD, measured spend 6.89: calibration 1.51, second calibration
 1.16, rerun 4.23 over nine runs. 1.11 USD is kept as reserve and unspent. No run
 read the answer key.
+
+## Audit after code review: did any Skerry run reach the answer key or the skill?
+
+Review of the pull request found that trials ran with `--dangerouslyDisableSandbox`
+equivalent permissions and a working directory 16 levels below the repository
+root, so `../` reached the answer key, the skill file and the casebook. Confirmed
+by resolving it from a real case workspace. Trials now run in a throwaway
+directory outside the repository (`2aaf74e`), which removes the casual route and
+is not a sandbox: an absolute path still works.
+
+Because that could have changed the result, every Skerry run still on disk was
+audited from its recorded tool calls, for any path outside its own workspace, any
+`../`, any answer-key filename, any touch of `SKILL.md` outside the mounted copy,
+and for answer-key or skill text in a tool result.
+
+| Arm | Runs | Left workspace | `../` | Key file | Skill file | Key or skill text in a result | Retried |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| first run, control | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
+| first run, natural | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
+| first run, forced | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
+| rerun, control | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
+| rerun, natural | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
+| rerun, forced | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
+| calibration runs | 5 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+**Nothing reached outside its workspace in any of the 22 runs, no control touched
+the skill, and none retried, so the replication result is unchanged and was not
+rerun.** The first pass of this audit reported nearly every run as reaching out;
+that was a defect in the audit, which matched the combo directory name
+`qe-skill-iii` inside every absolute path, and is recorded here because the
+corrected check is what the table reports.
+
+The same review fixed nine further defects, each as its own commit: retries now
+start from a pristine workspace in both the matrix and the adapter, the forced
+preamble stays off distractor cases, two changed-line manifests that listed lines
+past the end of their files are corrected and the scorer now warns on that, the
+Claude CLI floor is raised to the earliest release the changelog evidences for
+`--setting-sources`, the dry run applies the expected-skill override, provenance
+records the preamble, the override and the case filter, an unknown informational
+event type is logged and counted instead of aborting a paid run, the publication
+fields of a gate report are validated, and one list of scratch names is shared by
+every tree copy.
