@@ -31,7 +31,7 @@ from wololo_evals.cli import cases_compile
 from wololo_evals.cli import matrix as matrix_mod
 from wololo_evals.cli import replay as replay_mod
 from wololo_evals.cli.artefact_writer import compose_case, pass_at_k, pass_hat_k
-from wololo_evals.cli.config import load_matrix_config
+from wololo_evals.cli.config import AssetEntry, load_matrix_config
 from wololo_evals.cli.main import main
 from wololo_evals.core import interfaces as ci
 
@@ -733,3 +733,19 @@ def test_a_non_positive_case_weight_is_refused(tmp_path, weight):
     bad.write_text(json.dumps(row) + "\n")
     with pytest.raises(cases_compile.CasesCompileError, match="case_weight"):
         cases_compile.load_cases(bad)
+
+
+def test_a_missing_asset_path_is_an_error_not_an_empty_asset(tmp_path):
+    entry = AssetEntry(id="a", kind="agent_skill", path="nope/SKILL.md")
+    with pytest.raises(FileNotFoundError, match="nope"):
+        matrix_mod._snapshot(entry, tmp_path)
+
+
+def test_a_directory_asset_digest_covers_its_files(tmp_path):
+    d = tmp_path / "skill"
+    d.mkdir()
+    (d / "SKILL.md").write_text("one")
+    entry = AssetEntry(id="a", kind="agent_skill", path="skill")
+    first = matrix_mod._snapshot(entry, tmp_path).snapshot_digest
+    (d / "SKILL.md").write_text("two")
+    assert matrix_mod._snapshot(entry, tmp_path).snapshot_digest != first

@@ -106,16 +106,25 @@ def _snapshot(entry: Optional[AssetEntry], base_dir: pathlib.Path) -> ci.AssetSn
 
     body = entry.inline or ""
     files: dict[str, str] = {}
+    digest_src = body.encode("utf-8")
     if entry.path and not entry.inline:
         p = base_dir / entry.path
         if p.is_file():
             body = p.read_text(encoding="utf-8")
             files[entry.path] = body
+            digest_src = body.encode("utf-8")
         elif p.is_dir():
+            h = hashlib.sha256()
             for f in sorted(p.rglob("*")):
                 if f.is_file():
-                    files[str(f.relative_to(p))] = f.read_text(encoding="utf-8")
-    digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+                    rel = str(f.relative_to(p))
+                    files[rel] = f.read_text(encoding="utf-8")
+                    h.update(rel.encode("utf-8") + b"\0" + files[rel].encode("utf-8") + b"\0")
+            digest_src = h.digest()
+        else:
+            # Used to fall through to an empty asset under a plausible id.
+            raise FileNotFoundError(f"asset {entry.id!r}: no file or directory at {p}")
+    digest = hashlib.sha256(digest_src).hexdigest()
     ref = ci.AssetRef(
         kind=entry.kind,
         id=entry.id,
