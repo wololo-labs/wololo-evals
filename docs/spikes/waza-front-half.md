@@ -2,7 +2,7 @@
 
 Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, trigger tests, with/without A/B) with wololo-evals as the back half (mechanical scoring, gate)?
 
-**Recommendation: GO for waza as the front half, on Q1, Q3 and Q5.** Auth (Q1), trigger routing (Q3) and the kill-rate join on waza workspaces (Q5) ran end to end on waza output. Q4 no longer supports the verdict: it is invalid for test-engineer, because the with-skills arm very likely ran without the agent. The remaining build is glue items 5 and 6, with glue items 2 and 3 partly open; the complete list is under Open items. See Q4 and Mock verification.
+**Recommendation: GO for waza as the front half, on Q1, Q3 and Q5.** Auth (Q1), trigger routing (Q3) and the kill-rate join on waza workspaces (Q5) ran end to end on waza output. Q4 no longer supports the verdict: it is unresolved for test-engineer, because whether the with-skills arm loaded the agent cannot be settled from the artifacts. The remaining build is glue items 5 and 6, with glue items 2 and 3 partly open; the complete list is under Open items. See Q4 and Mock verification.
 
 ## Verdicts
 
@@ -11,7 +11,7 @@ Question: can `microsoft/waza` run as the front half (execute in Copilot, lint, 
 | Q1 | Install, Copilot auth | PASS | waza 0.38.9 installed, checksum verified. Copilot sign-in done. Rerun: `waza models` lists 11 models |
 | Q2 | Well-formed (`check`, `spec verify`, `tokens`) | FAIL (waza flags) | find-missing-tests 665/500 tokens; test-driven-development 2213/500; agent file rejected by `waza check`; spec verify 0/1 covered |
 | Q3 | Does the skill fire (trigger tests) | PASS (weak) | Two identical runs. `skill.invoked` on 2 of 3 positive prompts, 0 of 3 negatives. Accuracy 83.3%, recall 66.7% |
-| Q4 | With/without A/B, 3 trials per arm | INVALID for test-engineer | Rescored gap +0.0099 (pooled SD 0.0157) is not the agent's effect: the with-skills arm very likely ran without the agent. waza verdict NEUTRAL (100% vs 100%) |
+| Q4 | With/without A/B, 3 trials per arm | UNRESOLVED for test-engineer | Rescored gap +0.0099 (pooled SD 0.0157) cannot be read as the agent's effect until it is settled whether the with-skills arm loaded the agent |
 | Q5 | The join (waza output to mutation scorer) | PASS (prototype) | Kill rate computed on each of the 6 full-run workspaces by `grade_kill_rate.py`. Open items: see the complete list under Go / no-go |
 
 Spend (AI Credits, as reported by waza; waza gives no USD figure):
@@ -109,7 +109,8 @@ Per-trial mutation kill rate on the gate's own terms (shipped tests plus `tests_
 - Under the committed scoring, all six rescored trials (three per arm) are above the 0.24 threshold, so the threshold does not separate the arms. The NEUTRAL (100% vs 100%) verdict came from a run scored by the withdrawn grader, so it is not evidence.
 - Test files differ between arms: different hashes, and in the pilot workspaces 10 vs 14 test functions. Pilot scores were under the withdrawn grader and are not reported.
 - Setup finding (corrected again): the committed `test-engineer.agent.md` fails waza's agent parser. Under executor mock, waza rejects it with `line 11: cannot unmarshal !!str 'Read, W...' into []string`. Earlier wording that it "parses without error" was wrong. The earlier playwright error had the same field shape, and that is why it was not isolated.
-- (a) Q4 is INVALID for test-engineer. The with-skills arm very likely ran without the agent, so Q4 says nothing about the agent's effect. Withdrawn: the earlier wording that the agent was loaded per the trace, and the claim that the `Skill: test-engineer` line showed resolution. That line is the eval's name, and no trace shows the agent body reached the model. On the Copilot path, `buildSkillSystemMessage` (`internal/execution/copilot.go:1046`) logs a warning and injects nothing when the agent fails to parse, so the run continues without the agent body. The warning does not appear in the saved Q4 log, so this is inference from source. [inference]
+- (a) Q4 for test-engineer is UNRESOLVED. Whether the with-skills arm loaded the agent cannot be settled from the artifacts, so Q4 cannot be read as the agent's effect. The earlier INVALID label overstated the evidence.
+- Artifacts: the three live with-skills runs have status `passed` and `error_msg` null. The mock run failed on the same file through a path the live run did not hit. The live log has no WARN lines, but whether waza prints the Copilot path's skill-resolution warning at the level in use is unverified. Settling it needs a logged session or a fixed agent, and both need model spend, which is on hold. Withdrawn: the earlier wording that the agent was loaded per the trace, and the claim that the `Skill: test-engineer` line showed resolution. That line is the eval's name, and no trace shows the agent body reached the model. On the Copilot path, `buildSkillSystemMessage` (`internal/execution/copilot.go:1046`) logs a warning and injects nothing when the agent fails to parse, so the run continues without the agent body. The warning does not appear in the saved Q4 log, so this is inference from source. [inference]
 - Consequence: Q4 cannot test test-engineer in its published form, so its result says nothing about the agent, either way.
 
 ## Q5: the join
@@ -153,7 +154,7 @@ kill_rate 0.2373 (strict) · kill_rate_executed 0.4179 · ~5 s
 2. Glue 6: casebook slug or shipped skill. Build. The cause of 0.0833 is open with it.
 3. Glue 2: defect and rubric scorers not wrapped for a waza workspace. Build.
 4. Glue 3: the test drop path is enforced by the prompt only. Design gap.
-5. Q4 agent: INVALID for test-engineer (see Q4). Decision recorded (parent): leave the agent's `tools:` line unchanged, since a test of the agent must use it as its authors wrote it. Consequence: the asset as published does not load in Copilot, so Q4 cannot test the agent. Evidence gap.
+5. Q4 agent: UNRESOLVED for test-engineer (see Q4). Decision recorded (parent): leave the agent's `tools:` line unchanged, since a test of the agent must use it as its authors wrote it. Consequence: the asset as published does not load in Copilot, so Q4 cannot test the agent. Evidence gap.
 6. Spend: the USD conversion of 90.64 AI Credits is open, and the $10 cap is unverified. Budget.
 7. Commit 153c8a1 on `slice-c-qe-gate` is not in this clone, so the Q3 correction is unverified here. Evidence gap.
 
@@ -161,9 +162,9 @@ Closed: glue 1 (kill-rate sidecar) and glue 4 (keep-workspace, timeout).
 
 ## Go / no-go
 
-**GO: waza as the front half, on Q1, Q3 and Q5.** Auth, trigger routing and the kill-rate join ran on waza output. Q4 no longer supports the verdict: its with-skills arm very likely ran without the agent, so it says nothing about the agent's effect. The remaining build is the open items above.
+**GO: waza as the front half, on Q1, Q3 and Q5.** Auth, trigger routing and the kill-rate join ran on waza output. Q4 no longer supports the verdict: whether its with-skills arm loaded the agent is unresolved, so it says nothing about the agent's effect. The remaining build is the open items above.
 
-- Q4 reading: withdrawn as evidence about the agent. The measured gap (+0.0099, pooled SD 0.0157) and the threshold result (all six trials above 0.24, three per arm) are real measurements under the committed scoring, but the with-skills arm very likely ran without the agent, so they cannot be read as the agent's effect. Per the slice-c session, a capable model writes these tests unaided, which is a separate question. Next: a test that uses the agent as published, which needs a decision on the asset.
+- Q4 reading: withdrawn as evidence about the agent. The measured gap (+0.0099, pooled SD 0.0157) and the threshold result (all six trials above 0.24, three per arm) are real measurements under the committed scoring, but whether the with-skills arm loaded the agent is unresolved, so they cannot be read as the agent's effect. Per the slice-c session, a capable model writes these tests unaided, which is a separate question. Next: a test that uses the agent as published, which needs a decision on the asset.
 - Build remaining: the Build items in Open items (glue 5, glue 6, glue 2).
 - Spend: 90.64 AI Credits metered across Q3 and Q4. USD conversion is open and the $10 cap is unverified. Model spend is on hold: no more trials.
 
