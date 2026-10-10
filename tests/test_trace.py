@@ -156,11 +156,45 @@ def test_normaliser_rejects_malformed_json(tmp_path):
         normalise_stream("claude", bad)
 
 
-def test_normaliser_rejects_unknown_event_type(tmp_path):
+def test_a_stream_of_nothing_but_unknown_events_is_still_an_error(tmp_path):
+    # Skipping unknown types must not turn an unreadable stream into an empty
+    # trace that scores as a run which did nothing.
     bad = tmp_path / "claude.raw.jsonl"
     bad.write_text('{"type":"telepathy","payload":1}\n', encoding="utf-8")
-    with pytest.raises(TraceParseError, match="unknown event type"):
+    with pytest.raises(TraceParseError, match="yielded no trace events"):
         normalise_stream("claude", bad)
+
+
+def test_an_unknown_event_type_is_skipped_and_counted_not_fatal(tmp_path, caplog):
+    # A live stream emitted an informational line the normaliser did not know,
+    # and the whole matrix aborted on a run that had already been paid for.
+    # Unknown types are skipped with a warning and counted, so a trace can
+    # still be rejected by anyone who reads the count, but a new informational
+    # event no longer throws a run away.
+    import logging
+
+    from wololo_evals.trace.normalisers import ClaudeNormaliser
+
+    raw = tmp_path / "claude.raw.jsonl"
+    raw.write_text(
+        '{"type":"system","subtype":"init"}\n'
+        '{"type":"tool_progress","pct":40}\n'
+        '{"type":"assistant","message":{"content":['
+        '{"type":"tool_use","name":"Read","input":{"file_path":"a.py"}}]}}\n'
+        '{"type":"tool_progress","pct":90}\n',
+        encoding="utf-8",
+    )
+    norm = ClaudeNormaliser()
+    with caplog.at_level(logging.WARNING):
+        events = norm.normalise(raw)
+    assert [(e.kind, e.name) for e in events] == [("tool_call", "read")]
+    assert dict(norm.skipped) == {"tool_progress": 2}
+    assert "tool_progress" in caplog.text
+
+    # strict mode keeps the old behaviour for anyone who wants a parse to fail
+    strict = ClaudeNormaliser(strict=True)
+    with pytest.raises(TraceParseError, match="unknown event type"):
+        strict.normalise(raw)
 
 
 def test_claude_session_chatter_is_ignored_not_rejected(tmp_path):

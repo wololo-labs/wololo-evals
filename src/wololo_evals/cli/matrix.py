@@ -458,6 +458,7 @@ def _execute_combo(
             # works. What stays in the artefact tree is a copy, taken after
             # grading.
             work = pathlib.Path(tempfile.mkdtemp(prefix="we-trial-")).resolve()
+            trace_skipped: dict = {}
             try:
                 spec = ci.RunSpec(
                     run_id=_run_id(combo, case.case_id, seed),
@@ -511,6 +512,7 @@ def _execute_combo(
                         norm = normaliser_factory(combo.engine_id)
                         if norm is not None:
                             trace = list(norm.normalise(adapter.raw_event_path(spec)))
+                            trace_skipped = dict(getattr(norm, "skipped", None) or {})
                     _write_trace(run_dir, seed, case.case_id, trace)
                     signals = list(grader(spec, result, trace))
                     composed = aw.compose_case(
@@ -534,6 +536,11 @@ def _execute_combo(
             finally:
                 shutil.rmtree(work, ignore_errors=True)
             payload = _seed_case_payload(spec, result, composed)
+            if trace_skipped:
+                # Event types the normaliser did not recognise and skipped. Left
+                # out of the payload when there were none, so only a run that
+                # actually skipped something carries the key.
+                payload["trace_skipped_event_types"] = trace_skipped
             aw.write_json(ci.artefacts.seed_case_path(run_dir, seed, case.case_id), payload)
             payloads.append(payload)
             seed_outcomes.append(aw.SeedOutcome(seed=seed, result=result, composed=composed))

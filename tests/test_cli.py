@@ -520,6 +520,32 @@ def test_provenance_records_what_distinguishes_one_arm_from_another(tmp_path):
     assert arm2["only_cases"] == [] and len(arm2["cases_run"]) == 2
 
 
+def test_skipped_event_types_are_recorded_in_the_case_artefact(tmp_path):
+    # Skipping an unknown event type is only acceptable if it stays visible.
+    class SkippingNormaliser:
+        skipped = {"tool_progress": 2}
+
+        def normalise(self, path):  # noqa: ANN001
+            return [ci.TraceEvent(seq=0, ts_ms=0, kind="tool_call", name="read", target="a")]
+
+    mc = _make_project(tmp_path)
+    md = matrix_mod.run_matrix(
+        load_matrix_config(mc), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z", normaliser_factory=lambda e: SkippingNormaliser(),
+    )
+    payloads = [json.loads(p.read_text()) for p in md.rglob("seeds/*/cases/*.json")]
+    assert payloads and all(p["trace_skipped_event_types"] == {"tool_progress": 2} for p in payloads)
+
+    clean = matrix_mod.run_matrix(
+        load_matrix_config(_make_project(tmp_path / "clean")), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    assert not any(
+        "trace_skipped_event_types" in json.loads(p.read_text())
+        for p in clean.rglob("seeds/*/cases/*.json")
+    )
+
+
 def test_expected_skill_override_reaches_every_case(tmp_path):
     # One benchmark, two assets doing the same job under different slugs: the
     # matrix says which slug this arm ships, so activation is scored against
