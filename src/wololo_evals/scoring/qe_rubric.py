@@ -30,6 +30,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import warnings
 import tempfile
 from dataclasses import dataclass, field
 from typing import Mapping, Optional, Sequence
@@ -442,6 +443,7 @@ def changed_line_coverage(
     covered = 0
     considered = 0
     missed: list[str] = []
+    out_of_range: list[str] = []
     for rel, lines in changed_lines.items():
         entry = files.get(rel) or files.get(f"./{rel}")
         if entry is None:
@@ -452,7 +454,15 @@ def changed_line_coverage(
         executed = set(entry.get("executed_lines", []))
         missing = set(entry.get("missing_lines", []))
         executable = executed | missing
+        source = workspace / rel
+        n_lines = len(source.read_text(encoding="utf-8").splitlines()) if source.is_file() else None
         for line in lines:
+            if n_lines is not None and not 1 <= line <= n_lines:
+                # A line that does not exist behaves like a blank line below and
+                # is dropped silently, so a manifest that has drifted from its
+                # fixture scores exactly like a correct one. Say so instead.
+                out_of_range.append(f"{rel}:{line}")
+                continue
             if line not in executable:
                 continue  # not an executable line: never a coverage miss
             considered += 1
@@ -464,10 +474,19 @@ def changed_line_coverage(
         raise QeRubricError(
             f"no declared changed line is executable in {sorted(changed_lines)}"
         )
+    if out_of_range:
+        warnings.warn(
+            f"changed-line manifest names lines past the end of the file or before "
+            f"line 1: {sorted(out_of_range)}. They were ignored; regenerate the "
+            f"manifest, which has drifted from its fixture.",
+            UserWarning,
+            stacklevel=2,
+        )
     return covered / considered, {
         "covered": covered,
         "considered": considered,
         "missed": sorted(missed),
+        "out_of_range": sorted(out_of_range),
     }
 
 

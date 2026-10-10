@@ -273,6 +273,27 @@ def test_a_missing_mutation_tool_is_an_evaluator_error_not_a_zero():
     assert signal.score == 0.0
 
 
+def test_a_changed_line_past_the_end_of_the_file_is_flagged_not_swallowed(tmp_path):
+    # Lines coverage calls non-executable are dropped from the denominator, and
+    # a line number past the end of the file falls into the same bucket. Two
+    # shipped manifests drifted that way, listing 87 and 88 in an 86 line file,
+    # and nothing said so: a typo in a manifest scores exactly like a blank line.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "mod.py").write_text("def f(x):\n    return x + 1\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_mod.py").write_text(
+        "from pkg.mod import f\n\n\ndef test_f():\n    assert f(1) == 2\n"
+    )
+    with pytest.warns(UserWarning, match="past the end"):
+        coverage, details = qe_rubric.changed_line_coverage(
+            tmp_path, {"pkg/mod.py": [1, 2, 3, 40]}
+        )
+    assert coverage == 1.0, "the in-range lines are all executed"
+    assert details["out_of_range"] == ["pkg/mod.py:3", "pkg/mod.py:40"]
+
+
 def test_an_empty_denominator_is_not_a_perfect_score():
     assert mutation.MutationReport(killed=0, survived=0).kill_rate == 0.0
 
