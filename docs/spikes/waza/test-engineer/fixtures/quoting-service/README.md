@@ -37,7 +37,7 @@ happy paths for each destination zone, the express multiplier, two rejections.
 It runs green, it reads fine, and it catches **one of the four seeded defects**.
 
 ```console
-$ cd examples/fixtures/quoting-service && PYTHONPATH=. python -m pytest tests -q
+$ cd docs/spikes/waza/test-engineer/fixtures/quoting-service && PYTHONPATH=. python -m pytest tests -q
 7 passed
 ```
 
@@ -66,7 +66,7 @@ uncaught defect, so a manifest that drifts from the fixture fails the gate.
 ## Running it
 
 ```console
-$ cd examples/fixtures/quoting-service
+$ cd docs/spikes/waza/test-engineer/fixtures/quoting-service
 $ PYTHONPATH=. python -m quoting.service      # serves on :8080
 $ curl -s localhost:8080/quotes -d '{"weight_grams": 1500, "destination": "eu"}'
 {"quote_pence": 1269, "weight_grams": 1500, "destination": "eu", "express": false}
