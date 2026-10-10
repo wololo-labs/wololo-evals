@@ -257,6 +257,12 @@ Not evidence, and not reported as results: the text grader `names_a_missing_test
 
 **Asset portability finding (b):** the ainb-toolkit `test-engineer.agent.md` uses a comma-separated `tools:` line. That line is accepted by Claude Code but does not parse as a waza or Copilot custom agent. Waza rejects it under the mock executor (`cannot unmarshal !!str 'Read, W...' into []string`). So the asset as published does not load in Copilot. Claude Code's acceptance is the parent's finding and is not verified here.
 
+## Limitations
+
+- **Grader gaming: not resisted.** Agent test code runs as a process with this user's file and process access. mutmut sets `MUTANT_UNDER_TEST` at runtime, and a test can read it to behave differently under a mutant, which inflates the kill rate. File, symlink and environment checks cannot stop that. Only process isolation (a container or VM per scoring run) would, and the grader does not have it. Kill rates from this grader are not tamper-proof and must not be presented as such.
+- **Credentials, partial.** The find-missing-tests run goes through `run-isolated.sh`, which removes the GitHub tokens and points `gh` at an empty config. It does not cover Copilot's GitHub MCP tools, because a skill cannot restrict its tools.
+- **Answer key.** Every kill rate recorded before commit `797de7b` came from workspaces that held the answer key.
+
 ## Reproduce
 
 ```bash
