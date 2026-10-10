@@ -14,6 +14,7 @@ stdlib/``tomllib`` — never ``db``/``api``/``jobs``.
 """
 from __future__ import annotations
 
+import collections
 import dataclasses
 import hashlib
 import pathlib
@@ -444,6 +445,7 @@ def _execute_combo(
     cumulative: float,
     smoke: bool,
     engine_versions: dict[str, str],
+    trace_skipped_total: Optional[collections.Counter] = None,
     fixtures_dir: Optional[pathlib.Path] = None,
     prompt_preamble: Optional[str] = None,
     allow_engine_drift: bool = False,
@@ -548,6 +550,8 @@ def _execute_combo(
             finally:
                 shutil.rmtree(work, ignore_errors=True)
             payload = _seed_case_payload(spec, result, composed)
+            if trace_skipped_total is not None:
+                trace_skipped_total.update(trace_skipped)
             if trace_skipped:
                 # Event types the normaliser did not recognise and skipped. Left
                 # out of the payload when there were none, so only a run that
@@ -638,6 +642,7 @@ def run_matrix(
     cumulative = 0.0
     events = aw.EventLog()
     engine_versions: dict[str, str] = {}
+    trace_skipped_total: collections.Counter = collections.Counter()
     combo_records: list[aw.ComboRecord] = []
 
     for combo in combos:
@@ -650,6 +655,7 @@ def run_matrix(
             normaliser_factory=normaliser_factory, events=events,
             timestamp=timestamp, cap=cap, cumulative=cumulative, smoke=smoke,
             engine_versions=engine_versions,
+            trace_skipped_total=trace_skipped_total,
             fixtures_dir=(
                 (config.base_dir / config.fixtures_dir).resolve()
                 if config.fixtures_dir
@@ -690,6 +696,7 @@ def run_matrix(
         provenance=_provenance(
             config, benchmark, engine_versions, harness_version, cache_mode, smoke,
             cases_run=[case.case_id for case in all_cases],
+            trace_skipped=dict(trace_skipped_total),
         ),
         workflow=config.workflow,
     )
@@ -733,6 +740,7 @@ def _provenance(
     cache_mode: str,
     smoke: bool,
     cases_run: Sequence[str] = (),
+    trace_skipped: Optional[Mapping[str, int]] = None,
 ) -> dict:
     return {
         "harness_version": harness_version,
@@ -756,6 +764,9 @@ def _provenance(
         },
         # Trials run in a throwaway directory outside the repository. That
         # removes the casual `../` route, not the absolute-path one.
+        # Event types a normaliser did not recognise and skipped, summed over
+        # every run. Non-empty means some trace assertions saw a partial trace.
+        "trace_skipped_event_types": dict(trace_skipped or {}),
         "hermetic": False,
         "isolation": "none: the trial directory is outside the repo but is not a sandbox",
         "exfiltration_scan_scope": "advisory",

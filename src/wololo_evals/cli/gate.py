@@ -161,6 +161,7 @@ class _RunView:
     benchmark_path: Optional[str]
     benchmark_id: str
     benchmark_id_declared: bool
+    trace_skipped: Mapping[str, int]
     judge_disabled: bool
     has_active_judge: bool
     combos: Sequence[_ComboView]
@@ -222,6 +223,9 @@ def _load_run(run_dir: str | pathlib.Path) -> _RunView:
         benchmark_path=str(benchmark_path) if benchmark_path else None,
         benchmark_id=benchmark_id,
         benchmark_id_declared=bool(summary.get("benchmark_id")),
+        trace_skipped=dict(
+            (summary.get("provenance") or {}).get("trace_skipped_event_types") or {}
+        ),
         judge_disabled=judge_disabled,
         has_active_judge=has_active_judge,
         combos=tuple(combos),
@@ -605,6 +609,7 @@ def evaluate(
     signal_guards: Sequence[str] = (),
     allow_subset: bool = False,
     min_cases: int = 3,
+    allow_skipped_trace: bool = False,
 ) -> GateVerdict:
     """Produce the §16.4 gate verdict comparing ``run_dir`` against ``baseline_dir``.
 
@@ -623,6 +628,21 @@ def evaluate(
         return _refused(
             run_p, base_p, run, max_regression,
             f"runs are not comparable: {mismatch}",
+            {"participates": False, "agreement": None,
+             "agreement_min": judge_agreement_min, "calibrated": True},
+        )
+
+    skipped = {
+        f"{arm}:{t}": n
+        for arm, view in (("run", run), ("baseline", base))
+        for t, n in view.trace_skipped.items()
+    }
+    if skipped and not allow_skipped_trace:
+        return _refused(
+            run_p, base_p, run, max_regression,
+            "trace assertions ran on a partial trace; the normaliser skipped event "
+            f"types it does not know ({', '.join(f'{k} x{n}' for k, n in sorted(skipped.items()))}); "
+            "pass allow_skipped_trace once you have read them",
             {"participates": False, "agreement": None,
              "agreement_min": judge_agreement_min, "calibrated": True},
         )
@@ -853,6 +873,11 @@ def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
              "run omits a baseline case or combo)",
     )
     parser.add_argument(
+        "--allow-skipped-trace", action="store_true",
+        help="gate even though a run's trace skipped event types the normaliser "
+             "did not recognise (default: refuse)",
+    )
+    parser.add_argument(
         "--min-cases", type=int, default=3,
         help="refuse a verdict over fewer comparable cases than this (default 3)",
     )
@@ -958,6 +983,7 @@ def run(args) -> int:  # noqa: ANN001 - argparse namespace
         signal_guards=tuple(args.signal_guard or ()),
         allow_subset=args.allow_subset,
         min_cases=args.min_cases,
+        allow_skipped_trace=args.allow_skipped_trace,
     )
     subject = {
         k: v

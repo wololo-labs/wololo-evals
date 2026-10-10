@@ -599,3 +599,15 @@ def test_a_verdict_needs_a_minimum_number_of_comparable_cases(tmp_path):
     v = gate_mod.evaluate(run, baseline)
     assert v.verdict == "refused" and "at least 3" in v.reason
     assert gate_mod.evaluate(run, baseline, min_cases=1).verdict == "regression"
+
+
+def test_a_run_whose_trace_skipped_unknown_events_is_refused(tmp_path):
+    # Trace assertions (deny_tools, used_skill) read only what the normaliser
+    # recognised, so a stream that dropped an event type is graded on a partial
+    # trace. The gate says so instead of passing it.
+    ids = [f"c{i}" for i in range(6)]
+    run, baseline = _pair(tmp_path, [_case(c, 0.9) for c in ids], [_case(c, 0.9) for c in ids])
+    _tweak_summary(run, provenance={"trace_skipped_event_types": {"tool_progress": 3}})
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "refused" and "tool_progress" in v.reason
+    assert gate_mod.evaluate(run, baseline, allow_skipped_trace=True).verdict == "pass"

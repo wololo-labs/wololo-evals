@@ -768,3 +768,29 @@ def test_a_stale_compiled_casebook_is_refused(tmp_path):
             load_matrix_config(mc), adapter_factory(), make_grader(),
             timestamp="20260719T000000Z",
         )
+
+
+def test_skipped_event_types_roll_up_into_the_run_provenance(tmp_path):
+    # A per-case key is easy to miss. The run's summary says the trace was
+    # incomplete, and how often, so the gate can read it.
+    class SkippingNormaliser:
+        skipped = {"tool_progress": 2}
+
+        def normalise(self, path):  # noqa: ANN001
+            return [ci.TraceEvent(seq=0, ts_ms=0, kind="tool_call", name="read", target="a")]
+
+    md = matrix_mod.run_matrix(
+        load_matrix_config(_make_project(tmp_path)), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z", normaliser_factory=lambda e: SkippingNormaliser(),
+    )
+    prov = json.loads((md / "matrix_summary.json").read_text())["provenance"]
+    n_runs = len(list(md.rglob("seeds/*/cases/*.json")))
+    assert prov["trace_skipped_event_types"] == {"tool_progress": 2 * n_runs}
+
+    clean = matrix_mod.run_matrix(
+        load_matrix_config(_make_project(tmp_path / "clean")), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    assert json.loads((clean / "matrix_summary.json").read_text())["provenance"][
+        "trace_skipped_event_types"
+    ] == {}
