@@ -82,3 +82,21 @@ async def test_unknown_action_rejected(app_engine):
     async with tenant_txn(app_engine, "meridian") as conn:
         with pytest.raises(ValueError):
             await append_audit_event(conn, "meridian", "x", "made-up-action", "r")
+
+
+async def test_service_roles_cannot_rewrite_or_delete_audit_events(app_engine, worker_engine):
+    # 001 granted update on every table, so the app role could edit an event
+    # and recompute a chain that still verified.
+    import pytest
+    from sqlalchemy.exc import DBAPIError
+
+    async with tenant_txn(app_engine, "meridian") as conn:
+        await append_audit_event(conn, "meridian", "tester", "run-started", "run-ro")
+    for engine in (app_engine, worker_engine):
+        for stmt in (
+            "update wololo_evals.audit_events set resource = 'x' where resource = 'run-ro'",
+            "delete from wololo_evals.audit_events where resource = 'run-ro'",
+        ):
+            with pytest.raises(DBAPIError, match="permission denied"):
+                async with tenant_txn(engine, "meridian") as conn:
+                    await conn.execute(text(stmt))
