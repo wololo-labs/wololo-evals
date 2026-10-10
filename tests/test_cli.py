@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import pathlib
 from contextlib import redirect_stdout
 
@@ -708,3 +709,11 @@ def test_provenance_does_not_claim_the_run_was_hermetic(tmp_path):
     prov = json.loads((md / "matrix_summary.json").read_text())["provenance"]
     assert prov["hermetic"] is False
     assert "not a sandbox" in prov["isolation"]
+
+
+@pytest.mark.parametrize("n", ["0", "-1"])
+def test_seeds_below_one_are_refused(tmp_path, n):
+    mc = _make_project(tmp_path)
+    mc.write_text(re.sub(r"(?m)^seeds = .*$", f"seeds = {n}", mc.read_text()))
+    with pytest.raises(ValueError, match="seeds"):
+        load_matrix_config(mc)
