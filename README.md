@@ -121,6 +121,7 @@ Mandatory environment variables, fail-closed with no default:
 | `WOLOLO_EVALS_JUDGE_BASE_URL` | `https://api.anthropic.com` |
 | `WOLOLO_EVALS_JUDGE_API_KEY` | empty |
 | `WOLOLO_EVALS_DEPLOY_BASE_URL` | `http://wololo-deploy-stub:8080` |
+| `WOLOLO_EVALS_REPO_EVAL_ROOTS` | empty (no host repository can be named) |
 
 The DB-free eval core (the file-first CLI, a judge-only smoke) constructs only
 the judge and blob sub-settings, so it needs none of the three mandatory vars.

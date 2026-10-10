@@ -24,6 +24,7 @@ def build_app():
         verifier=Verifier(cfg.jwks_path, cfg.expected_iss),
         cipher=EnvelopeCipher(cfg.master_key_hex, cfg.master_key_id, cfg.keyring_path),
         blobstore=make_blobstore(cfg),
+        repo_eval_roots=cfg.repo_eval.roots,
     )
     return create_app(deps)
 
