@@ -12,7 +12,7 @@ config:
   parallel: false
   executor: copilot-sdk
   model: claude-sonnet-5.5
-  # Relative to the spec dir. Holds only test-engineer.agent.md, a byte-identical copy of the ainb-toolkit file (check with cmp).
+  # Relative to the spec dir. Holds only test-engineer.agent.md, a copy of the ainb-toolkit file with its em-dashes replaced (the only change).
   # Sharing the ainb-toolkit agents dir failed the with-skills arm once (playwright-test-generator.agent.md); cause not established.
   skill_directories:
     - agents
