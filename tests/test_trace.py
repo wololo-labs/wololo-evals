@@ -466,3 +466,30 @@ def test_skip_counts_do_not_carry_over_between_streams(tmp_path):
     assert dict(norm.skipped) == {"tool_progress": 1}
     norm.normalise(clean)
     assert dict(norm.skipped) == {}
+
+
+def _skill_stream(tmp_path, *, result):
+    lines = [
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1",'
+        '"name":"Skill","input":{"skill":"demo"}}]}}',
+    ]
+    if result is not None:
+        lines.append(
+            '{"type":"user","message":{"content":[{"type":"tool_result",'
+            f'"tool_use_id":"t1","content":"x"{result}}}]}}}}'
+        )
+    path = tmp_path / "claude.raw.jsonl"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def test_a_skill_call_that_errored_is_not_an_activation(tmp_path):
+    # The activation was emitted from the tool_use alone, so a call the CLI
+    # rejected ("Unknown skill") still satisfied used_skill.
+    errored = normalise_stream("claude", _skill_stream(tmp_path, result=',"is_error":true'))
+    assert not any(e.is_skill_activation for e in errored)
+    ok = normalise_stream("claude", _skill_stream(tmp_path, result=""))
+    assert [e.target for e in ok if e.is_skill_activation] == ["demo"]
+    # a stream cut before the result arrives is not proof either way: keep it
+    cut = normalise_stream("claude", _skill_stream(tmp_path, result=None))
+    assert [e.target for e in cut if e.is_skill_activation] == ["demo"]

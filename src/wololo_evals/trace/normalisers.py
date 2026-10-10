@@ -147,6 +147,7 @@ class _BaseNormaliser:
         # The registry shares one instance per engine, so per-stream state
         # starts clean here or the next run's artefact inherits this one's.
         self.skipped = collections.Counter()
+        self._begin_stream()
         rows = _read_jsonl(raw_event_path)
         events: list[TraceEvent] = []
         for seq, (lineno, obj) in enumerate(self._iter_emitted(rows)):
@@ -191,6 +192,13 @@ class _BaseNormaliser:
                         )
                     continue
                 pending.append((lineno, item))
+        return self._finalise(pending)
+
+    def _begin_stream(self) -> None:
+        """Reset any per-stream state before a parse."""
+
+    def _finalise(self, pending):
+        """Last look at the emitted events, in order, before they are numbered."""
         return pending
 
     def _emit(self, lineno: int, obj: dict):  # pragma: no cover - abstract
@@ -226,6 +234,28 @@ class ClaudeNormaliser(_BaseNormaliser):
         "Grep": "search",
         "Glob": "search",
     }
+
+    def _begin_stream(self) -> None:
+        #: tool_use ids of Skill calls the CLI then rejected. The activation is
+        #: emitted in place when the call is made, so ordering survives, and is
+        #: dropped afterwards if the result says the call failed.
+        self._rejected: set[str] = set()
+
+    def _finalise(self, pending):
+        kept = []
+        for lineno, (kind, fields) in pending:
+            hold = fields.pop("_skill_call", None)
+            if hold is not None and hold in self._rejected:
+                if fields.get("tokens_in") or fields.get("tokens_out"):
+                    # not an activation, but the tokens were still spent
+                    kept.append((lineno, ("message", {
+                        "target": None,
+                        "tokens_in": fields.get("tokens_in", 0),
+                        "tokens_out": fields.get("tokens_out", 0),
+                    })))
+                continue
+            kept.append((lineno, (kind, fields)))
+        return kept
 
     def _emit(self, lineno, obj):
         etype = obj.get("type")
@@ -281,6 +311,7 @@ class ClaudeNormaliser(_BaseNormaliser):
                         "args_digest": _digest(tinput),
                         "tokens_in": tin,
                         "tokens_out": tout,
+                        "_skill_call": str(block.get("id") or ""),
                     })
                 else:
                     yield ("tool_call", {
@@ -293,6 +324,8 @@ class ClaudeNormaliser(_BaseNormaliser):
                 emitted_any = True
                 tin = tout = 0
             elif btype == "tool_result":
+                if block.get("is_error"):
+                    self._rejected.add(str(block.get("tool_use_id")))
                 yield ("tool_result", {
                     "target": None,
                     "result_digest": _digest(block.get("content")),
