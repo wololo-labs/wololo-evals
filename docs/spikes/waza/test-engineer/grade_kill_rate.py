@@ -1,10 +1,11 @@
 """waza program grader: mutation kill rate of the suite the agent left in the workspace.
 
 Q5 glue prototype. waza hands over the post-run workspace in WAZA_WORKSPACE_DIR.
-The grader scores tests_generated/ against quoting/ with the wololo-evals mutation
-scorer, writes the full report to kill_rate.json inside the workspace (waza's
-program grader is binary, so the number needs a sidecar), and exits 0 when the
-kill rate meets the threshold in qe-target.json.
+The code under test is the pristine fixture copy next to this file, never the
+workspace's quoting/, because the agent can write to the workspace. The suite is
+the tests_generated/ the agent wrote. The full report goes to kill_rate.json
+inside the workspace (waza's program grader is binary, so the number needs a
+sidecar), and the grader exits 0 when the kill rate meets the threshold.
 """
 from __future__ import annotations
 
@@ -16,21 +17,22 @@ import sys
 from wololo_evals.scoring.mutation import MutationError, run_mutation_analysis
 
 THRESHOLD = 0.24  # benchmarks/qe-skill/qe-target.json: mutation_threshold
+HERE = pathlib.Path(__file__).resolve().parent
+FIXTURE = HERE / "fixtures" / "quoting-service"
 
 
 def main() -> int:
     ws = pathlib.Path(os.environ.get("WAZA_WORKSPACE_DIR", ""))
-    target = ws / "quoting"
+    target = FIXTURE / "quoting"
     tests = ws / "tests_generated"
-    if not target.is_dir() or not tests.is_dir():
-        print(f"missing quoting/ or tests_generated/ under {ws}", file=sys.stderr)
+    if not tests.is_dir():
+        print(f"missing tests_generated/ under {ws}", file=sys.stderr)
         return 1
     # The agent writes into this workspace, so it can plant symlinks at any depth. The scorer copies
     # these trees with shutil.copytree, which follows links and would run an outside file as a test.
-    for root in (target, tests):
-        if root.is_symlink() or any(p.is_symlink() for p in root.rglob("*")):
-            print(f"{root.name}/ contains a symlink; refusing to score", file=sys.stderr)
-            return 1
+    if tests.is_symlink() or any(p.is_symlink() for p in tests.rglob("*")):
+        print("tests_generated/ contains a symlink; refusing to score", file=sys.stderr)
+        return 1
     try:
         report = run_mutation_analysis(target, [tests], timeout_s=800)
     except MutationError as exc:
