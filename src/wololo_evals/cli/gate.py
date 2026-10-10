@@ -36,7 +36,9 @@ from __future__ import annotations
 
 import json
 import pathlib
-from datetime import datetime, timezone
+import re
+import sys
+from datetime import date, datetime, timezone
 from dataclasses import dataclass, field, replace
 from typing import Mapping, Optional, Sequence
 
@@ -772,7 +774,51 @@ def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
     )
 
 
+def validate_publication(args) -> list[str]:  # noqa: ANN001 - argparse namespace
+    """Problems with the publication fields, empty when they are consistent.
+
+    The report is published beside an asset and read as it stands, so a field
+    that contradicts another is worse than an absent one: a visibility label
+    with no link, a date that is not a date, or a subject naming no commit all
+    used to reach disk with exit 0 and read as valid.
+    """
+    problems: list[str] = []
+    if args.source_visibility and not args.source:
+        problems.append("--source-visibility needs --source: a label for a link that is not there")
+    if args.source and not re.match(r"^https?://\S+$", args.source):
+        problems.append(f"--source must be an http(s) URL, got {args.source!r}")
+    if args.recorded:
+        valid = bool(re.match(r"^\d{4}-\d{2}-\d{2}$", args.recorded))
+        if valid:
+            try:
+                date.fromisoformat(args.recorded)
+            except ValueError:
+                valid = False
+        if not valid:
+            problems.append(f"--recorded must be a YYYY-MM-DD date, got {args.recorded!r}")
+    named = [n for n in ("subject_repo", "subject_path", "subject_commit") if getattr(args, n)]
+    if named:
+        for needed in ("subject_repo", "subject_commit"):
+            if not getattr(args, needed):
+                flag = "--" + needed.replace("_", "-")
+                problems.append(
+                    f"a subject needs {flag}: without it the score cannot be tied to "
+                    f"an asset or shown to have gone stale"
+                )
+        if args.subject_commit and not re.match(r"^[0-9a-fA-F]{7,40}$", args.subject_commit):
+            problems.append(
+                f"--subject-commit must be a commit hash (7 to 40 hex digits), "
+                f"got {args.subject_commit!r}"
+            )
+    return problems
+
+
 def run(args) -> int:  # noqa: ANN001 - argparse namespace
+    problems = validate_publication(args)
+    if problems:
+        for problem in problems:
+            print(f"gate: {problem}", file=sys.stderr)
+        return _EXIT_REFUSED
     verdict = evaluate(
         args.run,
         args.baseline,
