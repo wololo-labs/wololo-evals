@@ -12,9 +12,9 @@ config:
   parallel: false
   executor: copilot-sdk
   model: claude-sonnet-5.5
-  # Clone path on this box. Waza resolves skill_directories from the spec dir; unverified until a live run.
+  # Relative to the spec dir. Byte-identical copy of the ainb-toolkit skill (check with cmp).
   skill_directories:
-    - /home/claude/.orca/ainb-toolkit/packages/qe-agent-pack/.apm/skills
+    - skills
   # Trigger-precision mode: keep skill discovery, do not inject the SKILL.md body.
   inject_skill_body: false
 

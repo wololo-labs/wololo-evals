@@ -6,5 +6,5 @@ description: Identify missing tests in the quoting-service fixture without creat
 inputs:
   prompt: "Find the missing test cases in the quoting service in this workspace. Print the gap list only. Do not create any GitHub issues."
   context:
-    # Relative to the eval spec directory (this folder's parent).
-    fixture: ../../../../examples/fixtures/quoting-service
+    # Relative to the eval spec directory. Byte-identical copy of examples/fixtures/quoting-service (check with diff -r).
+    fixture: fixtures/quoting-service
