@@ -33,6 +33,7 @@ def deps(app_engine, tmp_path):
         verifier=Verifier(JWKS_PATH, "wololo-deploy"),
         cipher=cipher,
         blobstore=FsBlobStore(str(tmp_path / "blobs")),
+        repo_eval_roots=(str(tmp_path),),
     )
 
 
@@ -329,3 +330,40 @@ async def test_regression_replay_run_is_accepted(client, app_engine, worker_engi
     assert run.status_code == 201, run.text
     assert run.json()["eval_suite"] == "regression-replay"
     await _drain_job(worker_engine, run.json()["id"])
+
+
+async def test_repo_eval_refuses_a_repo_path_outside_the_allowed_roots(
+    client, deps, tmp_path
+):
+    # repo_path is read with git on the host. Any submitter could name any
+    # readable repository, so it must sit under an operator-chosen root.
+    from test_repo_eval import _init_repo
+
+    elsewhere = tmp_path.parent / (tmp_path.name + "-elsewhere")
+    _init_repo(elsewhere)
+    token = mint_token("meridian", SUBMIT)
+    async with client:
+        cand = await client.post(
+            "/api/v1/candidates",
+            json={
+                "candidate_type": "harness-config",
+                "candidate_ref": "claude-code@repo-eval-2",
+                "baseline_ref": "claude-code@baseline",
+                "payload": {"harness": "claude-code", "model": "claude-sonnet-4"},
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        cid = cand.json()["id"]
+        for roots in ((), (str(tmp_path),)):
+            deps.repo_eval_roots = roots
+            run = await client.post(
+                f"/api/v1/candidates/{cid}/runs",
+                json={
+                    "eval_suite": "repo-eval",
+                    "n_trials": 5,
+                    "repo_eval_source": {"repo_path": str(elsewhere)},
+                },
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            assert run.status_code == 400, run.text
+            assert "allowed root" in run.text

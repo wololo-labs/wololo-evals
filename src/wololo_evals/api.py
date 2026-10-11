@@ -10,6 +10,7 @@ named integration debt for 06a/06c.
 from __future__ import annotations
 
 import dataclasses
+import pathlib
 import datetime as dt
 import json
 import subprocess
@@ -54,6 +55,9 @@ class AppDeps:
     verifier: Verifier
     cipher: object               # EnvelopeCipher
     blobstore: object
+    #: Directories a repo-eval ``repo_path`` may live under. Empty means no host
+    #: repository can be named at all: the path is read with git on the host.
+    repo_eval_roots: tuple = ()
 
 
 def create_app(deps: AppDeps) -> FastAPI:
@@ -200,6 +204,14 @@ def create_app(deps: AppDeps) -> FastAPI:
                 return JSONResponse(
                     status_code=400,
                     content={"detail": "repo-eval requires repo_eval_source.repo_path"},
+                )
+            resolved = pathlib.Path(str(repo_path)).resolve()
+            if not any(
+                resolved.is_relative_to(pathlib.Path(r).resolve()) for r in deps.repo_eval_roots
+            ):
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "repo_eval_source.repo_path is not under an allowed root"},
                 )
             try:
                 fixture = repo_gen.generate(

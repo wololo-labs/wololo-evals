@@ -126,6 +126,19 @@ class DeploySettings:
 
 
 @dataclass(frozen=True)
+class RepoEvalSettings:
+    """Where a repo-eval run may read a git repository from on the host."""
+
+    # os.pathsep-separated directories. Empty (the default) refuses every
+    # repo_path, so naming a host repository is something an operator turns on.
+    roots: tuple = field(
+        default_factory=lambda: tuple(
+            r for r in _env("WOLOLO_EVALS_REPO_EVAL_ROOTS", "").split(os.pathsep) if r
+        )
+    )
+
+
+@dataclass(frozen=True)
 class Settings:
     """Aggregate service configuration for the entrypoints that need all of it.
 
@@ -142,6 +155,7 @@ class Settings:
     blob: BlobSettings = field(default_factory=BlobSettings)
     judge: JudgeSettings = field(default_factory=JudgeSettings)
     deploy: DeploySettings = field(default_factory=DeploySettings)
+    repo_eval: RepoEvalSettings = field(default_factory=RepoEvalSettings)
 
     # --- Backwards-compatible flat attribute surface ---------------------
     @property

@@ -30,7 +30,6 @@ import pathlib
 import shutil
 import subprocess
 import sys
-import warnings
 import tempfile
 from dataclasses import dataclass, field
 from typing import Mapping, Optional, Sequence
@@ -249,9 +248,26 @@ def _test_functions(tree: ast.Module) -> list[ast.FunctionDef | ast.AsyncFunctio
     ]
 
 
+_BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
+
+
+def _is_broad_expectation(call: ast.Call) -> bool:
+    """``pytest.raises(Exception)``: it passes for any failure inside the
+    block, so it pins nothing about the target."""
+    if not call.args:
+        return False  # `match=`/`expected_exception=` forms: judge as specific
+    arg = call.args[0]
+    kinds = arg.elts if isinstance(arg, (ast.Tuple, ast.List)) else [arg]
+    names = {
+        k.id if isinstance(k, ast.Name) else getattr(k, "attr", None) for k in kinds
+    }
+    return bool(names) and names <= _BROAD_EXCEPTIONS
+
+
 def _raises_blocks(fn: ast.AST, target_names: set[str]) -> int:
-    """``with pytest.raises(...)`` bodies that call into the target: an
-    error-path expectation is a strong assertion even with no ``assert``."""
+    """``with pytest.raises(SomeError)`` bodies that call into the target: an
+    error-path expectation is a strong assertion even with no ``assert``.
+    A blanket ``Exception`` does not count (see :func:`_is_broad_expectation`)."""
     count = 0
     for node in ast.walk(fn):
         if not isinstance(node, ast.With):
@@ -262,6 +278,7 @@ def _raises_blocks(fn: ast.AST, target_names: set[str]) -> int:
                 isinstance(call, ast.Call)
                 and isinstance(call.func, ast.Attribute)
                 and call.func.attr == "raises"
+                and not _is_broad_expectation(call)
                 and any(_references_target(stmt, target_names) for stmt in node.body)
             ):
                 count += 1
@@ -364,7 +381,8 @@ def _pytest_outcomes(
 def flake_resistance(
     workspace: pathlib.Path, *, repeats: int = _REPEATS, timeout_s: int = _DEFAULT_TIMEOUT_S
 ) -> tuple[float, dict]:
-    """Share of tests whose outcome is identical across ``repeats`` runs.
+    """Share of tests that pass identically across ``repeats`` runs. A test that
+    fails or errors on every run does not count: it is stable, not healthy.
 
     Each run gets a different ``PYTHONHASHSEED``, which is what shakes out the
     common flake source in generated suites: an expectation that depends on
@@ -389,11 +407,19 @@ def flake_resistance(
         tid for tid in ids
         if len({r.get(tid, "MISSING") for r in runs}) > 1
     )
-    score = ((len(ids) - len(unstable)) / len(ids)) if ids else 0.0
+    # A test that fails or errors on every run is stable but not healthy, so it
+    # is not resistant either; counting it as one scored a broken suite 1.0.
+    failing = sorted(
+        tid for tid in ids
+        if tid not in unstable and runs[0].get(tid) in ("FAILED", "ERROR")
+    )
+    bad = len(unstable) + len(failing)
+    score = ((len(ids) - bad) / len(ids)) if ids else 0.0
     return score, {
         "repeats": repeats,
         "tests": len(ids),
         "unstable": unstable,
+        "failing": failing,
         "outcomes": runs[0],
     }
 
@@ -420,7 +446,7 @@ def changed_line_coverage(
         "COVERAGE_FILE": str(workspace / ".coverage"),
     }
     targets = sorted({p.split("/")[0] for p in changed_lines})
-    subprocess.run(
+    run = subprocess.run(
         [
             sys.executable, "-m", "coverage", "run",
             f"--source={','.join(targets)}", "-m", "pytest", "tests",
@@ -428,6 +454,13 @@ def changed_line_coverage(
         ],
         cwd=workspace, env=env, capture_output=True, text=True, timeout=timeout_s,
     )
+    # pytest: 0 passed, 1 tests failed, anything else = the suite did not run
+    # (usage, collection or internal error), so its coverage means nothing.
+    if run.returncode not in (0, 1):
+        raise QeRubricError(
+            f"the suite did not run (pytest exit {run.returncode}): "
+            f"{(run.stdout or run.stderr).strip()[:400]}"
+        )
     report_path = workspace / "coverage.json"
     proc = subprocess.run(
         [sys.executable, "-m", "coverage", "json", "-o", str(report_path)],
@@ -470,23 +503,22 @@ def changed_line_coverage(
                 covered += 1
             else:
                 missed.append(f"{rel}:{line}")
+    if out_of_range:
+        raise QeRubricError(
+            f"changed-line manifest names lines past the end of the file or before "
+            f"line 1: {sorted(out_of_range)}; regenerate it, it has drifted from "
+            f"its fixture"
+        )
     if not considered:
         raise QeRubricError(
             f"no declared changed line is executable in {sorted(changed_lines)}"
-        )
-    if out_of_range:
-        warnings.warn(
-            f"changed-line manifest names lines past the end of the file or before "
-            f"line 1: {sorted(out_of_range)}. They were ignored; regenerate the "
-            f"manifest, which has drifted from its fixture.",
-            UserWarning,
-            stacklevel=2,
         )
     return covered / considered, {
         "covered": covered,
         "considered": considered,
         "missed": sorted(missed),
         "out_of_range": sorted(out_of_range),
+        "suite_failed": run.returncode == 1,
     }
 
 

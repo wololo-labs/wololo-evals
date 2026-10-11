@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import pathlib
 from contextlib import redirect_stdout
 
@@ -30,7 +31,7 @@ from wololo_evals.cli import cases_compile
 from wololo_evals.cli import matrix as matrix_mod
 from wololo_evals.cli import replay as replay_mod
 from wololo_evals.cli.artefact_writer import compose_case, pass_at_k, pass_hat_k
-from wololo_evals.cli.config import load_matrix_config
+from wololo_evals.cli.config import AssetEntry, load_matrix_config
 from wololo_evals.cli.main import main
 from wololo_evals.core import interfaces as ci
 
@@ -676,3 +677,137 @@ def test_replay_is_byte_stable(tmp_path):
 def test_replay_missing_summary_fails_loud(tmp_path):
     with pytest.raises(replay_mod.ReplayError):
         replay_mod.replay(tmp_path)
+
+
+def test_allow_engine_drift_reaches_the_adapter(tmp_path):
+    # run_matrix accepted the flag and never forwarded it, so the adapter's
+    # version check refused an out-of-range CLI even with the override set.
+    mc = _make_project(tmp_path)
+    seen = []
+
+    class Spy(FakeAdapter):
+        def run(self, spec):  # noqa: ANN001
+            seen.append(spec.extra.get("allow_engine_drift"))
+            return super().run(spec)
+
+    for flag in (True, False):
+        seen.clear()
+        matrix_mod.run_matrix(
+            load_matrix_config(mc), lambda e: Spy(e), make_grader(),
+            timestamp=f"2026072{int(flag)}T000000Z", allow_engine_drift=flag,
+        )
+        assert seen and all(v is flag for v in seen)
+
+
+def test_provenance_does_not_claim_the_run_was_hermetic(tmp_path):
+    # Trials run outside the repo but are not sandboxed (an absolute path still
+    # works), so a published `hermetic: true` was false.
+    md = matrix_mod.run_matrix(
+        load_matrix_config(_make_project(tmp_path)), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    prov = json.loads((md / "matrix_summary.json").read_text())["provenance"]
+    assert prov["hermetic"] is False
+    assert "not a sandbox" in prov["isolation"]
+
+
+@pytest.mark.parametrize("n", ["0", "-1"])
+def test_seeds_below_one_are_refused(tmp_path, n):
+    mc = _make_project(tmp_path)
+    mc.write_text(re.sub(r"(?m)^seeds = .*$", f"seeds = {n}", mc.read_text()))
+    with pytest.raises(ValueError, match="seeds"):
+        load_matrix_config(mc)
+
+
+@pytest.mark.parametrize("weight", ["0", "-0.5", "nan"])
+def test_a_non_positive_case_weight_is_refused(tmp_path, weight):
+    # A negative weight can push a weighted score above 1 (1 / 0.5 = 2).
+    mc = _make_project(tmp_path)
+    toml = tmp_path / "benchmarks" / "demo" / "cases.toml"
+    toml.write_text(toml.read_text().replace("[[cases]]", f"[[cases]]\ncase_weight = {weight}", 1))
+    with pytest.raises(cases_compile.CasesCompileError, match="case_weight"):
+        cases_compile.compile(toml)
+    row = json.loads((tmp_path / "benchmarks" / "demo" / "cases.jsonl").read_text().splitlines()[1])
+    row["case_weight"] = float(weight)
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text(json.dumps(row) + "\n")
+    with pytest.raises(cases_compile.CasesCompileError, match="case_weight"):
+        cases_compile.load_cases(bad)
+
+
+def test_a_missing_asset_path_is_an_error_not_an_empty_asset(tmp_path):
+    entry = AssetEntry(id="a", kind="agent_skill", path="nope/SKILL.md")
+    with pytest.raises(FileNotFoundError, match="nope"):
+        matrix_mod._snapshot(entry, tmp_path)
+
+
+def test_a_directory_asset_digest_covers_its_files(tmp_path):
+    d = tmp_path / "skill"
+    d.mkdir()
+    (d / "SKILL.md").write_text("one")
+    entry = AssetEntry(id="a", kind="agent_skill", path="skill")
+    first = matrix_mod._snapshot(entry, tmp_path).snapshot_digest
+    (d / "SKILL.md").write_text("two")
+    assert matrix_mod._snapshot(entry, tmp_path).snapshot_digest != first
+
+
+def test_a_finished_output_directory_is_not_overwritten(tmp_path):
+    mc = _make_project(tmp_path)
+    kw = dict(timestamp="20260719T000000Z")
+    matrix_mod.run_matrix(load_matrix_config(mc), adapter_factory(), make_grader(), **kw)
+    with pytest.raises(FileExistsError, match="already holds"):
+        matrix_mod.run_matrix(load_matrix_config(mc), adapter_factory(), make_grader(), **kw)
+
+
+def test_a_stale_compiled_casebook_is_refused(tmp_path):
+    mc = _make_project(tmp_path)
+    toml = tmp_path / "benchmarks" / "demo" / "cases.toml"
+    toml.write_text(toml.read_text().replace("explains the risk", "explains the danger"))
+    with pytest.raises(ValueError, match="stale"):
+        matrix_mod.run_matrix(
+            load_matrix_config(mc), adapter_factory(), make_grader(),
+            timestamp="20260719T000000Z",
+        )
+
+
+def test_skipped_event_types_roll_up_into_the_run_provenance(tmp_path):
+    # A per-case key is easy to miss. The run's summary says the trace was
+    # incomplete, and how often, so the gate can read it.
+    class SkippingNormaliser:
+        skipped = {"tool_progress": 2}
+
+        def normalise(self, path):  # noqa: ANN001
+            return [ci.TraceEvent(seq=0, ts_ms=0, kind="tool_call", name="read", target="a")]
+
+    md = matrix_mod.run_matrix(
+        load_matrix_config(_make_project(tmp_path)), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z", normaliser_factory=lambda e: SkippingNormaliser(),
+    )
+    prov = json.loads((md / "matrix_summary.json").read_text())["provenance"]
+    n_runs = len(list(md.rglob("seeds/*/cases/*.json")))
+    assert prov["trace_skipped_event_types"] == {"tool_progress": 2 * n_runs}
+
+    clean = matrix_mod.run_matrix(
+        load_matrix_config(_make_project(tmp_path / "clean")), adapter_factory(), make_grader(),
+        timestamp="20260719T000000Z",
+    )
+    assert json.loads((clean / "matrix_summary.json").read_text())["provenance"][
+        "trace_skipped_event_types"
+    ] == {}
+
+
+def test_attempts_include_the_matrix_level_retry():
+    # The adapter retries once and the matrix retries again, so a run can
+    # execute four times. The recorded count came from the last call alone.
+    calls = []
+
+    class Flaky:
+        def run(self, spec):  # noqa: ANN001
+            calls.append(1)
+            status = "infra_fail" if len(calls) < 2 else "ok"
+            return ci.RunResult(run_id="r", status=status, artefact_dir="x",
+                                runtime_seconds=0.0, attempts=2)
+
+    result = matrix_mod._run_with_retry(Flaky(), spec=None)
+    assert result.status == "ok"
+    assert result.attempts == 4

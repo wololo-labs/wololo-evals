@@ -14,6 +14,7 @@ stdlib/``tomllib`` — never ``db``/``api``/``jobs``.
 """
 from __future__ import annotations
 
+import collections
 import dataclasses
 import hashlib
 import pathlib
@@ -106,16 +107,25 @@ def _snapshot(entry: Optional[AssetEntry], base_dir: pathlib.Path) -> ci.AssetSn
 
     body = entry.inline or ""
     files: dict[str, str] = {}
+    digest_src = body.encode("utf-8")
     if entry.path and not entry.inline:
         p = base_dir / entry.path
         if p.is_file():
             body = p.read_text(encoding="utf-8")
             files[entry.path] = body
+            digest_src = body.encode("utf-8")
         elif p.is_dir():
+            h = hashlib.sha256()
             for f in sorted(p.rglob("*")):
                 if f.is_file():
-                    files[str(f.relative_to(p))] = f.read_text(encoding="utf-8")
-    digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+                    rel = str(f.relative_to(p))
+                    files[rel] = f.read_text(encoding="utf-8")
+                    h.update(rel.encode("utf-8") + b"\0" + files[rel].encode("utf-8") + b"\0")
+            digest_src = h.digest()
+        else:
+            # Used to fall through to an empty asset under a plausible id.
+            raise FileNotFoundError(f"asset {entry.id!r}: no file or directory at {p}")
+    digest = hashlib.sha256(digest_src).hexdigest()
     ref = ci.AssetRef(
         kind=entry.kind,
         id=entry.id,
@@ -359,7 +369,9 @@ def render_plan(p: MatrixPlan) -> str:
 # ---------------------------------------------------------------------------
 # Live / injected execution
 # ---------------------------------------------------------------------------
-def _spec_extra(case: ci.CaseSpec, prompt_preamble: Optional[str]) -> dict:
+def _spec_extra(
+    case: ci.CaseSpec, prompt_preamble: Optional[str], allow_engine_drift: bool = False
+) -> dict:
     """Per-run extras. The preamble names the asset, so it stays off a case
     whose point is that the asset must stay silent.
 
@@ -367,9 +379,10 @@ def _spec_extra(case: ci.CaseSpec, prompt_preamble: Optional[str]) -> dict:
     to use the skill, the forced arm would fail it by construction, and the
     failure would measure the preamble rather than the skill.
     """
+    extra: dict = {"allow_engine_drift": allow_engine_drift}
     if prompt_preamble and case.expected_outcome != "no_activation":
-        return {"prompt_preamble": prompt_preamble}
-    return {}
+        extra["prompt_preamble"] = prompt_preamble
+    return extra
 
 
 def _run_with_retry(
@@ -388,7 +401,11 @@ def _run_with_retry(
     if result.status == "infra_fail":
         if reset is not None:
             reset()
+        first = result
         result = adapter.run(spec)
+        # The adapter retries too, so one trial can execute four times. Count
+        # all of them, not just the last call's.
+        result = dataclasses.replace(result, attempts=first.attempts + result.attempts)
     return result
 
 
@@ -432,8 +449,10 @@ def _execute_combo(
     cumulative: float,
     smoke: bool,
     engine_versions: dict[str, str],
+    trace_skipped_total: Optional[collections.Counter] = None,
     fixtures_dir: Optional[pathlib.Path] = None,
     prompt_preamble: Optional[str] = None,
+    allow_engine_drift: bool = False,
 ) -> float:
     """Run one combo's cases x seeds, write its seed/case/scorecard artefacts
     under ``run_dir``, append events, and return the new cumulative spend."""
@@ -469,7 +488,7 @@ def _execute_combo(
                     seed=seed,
                     cwd=str(work),
                     caps=ci.RunCaps(),
-                    extra=_spec_extra(case, prompt_preamble),
+                    extra=_spec_extra(case, prompt_preamble, allow_engine_drift),
                 )
                 if cap is not None and cumulative >= cap:
                     result = ci.RunResult(
@@ -535,6 +554,8 @@ def _execute_combo(
             finally:
                 shutil.rmtree(work, ignore_errors=True)
             payload = _seed_case_payload(spec, result, composed)
+            if trace_skipped_total is not None:
+                trace_skipped_total.update(trace_skipped)
             if trace_skipped:
                 # Event types the normaliser did not recognise and skipped. Left
                 # out of the payload when there were none, so only a run that
@@ -593,6 +614,12 @@ def run_matrix(
     """
     benchmark = load_benchmark(config.benchmark_dir)
     _validate_engines(config, benchmark)
+    toml = config.benchmark_dir / "cases.toml"
+    if toml.is_file():
+        # Editing cases.toml without recompiling left the run on the old cases.
+        fresh, why = cases_compile.check(toml, config.benchmark_dir / "cases.jsonl")
+        if not fresh:
+            raise ValueError(f"stale compiled casebook: {why}")
     all_cases = cases_compile.load_cases(config.benchmark_dir / "cases.jsonl")
     all_cases = _select_cases(config, all_cases)
     combos = build_combos(config)
@@ -609,12 +636,17 @@ def run_matrix(
         seeds = 1
 
     matrix_dir = ci.artefacts.matrix_dir(config.output_path, iteration, timestamp)
+    # Reusing a timestamp used to overwrite the earlier run file by file and
+    # leave its old summary beside new artefacts if this one died part way.
+    if matrix_dir.exists() and any(matrix_dir.iterdir()):
+        raise FileExistsError(f"{matrix_dir} already holds a run; pick a new timestamp")
     matrix_dir.mkdir(parents=True, exist_ok=True)
 
     cap = max_cost_usd if max_cost_usd is not None else config.max_cost_usd
     cumulative = 0.0
     events = aw.EventLog()
     engine_versions: dict[str, str] = {}
+    trace_skipped_total: collections.Counter = collections.Counter()
     combo_records: list[aw.ComboRecord] = []
 
     for combo in combos:
@@ -627,12 +659,14 @@ def run_matrix(
             normaliser_factory=normaliser_factory, events=events,
             timestamp=timestamp, cap=cap, cumulative=cumulative, smoke=smoke,
             engine_versions=engine_versions,
+            trace_skipped_total=trace_skipped_total,
             fixtures_dir=(
                 (config.base_dir / config.fixtures_dir).resolve()
                 if config.fixtures_dir
                 else None
             ),
             prompt_preamble=config.prompt_preamble,
+            allow_engine_drift=allow_engine_drift,
         )
         scorecard_path = ci.artefacts.scorecard_path(run_dir)
         combo_records.append(
@@ -666,6 +700,7 @@ def run_matrix(
         provenance=_provenance(
             config, benchmark, engine_versions, harness_version, cache_mode, smoke,
             cases_run=[case.case_id for case in all_cases],
+            trace_skipped=dict(trace_skipped_total),
         ),
         workflow=config.workflow,
     )
@@ -709,6 +744,7 @@ def _provenance(
     cache_mode: str,
     smoke: bool,
     cases_run: Sequence[str] = (),
+    trace_skipped: Optional[Mapping[str, int]] = None,
 ) -> dict:
     return {
         "harness_version": harness_version,
@@ -730,7 +766,13 @@ def _provenance(
             "cases_run": list(cases_run),
             "fixtures_dir": config.fixtures_dir,
         },
-        "hermetic": True,
+        # Trials run in a throwaway directory outside the repository. That
+        # removes the casual `../` route, not the absolute-path one.
+        # Event types a normaliser did not recognise and skipped, summed over
+        # every run. Non-empty means some trace assertions saw a partial trace.
+        "trace_skipped_event_types": dict(trace_skipped or {}),
+        "hermetic": False,
+        "isolation": "none: the trial directory is outside the repo but is not a sandbox",
         "exfiltration_scan_scope": "advisory",
         "repro_command": f"wololo-evals-cli matrix --config {config.matrix_id}.toml",
     }

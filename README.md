@@ -121,6 +121,7 @@ Mandatory environment variables, fail-closed with no default:
 | `WOLOLO_EVALS_JUDGE_BASE_URL` | `https://api.anthropic.com` |
 | `WOLOLO_EVALS_JUDGE_API_KEY` | empty |
 | `WOLOLO_EVALS_DEPLOY_BASE_URL` | `http://wololo-deploy-stub:8080` |
+| `WOLOLO_EVALS_REPO_EVAL_ROOTS` | empty (no host repository can be named) |
 
 The DB-free eval core (the file-first CLI, a judge-only smoke) constructs only
 the judge and blob sub-settings, so it needs none of the three mandatory vars.
@@ -168,8 +169,10 @@ worker, an OTEL collector on `4318`, and the wololo-deploy canary stub on `8090`
   catch rate, and a four-dimension rule-based `qe-review` rubric, all computed
   at gate time and all at zero spend. See
   [the QE benchmark](#the-qe-benchmark-scoring-a-testing-skill).
-- **Paired-trial statistics**: baseline-versus-treatment arms with a DDL-enforced
-  minimum of five trials per arm, a 95 percent Student-t confidence interval over
+- **Paired-trial statistics**: baseline-versus-treatment arms with a minimum of five
+  trials per arm enforced when a run is created (a smoke run may go below it and
+  is flagged, never verdict-bearing; the published `eval-run` schema accepts
+  `n_trials` of 1 and does not enforce the floor), a 95 percent Student-t confidence interval over
   paired differences, a wins rule and a `low_confidence` flag.
 - **Candidate-versus-baseline gate**: paired bootstrap confidence interval on the
   benchmark-score delta, hard-gate trips, and a four-bucket classification of
@@ -195,7 +198,8 @@ worker, an OTEL collector on `4318`, and the wololo-deploy canary stub on `8090`
   round-robin fairness, idempotency keys and a daily run quota returning 429.
 - **Canary gate lifecycle**: open, telemetry and verdict routes plus a
   `canary-poll` worker with a two-consecutive-window regression debounce and an
-  exactly-once, crash-safe idempotent rollback.
+  crash-safe rollback sent with a stable `Idempotency-Key`: delivery is at-least-once,
+  and the effect is exactly-once only when wololo-deploy honours the key.
 - **Observability**: OTEL traces and per-tenant metering on every route and run.
 
 ### Tech stack
@@ -296,7 +300,7 @@ and the `task_outcome` slot is where the QE number lives:
 | `qe_rubric` | the weighted `qe-review` composite | 0.8782 | 0.9033 |
 | `qe_assertion_strength` | share of tests making a discriminating expectation | 0.8571 | 0.8959 |
 | `qe_changed_line_coverage` | share of the declared changed lines executed | 0.7368 | 0.7847 |
-| `qe_flake_resistance` | share of tests whose outcome holds across hash seeds | 1.0000 | 1.0000 |
+| `qe_flake_resistance` | share of tests that pass and hold their outcome across hash seeds | 1.0000 | 1.0000 |
 | `qe_no_tautological_assertions` | share of assertions that can actually fail | 1.0000 | 0.9943 |
 
 Baseline is the no-agent arm: the repository's shipped suite, run as it stands.

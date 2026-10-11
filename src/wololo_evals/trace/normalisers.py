@@ -144,6 +144,10 @@ class _BaseNormaliser:
         self.skipped[str(value)] += 1
 
     def normalise(self, raw_event_path: pathlib.Path) -> list[TraceEvent]:
+        # The registry shares one instance per engine, so per-stream state
+        # starts clean here or the next run's artefact inherits this one's.
+        self.skipped = collections.Counter()
+        self._begin_stream()
         rows = _read_jsonl(raw_event_path)
         events: list[TraceEvent] = []
         for seq, (lineno, obj) in enumerate(self._iter_emitted(rows)):
@@ -178,7 +182,13 @@ class _BaseNormaliser:
                 if item is None:
                     continue
                 if item[0] == "__tokens__":
-                    tin, tout = item[1]["tokens_in"], item[1]["tokens_out"]
+                    # A report is a running total, so only what the events do
+                    # not already carry is new. Adding it whole counted Claude's
+                    # per-turn usage twice and a repeated report twice.
+                    have_in = sum(p[1][1].get("tokens_in", 0) for p in pending)
+                    have_out = sum(p[1][1].get("tokens_out", 0) for p in pending)
+                    tin = max(0, item[1]["tokens_in"] - have_in)
+                    tout = max(0, item[1]["tokens_out"] - have_out)
                     if pending:
                         pending[-1][1][1]["tokens_in"] = (
                             pending[-1][1][1].get("tokens_in", 0) + tin
@@ -188,6 +198,13 @@ class _BaseNormaliser:
                         )
                     continue
                 pending.append((lineno, item))
+        return self._finalise(pending)
+
+    def _begin_stream(self) -> None:
+        """Reset any per-stream state before a parse."""
+
+    def _finalise(self, pending):
+        """Last look at the emitted events, in order, before they are numbered."""
         return pending
 
     def _emit(self, lineno: int, obj: dict):  # pragma: no cover - abstract
@@ -223,6 +240,28 @@ class ClaudeNormaliser(_BaseNormaliser):
         "Grep": "search",
         "Glob": "search",
     }
+
+    def _begin_stream(self) -> None:
+        #: tool_use ids of Skill calls the CLI then rejected. The activation is
+        #: emitted in place when the call is made, so ordering survives, and is
+        #: dropped afterwards if the result says the call failed.
+        self._rejected: set[str] = set()
+
+    def _finalise(self, pending):
+        kept = []
+        for lineno, (kind, fields) in pending:
+            hold = fields.pop("_skill_call", None)
+            if hold is not None and hold in self._rejected:
+                if fields.get("tokens_in") or fields.get("tokens_out"):
+                    # not an activation, but the tokens were still spent
+                    kept.append((lineno, ("message", {
+                        "target": None,
+                        "tokens_in": fields.get("tokens_in", 0),
+                        "tokens_out": fields.get("tokens_out", 0),
+                    })))
+                continue
+            kept.append((lineno, (kind, fields)))
+        return kept
 
     def _emit(self, lineno, obj):
         etype = obj.get("type")
@@ -278,6 +317,7 @@ class ClaudeNormaliser(_BaseNormaliser):
                         "args_digest": _digest(tinput),
                         "tokens_in": tin,
                         "tokens_out": tout,
+                        "_skill_call": str(block.get("id") or ""),
                     })
                 else:
                     yield ("tool_call", {
@@ -290,6 +330,8 @@ class ClaudeNormaliser(_BaseNormaliser):
                 emitted_any = True
                 tin = tout = 0
             elif btype == "tool_result":
+                if block.get("is_error"):
+                    self._rejected.add(str(block.get("tool_use_id")))
                 yield ("tool_result", {
                     "target": None,
                     "result_digest": _digest(block.get("content")),
@@ -485,7 +527,13 @@ class CopilotNormaliser(_BaseNormaliser):
                     raise TraceParseError(
                         f"{self.engine_id}:{lineno}: tool_call.arguments is not JSON: {exc}"
                     ) from exc
-            args = args if isinstance(args, dict) else {}
+            if args is None:
+                args = {}
+            if not isinstance(args, dict):
+                raise TraceParseError(
+                    f"{self.engine_id}:{lineno}: tool_call.arguments must be an "
+                    f"object, got {type(args).__name__}"
+                )
             if name in ("activate_skill", "skill"):
                 yield ("lifecycle", {
                     "name": SKILL_ACTIVATED,

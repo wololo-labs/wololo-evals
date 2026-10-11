@@ -88,6 +88,16 @@ def _case_hard_failed(signals: Sequence[Mapping[str, object]], hard: frozenset[s
     )
 
 
+def _hard_signal_ids(signals: Sequence[Mapping[str, object]], hard: frozenset[str]) -> frozenset[str]:
+    """Hard-gate evaluators that actually scored in this case."""
+    return frozenset(
+        str(s.get("evaluator_id"))
+        for s in signals
+        if s.get("verdict") in ("pass", "fail")
+        and (s.get("evaluator_id") in hard or s.get("slot") in hard)
+    )
+
+
 def _case_has_active_judge(signals: Sequence[Mapping[str, object]]) -> bool:
     return any(s.get("kind") == "judge" and s.get("verdict") != "skipped" for s in signals)
 
@@ -150,6 +160,8 @@ class _RunView:
     pass_threshold: float
     benchmark_path: Optional[str]
     benchmark_id: str
+    benchmark_id_declared: bool
+    trace_skipped: Mapping[str, int]
     judge_disabled: bool
     has_active_judge: bool
     combos: Sequence[_ComboView]
@@ -189,6 +201,7 @@ def _load_run(run_dir: str | pathlib.Path) -> _RunView:
             raise GateError(f"combo {combo.get('combo_id')!r} scorecard missing: {sc_path}")
         sc = json.loads(sc_path.read_text(encoding="utf-8"))
         judge_disabled = judge_disabled or bool(sc.get("judge_disabled"))
+        _check_scorecard(sc, sc_path)
         for case in sc.get("cases", []):
             if _case_has_active_judge(case.get("signals", [])):
                 has_active_judge = True
@@ -209,10 +222,36 @@ def _load_run(run_dir: str | pathlib.Path) -> _RunView:
         pass_threshold=pass_threshold,
         benchmark_path=str(benchmark_path) if benchmark_path else None,
         benchmark_id=benchmark_id,
+        benchmark_id_declared=bool(summary.get("benchmark_id")),
+        trace_skipped=dict(
+            (summary.get("provenance") or {}).get("trace_skipped_event_types") or {}
+        ),
         judge_disabled=judge_disabled,
         has_active_judge=has_active_judge,
         combos=tuple(combos),
     )
+
+
+def _check_scorecard(sc: Mapping[str, object], path: pathlib.Path) -> None:
+    """Refuse a scorecard whose rows cannot be read unambiguously.
+
+    A repeated case_id kept only the last row, so a failing duplicate hid
+    behind a passing one; a verdict outside the known set was averaged in with
+    a missing score read as 0.0.
+    """
+    seen: set[str] = set()
+    for case in sc.get("cases", []):
+        cid = str(case.get("case_id"))
+        if cid in seen:
+            raise GateError(f"{path}: duplicate case_id {cid!r}")
+        seen.add(cid)
+        for signal in case.get("signals", []):
+            verdict = signal.get("verdict")
+            if verdict not in ci.SIGNAL_VERDICTS:
+                raise GateError(
+                    f"{path}: case {cid!r} signal {signal.get('evaluator_id')!r} "
+                    f"has unknown verdict {verdict!r}"
+                )
 
 
 def _case_rows(sc: Mapping[str, object]) -> dict[str, Mapping[str, object]]:
@@ -512,6 +551,26 @@ class GateVerdict:
         return "\n".join(lines)
 
 
+def _incomparable(run: _RunView, base: _RunView) -> str:
+    if run.evaluation_type != base.evaluation_type:
+        return (
+            f"evaluation_type {run.evaluation_type!r} (run) vs "
+            f"{base.evaluation_type!r} (baseline)"
+        )
+    if run.pass_threshold != base.pass_threshold:
+        return (
+            f"pass_threshold {run.pass_threshold} (run) vs "
+            f"{base.pass_threshold} (baseline)"
+        )
+    if (
+        run.benchmark_id_declared
+        and base.benchmark_id_declared
+        and run.benchmark_id != base.benchmark_id
+    ):
+        return f"benchmark {run.benchmark_id!r} (run) vs {base.benchmark_id!r} (baseline)"
+    return ""
+
+
 def _refused(
     run_dir: pathlib.Path,
     baseline_dir: pathlib.Path,
@@ -548,6 +607,9 @@ def evaluate(
     golden_agreement: Optional[float] = None,
     judge_agreement_min: float = 0.7,
     signal_guards: Sequence[str] = (),
+    allow_subset: bool = False,
+    min_cases: int = 3,
+    allow_skipped_trace: bool = False,
 ) -> GateVerdict:
     """Produce the §16.4 gate verdict comparing ``run_dir`` against ``baseline_dir``.
 
@@ -558,6 +620,32 @@ def evaluate(
     run = _load_run(run_dir)
     base = _load_run(baseline_dir)
     run_p, base_p = pathlib.Path(run_dir), pathlib.Path(baseline_dir)
+
+    # Two runs are comparable only on one bar. Each case is classified against
+    # its own run's threshold, so a mismatch changes the buckets silently.
+    mismatch = _incomparable(run, base)
+    if mismatch:
+        return _refused(
+            run_p, base_p, run, max_regression,
+            f"runs are not comparable: {mismatch}",
+            {"participates": False, "agreement": None,
+             "agreement_min": judge_agreement_min, "calibrated": True},
+        )
+
+    skipped = {
+        f"{arm}:{t}": n
+        for arm, view in (("run", run), ("baseline", base))
+        for t, n in view.trace_skipped.items()
+    }
+    if skipped and not allow_skipped_trace:
+        return _refused(
+            run_p, base_p, run, max_regression,
+            "trace assertions ran on a partial trace; the normaliser skipped event "
+            f"types it does not know ({', '.join(f'{k} x{n}' for k, n in sorted(skipped.items()))}); "
+            "pass allow_skipped_trace once you have read them",
+            {"participates": False, "agreement": None,
+             "agreement_min": judge_agreement_min, "calibrated": True},
+        )
 
     # --- judge-input guards (§16.4 / §17) ---
     family = ci.GATE_FAMILY_WEIGHTS.get(run.evaluation_type, {})
@@ -602,6 +690,30 @@ def evaluate(
     combos_compared: list[str] = []
     hard = _hard_gate_names(run.evaluation_type)
 
+    # A baseline combo or case the candidate never ran is not evidence of no
+    # regression. Omitting the case it would fail used to make it pass.
+    missing: list[str] = []
+    cand_by_key = {c.key: c for c in run.combos}
+    for base_combo in base.combos:
+        cand_combo = cand_by_key.get(base_combo.key)
+        if cand_combo is None:
+            missing.append(f"combo {base_combo.combo_id} ({'/'.join(base_combo.key)})")
+            continue
+        have = set(_case_rows(cand_combo.scorecard))
+        missing.extend(
+            f"{base_combo.combo_id}:{cid}"
+            for cid in _case_rows(base_combo.scorecard) if cid not in have
+        )
+    if missing and not allow_subset:
+        shown = ", ".join(missing[:5]) + (f" (+{len(missing) - 5} more)" if len(missing) > 5 else "")
+        return _refused(
+            run_p, base_p, run, max_regression,
+            f"baseline cases absent from the run: {shown}; pass allow_subset to compare "
+            f"only what both ran",
+            judge_info,
+        )
+
+    reweighted: list[str] = []
     for cand_combo in run.combos:
         base_combo = base_by_key.get(cand_combo.key)
         if base_combo is None:
@@ -614,6 +726,10 @@ def evaluate(
             if base_case is None:
                 unmatched.append(f"{cand_combo.combo_id}:{case_id}")
                 continue
+            w_cand = float(cand_case.get("case_weight", 1.0))
+            w_base = float(base_case.get("case_weight", 1.0))
+            if w_cand != w_base:
+                reweighted.append(f"{cand_combo.combo_id}:{case_id} ({w_base} -> {w_cand})")
             is_quarantined = bool(cand_case.get("quarantined")) or bool(
                 base_case.get("quarantined")
             )
@@ -631,18 +747,39 @@ def evaluate(
                     baseline_hard_failed=_case_hard_failed(
                         base_case.get("signals", []), hard
                     ),
+                    # A hard gate the baseline scored and the candidate did not is
+                    # a failure: dropping the check must not be a way past it.
                     candidate_hard_failed=_case_hard_failed(
                         cand_case.get("signals", []), hard
+                    ) or bool(
+                        _hard_signal_ids(base_case.get("signals", []), hard)
+                        - _hard_signal_ids(cand_case.get("signals", []), hard)
                     ),
                     quarantined=is_quarantined,
-                    case_weight=float(cand_case.get("case_weight", 1.0)),
+                    case_weight=w_cand,
                 )
             )
+
+    if reweighted:
+        return _refused(
+            run_p, base_p, run, max_regression,
+            "case_weight differs between the runs: " + ", ".join(reweighted[:5])
+            + "; the candidate must not choose how much a case counts",
+            judge_info,
+        )
 
     if not any(not p.quarantined for p in pairs):
         return _refused(
             run_p, base_p, run, max_regression,
             "no comparable (non-quarantined) cases between run and baseline",
+            judge_info,
+        )
+
+    comparable = sum(1 for p in pairs if not p.quarantined)
+    if comparable < min_cases:
+        return _refused(
+            run_p, base_p, run, max_regression,
+            f"{comparable} comparable case(s); a verdict needs at least {min_cases}",
             judge_info,
         )
 
@@ -729,6 +866,20 @@ def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
     parser.add_argument(
         "--max-regression", type=float, default=0.0,
         help="regression tolerance (§16.4, default 0)",
+    )
+    parser.add_argument(
+        "--allow-subset", action="store_true",
+        help="compare only the cases both runs have (default: refuse when the "
+             "run omits a baseline case or combo)",
+    )
+    parser.add_argument(
+        "--allow-skipped-trace", action="store_true",
+        help="gate even though a run's trace skipped event types the normaliser "
+             "did not recognise (default: refuse)",
+    )
+    parser.add_argument(
+        "--min-cases", type=int, default=3,
+        help="refuse a verdict over fewer comparable cases than this (default 3)",
     )
     parser.add_argument("--confidence", type=float, default=0.95)
     parser.add_argument("--resamples", type=int, default=1000)
@@ -830,6 +981,9 @@ def run(args) -> int:  # noqa: ANN001 - argparse namespace
         golden_agreement=args.golden_agreement,
         judge_agreement_min=args.judge_agreement_min,
         signal_guards=tuple(args.signal_guard or ()),
+        allow_subset=args.allow_subset,
+        min_cases=args.min_cases,
+        allow_skipped_trace=args.allow_skipped_trace,
     )
     subject = {
         k: v

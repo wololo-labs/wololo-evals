@@ -424,7 +424,7 @@ def test_a_scorer_outage_on_one_arm_is_not_a_regression(tmp_path):
         "c2": (1.0, [_sig("kill_rate", 0.0, "evaluator_error"), _sig("other", 1.0)]),
     })
 
-    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",))
+    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",), min_cases=1)
     delta = next(d for d in verdict.signal_deltas if d.evaluator_id == "kill_rate")
 
     # 0.40 alone, not (0.40 + 0.0) / 2 = 0.20 against a baseline of 0.25.
@@ -446,13 +446,13 @@ def test_a_guard_on_an_error_only_signal_refuses(tmp_path):
         "c1": (1.0, [_sig("kill_rate", 0.0, "evaluator_error"), _sig("other", 1.0)]),
     })
 
-    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",))
+    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",), min_cases=1)
     assert verdict.verdict == "refused"
     assert verdict.exit_code == 2
     assert "error-only in run" in verdict.reason
 
     # Unguarded, the same pair is simply not compared on that signal.
-    ungated = gate_mod.evaluate(candidate, baseline)
+    ungated = gate_mod.evaluate(candidate, baseline, min_cases=1)
     assert ungated.verdict == "pass"
     assert "kill_rate" not in {d.evaluator_id for d in ungated.signal_deltas}
 
@@ -464,6 +464,150 @@ def test_a_guard_on_an_absent_signal_still_refuses(tmp_path):
     candidate = _write_arm(tmp_path / "cand", signals_by_case={
         "c1": (1.0, [_sig("other", 1.0)]),
     })
-    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",))
+    verdict = gate_mod.evaluate(candidate, baseline, signal_guards=("kill_rate",), min_cases=1)
     assert verdict.exit_code == 2
     assert "absent" in verdict.reason
+
+
+@pytest.mark.parametrize("confidence", [0.0, 1.0, -0.1, 1.5, float("nan")])
+def test_bootstrap_rejects_a_confidence_outside_the_open_unit_interval(confidence):
+    # confidence 0 or 1 collapses the percentile band to a point or to the
+    # extremes and was accepted as a real interval.
+    with pytest.raises(ValueError, match="confidence"):
+        ab.paired_bootstrap_ci([0.1, 0.2, 0.3], confidence=confidence)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -1.0, 0.0])
+def test_bootstrap_rejects_unusable_weights_and_deltas(bad):
+    with pytest.raises(ValueError, match="weight"):
+        ab.paired_bootstrap_ci([0.1, 0.2], weights=[1.0, bad])
+    with pytest.raises(ValueError, match="delta"):
+        ab.paired_bootstrap_ci([0.1, float("nan")])
+
+
+def test_comparing_only_quarantined_cases_is_an_error_not_a_neutral_verdict():
+    p = ab.CasePair(
+        case_id="a", baseline_score=1.0, candidate_score=0.0, baseline_passed=True,
+        candidate_passed=False, baseline_hard_failed=False, candidate_hard_failed=False,
+        quarantined=True,
+    )
+    with pytest.raises(ValueError, match="no comparable"):
+        ab.compare([p])
+
+
+def test_duplicate_case_ids_in_a_scorecard_are_refused(tmp_path):
+    # A dict keyed by case_id kept the last row, so a failing duplicate could
+    # hide behind a passing one.
+    cand = [_case("c0", 0.2), _case("c0", 0.95), _case("c1", 0.9), _case("c2", 0.9)]
+    base = [_case(f"c{i}", 0.9) for i in range(3)]
+    run, baseline = _pair(tmp_path, cand, base)
+    with pytest.raises(gate_mod.GateError, match="duplicate case_id"):
+        gate_mod.evaluate(run, baseline)
+
+
+def test_an_unknown_signal_verdict_is_refused_not_scored(tmp_path):
+    # Anything other than pass/fail/skipped/evaluator_error was averaged in,
+    # with a missing score read as 0.0.
+    cand = [_case(f"c{i}", 0.9) for i in range(4)]
+    cand[0]["signals"][0]["verdict"] = "errored"
+    base = [_case(f"c{i}", 0.9) for i in range(4)]
+    run, baseline = _pair(tmp_path, cand, base)
+    with pytest.raises(gate_mod.GateError, match="unknown verdict 'errored'"):
+        gate_mod.evaluate(run, baseline)
+
+
+def _tweak_summary(run_dir, **changes):
+    path = pathlib.Path(run_dir) / "matrix_summary.json"
+    data = json.loads(path.read_text())
+    data.update(changes)
+    path.write_text(json.dumps(data))
+
+
+@pytest.mark.parametrize(
+    "change,needle",
+    [
+        ({"evaluation_type": "skill_behaviour"}, "evaluation_type"),
+        ({"pass_threshold": 0.5}, "pass_threshold"),
+        ({"benchmark_id": "other"}, "benchmark"),
+    ],
+)
+def test_runs_from_different_benchmarks_or_bars_are_refused(tmp_path, change, needle):
+    # Matching on engine/model/prompt alone let a verdict compare two runs that
+    # were scored on different bars and report a bucket for each against its own.
+    ids = [f"c{i}" for i in range(6)]
+    run, baseline = _pair(tmp_path, [_case(c, 0.9) for c in ids], [_case(c, 0.9) for c in ids])
+    _tweak_summary(run, **change)
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "refused" and v.exit_code == 2
+    assert needle in v.reason
+
+
+def test_baseline_cases_missing_from_the_candidate_are_refused(tmp_path):
+    # Iterating the candidate's cases alone dropped a baseline case the
+    # candidate never ran, so omitting the case it would fail made it pass.
+    base = [_case(f"c{i}", 0.9) for i in range(6)]
+    cand = [_case(f"c{i}", 0.9) for i in range(5)]  # c5 not run
+    run, baseline = _pair(tmp_path, cand, base)
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "refused" and "c5" in v.reason
+    ok = gate_mod.evaluate(run, baseline, allow_subset=True)
+    assert ok.verdict == "pass"
+
+
+def test_a_baseline_combo_missing_from_the_candidate_is_refused(tmp_path):
+    cases = [_case(f"c{i}", 0.9) for i in range(4)]
+    run = _write_run(tmp_path / "cand", evaluation_type="code_change", combos=[_combo(cases)])
+    other = _combo(cases, cid="claude__haiku__default")
+    other["model_id"] = "haiku"
+    base = _write_run(tmp_path / "base", evaluation_type="code_change",
+                      combos=[_combo(cases), other])
+    v = gate_mod.evaluate(run, base)
+    assert v.verdict == "refused" and "haiku" in v.reason
+
+
+def test_a_case_weight_that_differs_between_the_runs_is_refused(tmp_path):
+    # Only the candidate's weight was used, so raising it on an improving case
+    # diluted a regression elsewhere.
+    ids = [f"c{i}" for i in range(6)]
+    cand = [_case(c, 0.95 if c == "c0" else 0.3) for c in ids]
+    base = [_case(c, 0.9) for c in ids]
+    cand[0]["case_weight"] = 50.0
+    run, baseline = _pair(tmp_path, cand, base)
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "refused" and "case_weight" in v.reason and "c0" in v.reason
+
+
+def test_a_hard_gate_signal_the_candidate_dropped_counts_as_a_hard_failure(tmp_path):
+    # `_case_hard_failed` only recognised an explicit "fail", so a candidate
+    # that stopped emitting the baseline's hard-gate signal avoided the check.
+    ids = [f"c{i}" for i in range(6)]
+    base = [_case(c, 0.9) for c in ids]
+    for row in base:
+        row["signals"].append({"evaluator_id": "exfiltration", "kind": "safety", "score": 1.0,
+                               "weight": 1.0, "verdict": "pass", "slot": None})
+    cand = [_case(c, 0.9) for c in ids]  # no exfiltration signal at all
+    run, baseline = _pair(tmp_path, cand, base)
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "regression"
+    assert len(v.ab_verdict.newly_failing_hard_gates) == 6
+
+
+def test_a_verdict_needs_a_minimum_number_of_comparable_cases(tmp_path):
+    # One comparable pair reached the bootstrap, whose interval over a single
+    # delta is a point, so a gate of record could pass or fail on n = 1.
+    run, baseline = _pair(tmp_path, [_case("c0", 0.1)], [_case("c0", 0.9)])
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "refused" and "at least 3" in v.reason
+    assert gate_mod.evaluate(run, baseline, min_cases=1).verdict == "regression"
+
+
+def test_a_run_whose_trace_skipped_unknown_events_is_refused(tmp_path):
+    # Trace assertions (deny_tools, used_skill) read only what the normaliser
+    # recognised, so a stream that dropped an event type is graded on a partial
+    # trace. The gate says so instead of passing it.
+    ids = [f"c{i}" for i in range(6)]
+    run, baseline = _pair(tmp_path, [_case(c, 0.9) for c in ids], [_case(c, 0.9) for c in ids])
+    _tweak_summary(run, provenance={"trace_skipped_event_types": {"tool_progress": 3}})
+    v = gate_mod.evaluate(run, baseline)
+    assert v.verdict == "refused" and "tool_progress" in v.reason
+    assert gate_mod.evaluate(run, baseline, allow_skipped_trace=True).verdict == "pass"

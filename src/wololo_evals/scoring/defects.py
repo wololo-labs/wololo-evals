@@ -123,6 +123,10 @@ def apply_defect(root: pathlib.Path, defect: SeededDefect) -> pathlib.Path:
     manifest and the coverage report use.
     """
     path = root / defect.file
+    if not path.resolve().is_relative_to(root.resolve()):
+        raise DefectApplyError(
+            f"defect {defect.id!r}: {defect.file!r} points outside the workspace"
+        )
     if not path.is_file():
         raise DefectApplyError(f"defect {defect.id!r}: no file at {path}")
     source = path.read_text(encoding="utf-8")

@@ -273,7 +273,7 @@ def test_a_missing_mutation_tool_is_an_evaluator_error_not_a_zero():
     assert signal.score == 0.0
 
 
-def test_a_changed_line_past_the_end_of_the_file_is_flagged_not_swallowed(tmp_path):
+def test_a_changed_line_past_the_end_of_the_file_is_refused(tmp_path):
     # Lines coverage calls non-executable are dropped from the denominator, and
     # a line number past the end of the file falls into the same bucket. Two
     # shipped manifests drifted that way, listing 87 and 88 in an 86 line file,
@@ -286,12 +286,11 @@ def test_a_changed_line_past_the_end_of_the_file_is_flagged_not_swallowed(tmp_pa
     (tmp_path / "tests" / "test_mod.py").write_text(
         "from pkg.mod import f\n\n\ndef test_f():\n    assert f(1) == 2\n"
     )
-    with pytest.warns(UserWarning, match="past the end"):
-        coverage, details = qe_rubric.changed_line_coverage(
-            tmp_path, {"pkg/mod.py": [1, 2, 3, 40]}
-        )
-    assert coverage == 1.0, "the in-range lines are all executed"
-    assert details["out_of_range"] == ["pkg/mod.py:3", "pkg/mod.py:40"]
+    # A manifest that has drifted from its fixture used to score on the
+    # lines that survived, so 1.0 was still possible. It is now an
+    # evaluator error, never a number.
+    with pytest.raises(qe_rubric.QeRubricError, match="pkg/mod.py:40"):
+        qe_rubric.changed_line_coverage(tmp_path, {"pkg/mod.py": [1, 2, 3, 40]})
 
 
 def test_an_empty_denominator_is_not_a_perfect_score():
@@ -362,3 +361,66 @@ def test_the_workspace_digest_is_content_addressed(tmp_path):
     assert mutation.workspace_digest(a) == mutation.workspace_digest(b)
     (b / "test_x.py").write_text("assert False\n", encoding="utf-8")
     assert mutation.workspace_digest(a) != mutation.workspace_digest(b)
+
+
+def _strength(tmp_path, body):
+    (tmp_path / "test_mod.py").write_text(
+        "import pytest\nfrom pkg.mod import f\n\n\ndef test_x():\n" + body
+    )
+    return qe_rubric.assertion_strength(tmp_path, "pkg")[0]
+
+
+def test_a_broad_exception_expectation_is_not_a_strong_assertion(tmp_path):
+    # `raises(Exception)` passes for any failure inside the call, an
+    # unrelated TypeError included, so it pins nothing about the target.
+    assert _strength(tmp_path, "    with pytest.raises(Exception):\n        f(1)\n") == 0.0
+    assert _strength(tmp_path, "    with pytest.raises(BaseException):\n        f(1)\n") == 0.0
+    assert _strength(tmp_path, "    with pytest.raises((Exception,)):\n        f(1)\n") == 0.0
+    assert _strength(tmp_path, "    with pytest.raises(ValueError):\n        f(1)\n") == 1.0
+
+
+def test_a_suite_that_fails_every_run_is_not_flake_resistant(tmp_path):
+    # Failing identically on every seed is stable, not healthy. It used to
+    # score 1.0 on flake_resistance.
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_a.py").write_text(
+        "def test_ok():\n    assert True\n\n\ndef test_broken():\n    assert False\n"
+    )
+    score, details = qe_rubric.flake_resistance(tmp_path, repeats=2)
+    assert score == 0.5
+    assert details["failing"] == ["tests/test_a.py::test_broken"]
+    assert details["unstable"] == []
+
+
+def test_changed_line_coverage_records_a_failing_suite_and_refuses_a_broken_one(tmp_path):
+    # Coverage of a run whose tests failed was scored like any other. A failing
+    # suite is recorded; one that never ran (collection error) is refused.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "mod.py").write_text("def f(x):\n    return x + 1\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_mod.py").write_text(
+        "from pkg.mod import f\n\n\ndef test_f():\n    assert f(1) == 99\n"
+    )
+    _, details = qe_rubric.changed_line_coverage(tmp_path, {"pkg/mod.py": [1, 2]})
+    assert details["suite_failed"] is True
+
+    (tmp_path / "tests" / "test_mod.py").write_text("import nonexistent_module\n")
+    with pytest.raises(qe_rubric.QeRubricError, match="did not run"):
+        qe_rubric.changed_line_coverage(tmp_path, {"pkg/mod.py": [1, 2]})
+
+
+def test_a_defect_path_cannot_leave_the_workspace(tmp_path):
+    from wololo_evals.scoring import defects
+
+    root = tmp_path / "ws"
+    root.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("x = 1\n")
+    bad = defects.SeededDefect(
+        id="d", title="d", file="../outside.py", find="x = 1", replace="x = 2", rationale=""
+    )
+    with pytest.raises(defects.DefectApplyError, match="outside"):
+        defects.apply_defect(root, bad)
+    assert outside.read_text() == "x = 1\n"

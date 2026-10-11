@@ -175,12 +175,16 @@ def load_matrix_config(path: str | pathlib.Path) -> MatrixConfig:
     if not models:
         raise ValueError(f"matrix config {p} declares no [[models]]")
 
+    seeds = int(data.get("seeds", 1))
+    if seeds < 1:
+        raise ValueError(f"matrix config {p}: seeds must be at least 1, got {seeds}")
+
     return MatrixConfig(
         schema_version=str(data.get("schema_version", "2.0.0")),
         benchmark=str(data["benchmark"]),
         output_dir=str(data.get("output_dir", "out")),
         base_dir=p.parent.resolve(),
-        seeds=int(data.get("seeds", 1)),
+        seeds=seeds,
         concurrency=int(data.get("concurrency", 1)),
         max_cost_usd=(
             float(data["max_cost_usd"]) if data.get("max_cost_usd") is not None else None

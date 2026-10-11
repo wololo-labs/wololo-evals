@@ -103,7 +103,8 @@ async def open_gate(
     run = (
         await conn.execute(
             text(
-                "select status, composite_score, rubric_version, verdict_stats "
+                "select status, composite_score, rubric_version, verdict_stats, "
+                "       smoke, candidate_id "
                 "from wololo_evals.runs where id = :id"
             ),
             {"id": run_id},
@@ -113,6 +114,10 @@ async def open_gate(
         raise GateError("no such run")
     if run.status != "passed":
         raise GateError(f"run status {run.status!r} is not 'passed'; gate refused")
+    if run.smoke:
+        raise GateError("run is a smoke run; it is never verdict-bearing, gate refused")
+    if str(run.candidate_id) != str(candidate_id):
+        raise GateError("run belongs to a different candidate; gate refused")
     if run.composite_score is None:
         raise GateError("run has no frozen composite")
     stats = run.verdict_stats

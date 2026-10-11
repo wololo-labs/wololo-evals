@@ -1,7 +1,7 @@
 """Statistics engine (SPEC S7, DOCTRINE 15.6: no verdict on n=1).
 
 Uniform policy across suites: verdict-bearing runs execute ``n_trials`` per
-arm (floor 5, DDL-enforced); trials pair by ``(task_fixture, trial_index)``;
+arm (floor 5, enforced at run creation; smoke runs excepted); trials pair by ``(task_fixture, trial_index)``;
 the run's verdict stores mean, stddev, a 95% Student-t confidence interval
 over the paired per-trial differences, wins/losses, and ``low_confidence``
 (CI spanning zero). stdlib only: ``statistics`` + ``math`` + a small t-table,
@@ -20,14 +20,20 @@ _T_95 = {
     14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093,
     20: 2.086, 21: 2.080, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060,
     26: 2.056, 27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042,
+    # Anchors past the dense table. An unlisted df takes the nearest anchor at
+    # or below it, which can only overstate t, so the interval is never
+    # narrower than the 95% it claims (the normal 1.960 was 4% short at df 31).
+    40: 2.021, 60: 2.000, 120: 1.980,
 }
 
 
 def t_critical_95(df: int) -> float:
     if df < 1:
         raise ValueError("degrees of freedom must be >= 1")
-    # ponytail: beyond the table the normal quantile is within 2% of t.
-    return _T_95.get(df, 1.960)
+    if df in _T_95:
+        return _T_95[df]
+    below = [k for k in _T_95 if k < df]
+    return _T_95[max(below)] if df <= 1000 else 1.960
 
 
 def paired_uplift_pcts(

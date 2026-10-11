@@ -126,6 +126,27 @@ async def test_open_on_low_confidence_run_is_refused(app_engine, cipher):
         await _open_gate(app_engine, cid, rid, "dep-lowconf")
 
 
+async def test_open_on_a_smoke_run_is_refused(app_engine, cipher):
+    # Migration 002 says a smoke run is never verdict-bearing and the gate must
+    # reject it; open_gate never looked at the flag.
+    cid, rid = await _passed_run(app_engine, cipher)
+    async with tenant_txn(app_engine, TENANT) as conn:
+        await conn.execute(
+            text("update wololo_evals.runs set smoke = true where id = :id"), {"id": rid}
+        )
+    with pytest.raises(canary.GateError, match="smoke"):
+        await _open_gate(app_engine, cid, rid, "dep-smoke")
+
+
+async def test_open_with_a_candidate_that_is_not_the_runs_is_refused(app_engine, cipher):
+    # The gate recorded whichever candidate the caller named, so a passed run
+    # of one candidate could put another under watch.
+    _, rid = await _passed_run(app_engine, cipher)
+    other_cid, _ = await _passed_run(app_engine, cipher)
+    with pytest.raises(canary.GateError, match="candidate"):
+        await _open_gate(app_engine, other_cid, rid, "dep-mismatch")
+
+
 async def test_open_on_passed_run_watches(app_engine, cipher):
     cid, rid = await _passed_run(app_engine, cipher)
     gid = await _open_gate(app_engine, cid, rid, "dep-ok")

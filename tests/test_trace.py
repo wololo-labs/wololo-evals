@@ -443,3 +443,96 @@ def test_read_revalidates_events(tmp_path):
     )
     with pytest.raises(ValueError, match="not in"):
         read_trace(path)
+
+
+def test_skip_counts_do_not_carry_over_between_streams(tmp_path):
+    # NORMALISERS holds one instance per engine, and the counter was never
+    # cleared, so a later run's artefact reported skips from an earlier one.
+    from wololo_evals.trace.normalisers import ClaudeNormaliser
+
+    noisy = tmp_path / "noisy.raw.jsonl"
+    noisy.write_text(
+        '{"type":"tool_progress"}\n'
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}\n',
+        encoding="utf-8",
+    )
+    clean = tmp_path / "clean.raw.jsonl"
+    clean.write_text(
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}\n',
+        encoding="utf-8",
+    )
+    norm = ClaudeNormaliser()
+    norm.normalise(noisy)
+    assert dict(norm.skipped) == {"tool_progress": 1}
+    norm.normalise(clean)
+    assert dict(norm.skipped) == {}
+
+
+def _skill_stream(tmp_path, *, result):
+    lines = [
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1",'
+        '"name":"Skill","input":{"skill":"demo"}}]}}',
+    ]
+    if result is not None:
+        lines.append(
+            '{"type":"user","message":{"content":[{"type":"tool_result",'
+            f'"tool_use_id":"t1","content":"x"{result}}}]}}}}'
+        )
+    path = tmp_path / "claude.raw.jsonl"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def test_a_skill_call_that_errored_is_not_an_activation(tmp_path):
+    # The activation was emitted from the tool_use alone, so a call the CLI
+    # rejected ("Unknown skill") still satisfied used_skill.
+    errored = normalise_stream("claude", _skill_stream(tmp_path, result=',"is_error":true'))
+    assert not any(e.is_skill_activation for e in errored)
+    ok = normalise_stream("claude", _skill_stream(tmp_path, result=""))
+    assert [e.target for e in ok if e.is_skill_activation] == ["demo"]
+    # a stream cut before the result arrives is not proof either way: keep it
+    cut = normalise_stream("claude", _skill_stream(tmp_path, result=None))
+    assert [e.target for e in cut if e.is_skill_activation] == ["demo"]
+
+
+def test_reported_token_totals_are_totals_not_increments(tmp_path):
+    # Claude's `result` line reports the run's total usage on top of the
+    # per-turn usage already attached inline, and Codex and Copilot report
+    # cumulative totals that can repeat. Adding each report double counted:
+    # a recorded run summed to 8162 output tokens against a reported 8119.
+    raw = tmp_path / "claude.raw.jsonl"
+    raw.write_text(
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"a"}],'
+        '"usage":{"input_tokens":10,"output_tokens":4}}}\n'
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"b"}],'
+        '"usage":{"input_tokens":6,"output_tokens":5}}}\n'
+        '{"type":"result","usage":{"input_tokens":16,"output_tokens":100}}\n',
+        encoding="utf-8",
+    )
+    events = normalise_stream("claude", raw)
+    assert (sum(e.tokens_in for e in events), sum(e.tokens_out for e in events)) == (16, 100)
+
+    cop = tmp_path / "copilot.raw.jsonl"
+    cop.write_text(
+        '{"type":"assistant_message"}\n'
+        '{"type":"usage","input_tokens":100,"output_tokens":20}\n'
+        '{"type":"assistant_message"}\n'
+        '{"type":"usage","input_tokens":100,"output_tokens":20}\n',
+        encoding="utf-8",
+    )
+    events = normalise_stream("copilot", cop)
+    assert (sum(e.tokens_in for e in events), sum(e.tokens_out for e in events)) == (100, 20)
+
+
+@pytest.mark.parametrize("bad", ["[1, 2]", "7", '"[1]"'])
+def test_copilot_arguments_that_are_not_an_object_are_a_parse_error(tmp_path, bad):
+    # Anything but an object became {} and the call kept its name with no
+    # target, so a malformed activation or a target-specific assertion failed
+    # without saying why.
+    raw = tmp_path / "copilot.raw.jsonl"
+    raw.write_text(
+        f'{{"type":"tool_call","name":"activate_skill","arguments":{bad}}}\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(TraceParseError, match="arguments"):
+        normalise_stream("copilot", raw)
