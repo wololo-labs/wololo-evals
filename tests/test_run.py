@@ -201,3 +201,10 @@ def test_a_replay_archive_with_a_symlink_is_refused(skill_repo, capsys):
     (archive / "skill" / "case").symlink_to(skill_repo / "eval.yaml")
     assert _run(skill_repo, "--replay", str(archive)) == 2
     assert "symlink" in capsys.readouterr().err
+
+
+def test_two_runs_in_the_same_second_do_not_collide(skill_repo, monkeypatch):
+    monkeypatch.setattr("wololo_evals.cli.run._timestamp", lambda: "20260101T000000Z")
+    assert _run(skill_repo) == 0
+    assert _run(skill_repo) == 0
+    assert len(list((skill_repo / ".wololo-evals" / "skill" / "iterations").glob("*"))) == 2

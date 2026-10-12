@@ -189,6 +189,13 @@ def _record(matrix_dir: pathlib.Path, dest: pathlib.Path, model: str, stamp: str
     return count
 
 
+def _next_iteration(out: pathlib.Path) -> int:
+    """One more than the runs already under ``out``: a second run in the same
+    second used to collide on the timestamp and refuse."""
+    seen = [len(list((out / arm / "iterations").glob("*"))) for arm in ARMS]
+    return max(seen) + 1
+
+
 def _timestamp() -> str:
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
@@ -257,6 +264,7 @@ def run(
 
     out = pathlib.Path(args.out).resolve() if args.out else cfg.base_dir / ".wololo-evals"
     stamp = _timestamp()
+    iteration = _next_iteration(out)
     remaining = cfg.max_cost_usd
     dirs: dict[str, pathlib.Path] = {}
     spent = 0.0
@@ -268,7 +276,7 @@ def run(
         factory = adapter_factory or live_factory
         dirs[arm] = _matrix.run_matrix(
             arm_cfg, factory, grader, timestamp=stamp,
-            normaliser_factory=normaliser_factory,
+            normaliser_factory=normaliser_factory, iteration=iteration,
             max_cost_usd=None if replay else remaining,
         )
         arm_spend = _spend(dirs[arm])
