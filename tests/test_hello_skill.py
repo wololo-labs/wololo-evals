@@ -9,6 +9,7 @@ left in their workspaces and requires the gate to have reported the same.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import shutil
 
@@ -155,6 +156,7 @@ class _LeakyEngine(_RecordedEngine):
             encoding="utf-8",
         )
         (pathlib.Path(spec.cwd) / "stolen.txt").symlink_to(self._secret_file)
+        os.link(self._secret_file, pathlib.Path(spec.cwd) / "hard.txt")
         return result
 
 
@@ -177,6 +179,21 @@ def test_a_recorded_archive_holds_no_credentials_and_no_followed_links(tmp_path,
     blob = "".join(f.read_text(encoding="utf-8") for f in files if f.suffix in (".jsonl", ".json", ".txt"))
     assert "sk-test-placeholder-not-a-secret" not in blob and "[redacted]" in blob
     assert "PRIVATE-HOST-DATA" not in blob
+    # Neither the hardlink's content nor the file itself reached the archive or the kept tree.
+    assert not list((work / "recorded").rglob("hard.txt"))
+    assert not any(
+        "PRIVATE-HOST-DATA" in f.read_text(encoding="utf-8")
+        for f in (work / ".wololo-evals").rglob("*") if f.is_file() and not f.is_symlink()
+    )
     # The run tree the matrix kept has the link as a link, not a copy of its target.
     kept = [p for p in (work / ".wololo-evals").rglob("stolen.txt")]
     assert kept and all(p.is_symlink() for p in kept)
+
+
+def test_redaction_scrubs_binary_files_too(tmp_path):
+    from wololo_evals.cli.run import _redact
+
+    f = tmp_path / "blob.bin"
+    f.write_bytes(b"\xff\xfe sk-test-placeholder-not-a-secret \x00")
+    _redact(tmp_path, ["sk-test-placeholder-not-a-secret"])
+    assert b"sk-live" not in f.read_bytes() and b"[redacted]" in f.read_bytes()

@@ -138,18 +138,19 @@ def _secrets() -> list[str]:
 
 
 def _redact(root: pathlib.Path, secrets: list[str]) -> None:
+    """Scrub secret values from every archived file, as bytes so a binary file
+    cannot slip through unread. An I/O error propagates: a record that could
+    not be scrubbed must fail, not ship."""
+    needles = [v.encode("utf-8") for v in secrets]
     for f in root.rglob("*"):
         if f.is_symlink() or not f.is_file():
             continue
-        try:
-            text = f.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
-            continue  # binary: left alone
-        scrubbed = text
-        for value in secrets:
-            scrubbed = scrubbed.replace(value, "[redacted]")
-        if scrubbed != text:
-            f.write_text(scrubbed, encoding="utf-8")
+        data = f.read_bytes()
+        scrubbed = data
+        for needle in needles:
+            scrubbed = scrubbed.replace(needle, b"[redacted]")
+        if scrubbed != data:
+            f.write_bytes(scrubbed)
 
 
 def _skip_links(directory: str, names: list[str]) -> set[str]:
