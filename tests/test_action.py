@@ -57,6 +57,12 @@ def _run_gate(tmp_path: pathlib.Path, event: str, *, replay: str = "", cap: str 
     return done, outputs, work, summary
 
 
+def test_dispatch_records_an_archive_for_later_replay():
+    assert '--record "$report_dir/replay-archive"' in _GATE["run"]
+    upload = next(s for s in _STEPS if s.get("name") == "Upload the replay archive")
+    assert "workflow_dispatch" in upload["if"]
+
+
 def test_pull_request_scores_the_archive_and_reports_a_pass(tmp_path):
     done, outputs, work, summary = _run_gate(tmp_path, "pull_request", replay="replay")
     assert done.returncode == 0, done.stderr

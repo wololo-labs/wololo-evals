@@ -63,6 +63,8 @@ runs:
         args=(run --config "$EVAL_CONFIG")
         if [ "$EVAL_EVENT" = workflow_dispatch ]; then
           if [ -n "$EVAL_MAX_COST_USD" ]; then args+=(--max-cost-usd "$EVAL_MAX_COST_USD"); fi
+          # Keep what the run did, so it can be committed and replayed on pull requests.
+          args+=(--record "$report_dir/replay-archive")
         elif [ -n "$EVAL_REPLAY" ]; then
           args+=(--replay "$EVAL_REPLAY")
         else
@@ -86,6 +88,14 @@ runs:
       with:
         name: eval-gate-report
         path: ${{ steps.gate.outputs.dir }}/eval-gate-report.*
+        if-no-files-found: ignore
+
+    - name: Upload the replay archive
+      if: always() && github.event_name == 'workflow_dispatch'
+      uses: actions/upload-artifact@v4
+      with:
+        name: eval-replay-archive
+        path: ${{ steps.gate.outputs.dir }}/replay-archive
         if-no-files-found: ignore
 
     - name: Fail on a regression or a refusal
