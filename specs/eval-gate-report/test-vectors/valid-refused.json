@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0.0",
+  "verdict": "refused",
+  "reason": "judge uncalibrated: golden-set agreement k=none < 0.7",
+  "run": ".wololo-evals/skill/iterations/001/matrix-20261012T015134Z",
+  "baseline": ".wololo-evals/no-skill/iterations/001/matrix-20261012T015134Z",
+  "evaluation_type": "skill_behaviour",
+  "pass_threshold": 0.7,
+  "max_regression": 0.0,
+  "combos_compared": [],
+  "quarantined_cases": [],
+  "unmatched_cases": [],
+  "judge": {
+    "participates": false,
+    "agreement": null,
+    "agreement_min": 0.7,
+    "calibrated": true
+  },
+  "signals": [],
+  "guarded_regressions": [],
+  "recorded": "2026-10-12",
+  "mode": "replay",
+  "spend_usd": 0.0,
+  "thresholds": {
+    "pass": 0.7,
+    "max_regression": 0.0
+  },
+  "scores": {
+    "no_skill": 0.5441,
+    "skill": 1.0
+  }
+}
