@@ -1,0 +1,38 @@
+name: hello-skill
+
+# Runs examples/hello-skill through this repository's own action, the way a
+# skill repo would. The event is pull_request or push, so the action scores the
+# recorded archive and spends nothing; the job fails unless the verdict is pass.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hello-skill-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Gate the example skill
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: gate
+        uses: ./
+        with:
+          config: examples/hello-skill/eval.yaml
+          replay: examples/hello-skill/replay
+
+      - name: Check the action reported what the report says
+        run: |
+          test "${{ steps.gate.outputs.verdict }}" = pass
+          jq -e '.verdict == "pass" and .mode == "replay" and .spend_usd == 0' \
+            "${{ steps.gate.outputs.report }}"
