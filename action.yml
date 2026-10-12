@@ -1,0 +1,95 @@
+name: wololo-evals skill gate
+description: >
+  Evaluate a skill from its eval.yaml. On a pull request it scores a recorded
+  archive at zero spend; on workflow_dispatch it runs live under the cost cap.
+  Uploads the gate report and fails the job on a regression or a refusal.
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  config:
+    description: Path to eval.yaml, relative to the workspace.
+    default: eval.yaml
+  replay:
+    description: >
+      Archive of recorded runs (no-skill/ and skill/) to score on every event
+      except workflow_dispatch. Required there; spends nothing.
+    default: ""
+  max-cost-usd:
+    description: >
+      Cost cap for a live run (workflow_dispatch). Overrides max_cost_usd in
+      eval.yaml. A live run with neither set is refused.
+    default: ""
+  python-version:
+    description: Python used to run wololo-evals.
+    default: "3.11"
+
+outputs:
+  verdict:
+    description: pass, regression or refused.
+    value: ${{ steps.gate.outputs.verdict }}
+  report:
+    description: Path to eval-gate-report.json.
+    value: ${{ steps.gate.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    # Editable on purpose: the built-in benchmarks live beside the package in
+    # this repository, and an editable install keeps them reachable by name.
+    - name: Install wololo-evals
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: python -m pip install --quiet -e "$ACTION_PATH"
+
+    - name: Run the gate
+      id: gate
+      shell: bash
+      env:
+        EVAL_CONFIG: ${{ inputs.config }}
+        EVAL_REPLAY: ${{ inputs.replay }}
+        EVAL_MAX_COST_USD: ${{ inputs.max-cost-usd }}
+        EVAL_EVENT: ${{ github.event_name }}
+      run: |
+        report_dir="$(dirname "$EVAL_CONFIG")"
+        echo "dir=$report_dir" >> "$GITHUB_OUTPUT"
+        echo "report=$report_dir/eval-gate-report.json" >> "$GITHUB_OUTPUT"
+        args=(run --config "$EVAL_CONFIG")
+        if [ "$EVAL_EVENT" = workflow_dispatch ]; then
+          if [ -n "$EVAL_MAX_COST_USD" ]; then args+=(--max-cost-usd "$EVAL_MAX_COST_USD"); fi
+        elif [ -n "$EVAL_REPLAY" ]; then
+          args+=(--replay "$EVAL_REPLAY")
+        else
+          echo "::error::event $EVAL_EVENT scores a recorded archive; set the replay input (a live run is workflow_dispatch only)"
+          echo "code=2" >> "$GITHUB_OUTPUT"
+          echo "verdict=refused" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        code=0
+        wololo-evals-cli "${args[@]}" || code=$?
+        echo "code=$code" >> "$GITHUB_OUTPUT"
+        if [ -f "$report_dir/eval-gate-report.md" ]; then
+          cat "$report_dir/eval-gate-report.md" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        case "$code" in 0) verdict=pass ;; 1) verdict=regression ;; *) verdict=refused ;; esac
+        echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+
+    - name: Upload the report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: eval-gate-report
+        path: ${{ steps.gate.outputs.dir }}/eval-gate-report.*
+        if-no-files-found: ignore
+
+    - name: Fail on a regression or a refusal
+      shell: bash
+      env:
+        EVAL_CODE: ${{ steps.gate.outputs.code }}
+      run: exit "${EVAL_CODE:-2}"
