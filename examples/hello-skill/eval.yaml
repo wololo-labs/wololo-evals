@@ -1,0 +1,14 @@
+# How this skill is evaluated. Run it from this directory:
+#
+#   wololo-evals-cli run --config eval.yaml --replay replay
+#
+# --replay scores the recorded runs under replay/ at zero spend. Drop the flag
+# to run live against the engine below; a live run refuses without max_cost_usd.
+asset: skill
+benchmark: benchmark
+engine: claude
+model: claude-sonnet-5-5
+max_cost_usd: 1.00
+thresholds:
+  pass: 0.7
+  max_regression: 0.0

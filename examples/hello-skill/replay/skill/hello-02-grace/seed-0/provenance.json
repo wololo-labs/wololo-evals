@@ -1,0 +1,6 @@
+{
+  "engine_id": "claude",
+  "model_id": "synthetic:hand-authored",
+  "recorded": "hand-authored fixture",
+  "note": "This raw stream is hand-authored to the Claude Code stream-json shape, not captured from a model run. It drives the replay engine deterministically. The score in the gate report is not recorded here: it is recomputed at gate time from the stream and from the files in workspace/."
+}

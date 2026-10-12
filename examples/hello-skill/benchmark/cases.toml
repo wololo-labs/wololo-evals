@@ -1,0 +1,69 @@
+# Casebook for the hello-greeter skill: three greeting cases and a distractor.
+#
+#   activation_correct  trace:used_skill  - the skill fired on a greeting and
+#                       stayed silent on the distractor
+#   trace_conformance   every tool call wrote greeting.txt, and none shelled out
+#   task_outcome        code: over what the run left behind
+#
+# `cases compile` turns this into the canonical `cases.jsonl`; keep the two in
+# sync (`cases compile --check`).
+
+version = 2
+
+[defaults]
+expected_skill = "hello-greeter"
+assertions = ["used_greeter", "wrote_the_file", "no_shell"]
+
+[assertions]
+used_greeter = "trace:used_skill()"
+wrote_the_file = "trace:allow_tools(write:greeting.txt)"
+no_shell = "trace:deny_tools(bash)"
+greeted_ada = "code:output.greeting == 'Hello, Ada!'"
+greeted_grace = "code:output.greeting == 'Hello, Grace!'"
+greeted_linus = "code:output.greeting == 'Hello, Linus!'"
+answered_four = "code:output.answer == '4'"
+
+[[cases]]
+case_id = "hello-01-ada"
+fixture_id = "empty"
+case_weight = 1.0
+title = "Greet Ada"
+difficulty = "easy"
+tags = ["greeting"]
+input_text = "Say hello to Ada."
+expected_outcome = "pass"
+assertions = ["used_greeter", "wrote_the_file", "no_shell", "greeted_ada"]
+
+[[cases]]
+case_id = "hello-02-grace"
+fixture_id = "empty"
+case_weight = 1.0
+title = "Greet Grace"
+difficulty = "easy"
+tags = ["greeting"]
+input_text = "Say hello to Grace."
+expected_outcome = "pass"
+assertions = ["used_greeter", "wrote_the_file", "no_shell", "greeted_grace"]
+
+[[cases]]
+case_id = "hello-03-linus"
+fixture_id = "empty"
+case_weight = 1.0
+title = "Greet Linus"
+difficulty = "easy"
+tags = ["greeting"]
+input_text = "Say hello to Linus."
+expected_outcome = "pass"
+assertions = ["used_greeter", "wrote_the_file", "no_shell", "greeted_linus"]
+
+[[cases]]
+case_id = "hello-04-distractor"
+role = "distractor"
+fixture_id = "empty"
+case_weight = 1.0
+title = "Not a greeting: the skill must stay silent"
+difficulty = "easy"
+tags = ["distractor", "no-activation"]
+input_text = "What is 2 + 2?"
+expected_outcome = "no_activation"
+assertions = ["used_greeter", "answered_four"]
