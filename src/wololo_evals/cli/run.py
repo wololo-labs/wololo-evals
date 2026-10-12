@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import json
+import os
 import pathlib
 import sys
 from typing import Callable, Optional
@@ -128,6 +129,22 @@ def _mean_score(matrix_dir: pathlib.Path) -> float:
     return sum(scores) / len(scores) if scores else 0.0
 
 
+def _subject(cfg: EvalConfig) -> dict:
+    """Which asset the verdict is about, from the CI environment.
+
+    Like ``gate``, a subject with no repo or commit cannot tie the score to
+    anything, so outside CI the report simply carries none.
+    """
+    repo, commit = os.environ.get("GITHUB_REPOSITORY"), os.environ.get("GITHUB_SHA")
+    if not (repo and commit):
+        return {}
+    return {
+        "repo": f"https://github.com/{repo}",
+        "path": os.path.relpath(cfg.asset, cfg.base_dir),
+        "commit": commit,
+    }
+
+
 def run(
     args,  # noqa: ANN001 - argparse namespace
     *,
@@ -185,7 +202,13 @@ def run(
 
     scores = {"no_skill": _mean_score(dirs["no-skill"]), "skill": _mean_score(dirs["skill"])}
     verdict = dataclasses.replace(
-        verdict, recorded=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+        verdict,
+        # Relative to the config: an absolute path would put the operator's
+        # home directory in a report that is uploaded and published.
+        run_dir=os.path.relpath(dirs["skill"], cfg.base_dir),
+        baseline_dir=os.path.relpath(dirs["no-skill"], cfg.base_dir),
+        subject=_subject(cfg),
+        recorded=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"),
     )
     if verdict.verdict == "pass" and scores["skill"] < cfg.pass_score:
         verdict = dataclasses.replace(

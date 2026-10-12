@@ -165,3 +165,22 @@ def test_thresholds_pass_is_an_absolute_floor(skill_repo, monkeypatch):
     report = _report(skill_repo)
     assert report["verdict"] == "regression"
     assert "thresholds.pass" in report["reason"]
+
+
+def test_report_paths_are_relative_and_subject_comes_from_ci(skill_repo, monkeypatch):
+    monkeypatch.setenv("GITHUB_REPOSITORY", "acme/skills")
+    monkeypatch.setenv("GITHUB_SHA", "a" * 40)
+    _run(skill_repo)
+    report = _report(skill_repo)
+    assert not pathlib.PurePath(report["run"]).is_absolute()
+    assert str(skill_repo) not in json.dumps(report)
+    assert report["subject"] == {
+        "repo": "https://github.com/acme/skills", "path": "skill", "commit": "a" * 40,
+    }
+
+
+def test_no_subject_outside_ci(skill_repo, monkeypatch):
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
+    _run(skill_repo)
+    assert "subject" not in _report(skill_repo)
