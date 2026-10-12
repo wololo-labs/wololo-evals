@@ -98,6 +98,12 @@ def load_eval_config(path: str | pathlib.Path) -> EvalConfig:
     if not asset.is_dir():
         raise _fail(p, "asset", f"must be the skill directory, no directory at {asset}")
 
+    for f in asset.rglob("*"):
+        # A live run sends the asset's files to the model; a link that leaves
+        # the directory would send whatever it points at.
+        if not f.resolve().is_relative_to(asset):
+            raise _fail(p, "asset", f"contains {f.relative_to(asset)}, a link that leaves the skill directory")
+
     engine = _text(p, "engine", data["engine"])
     if engine not in ci.ENGINE_IDS:
         raise _fail(p, "engine", f"must be one of {', '.join(ci.ENGINE_IDS)}, got {engine!r}")

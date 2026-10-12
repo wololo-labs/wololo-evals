@@ -72,3 +72,12 @@ def test_not_a_mapping_and_not_yaml_are_errors(tmp_path):
 
 def test_builtin_benchmarks_ship_with_the_repo():
     assert (_REPO / "benchmarks" / "qe-skill" / "benchmark.json").is_file()
+
+
+def test_asset_with_a_link_out_of_the_directory_is_refused(tmp_path):
+    cfg = _write(tmp_path, _GOOD)
+    secret = tmp_path / "secret.txt"
+    secret.write_text("x", encoding="utf-8")
+    (tmp_path / "skill" / "notes.md").symlink_to(secret)
+    with pytest.raises(EvalConfigError, match=r"`asset`.*notes\.md"):
+        load_eval_config(cfg)
