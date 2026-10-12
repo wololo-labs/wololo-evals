@@ -19,6 +19,7 @@ import datetime
 import json
 import os
 import pathlib
+import shutil
 import sys
 from typing import Callable, Optional
 
@@ -56,6 +57,13 @@ def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
     parser.add_argument(
         "--out", default=None,
         help="where the per-arm run trees go (default: .wololo-evals next to the config)",
+    )
+    parser.add_argument(
+        "--record", default=None, metavar="DIR",
+        help=(
+            "after a live run, write both arms as a replay archive (DIR/no-skill, "
+            "DIR/skill) that --replay can score later at zero spend"
+        ),
     )
     parser.add_argument(
         "--judge", choices=("on", "off"), default=None,
@@ -112,6 +120,34 @@ def _arm_config(
         assets=(AssetEntry(id=cfg.skill_slug, kind="agent_skill", path=str(cfg.asset)),) if mount else (),
         raw=raw,
     )
+
+
+#: Files the replay engine regenerates itself; an archive keeps only what a run left behind.
+_REGENERATED = ("*.raw.jsonl", "*.stdout.log", "*.stderr.log", "trace.jsonl", "prompt.md")
+
+
+def _record(matrix_dir: pathlib.Path, dest: pathlib.Path, model: str, stamp: str) -> int:
+    """Export one arm's retained workspaces as a replay-engine archive."""
+    summary = json.loads((matrix_dir / "matrix_summary.json").read_text(encoding="utf-8"))
+    count = 0
+    for combo in summary["combos"]:
+        for ws in sorted((matrix_dir / combo["combo_dir"] / "seeds").glob("*/workspace/*")):
+            raw = next((ws / ci.ADVISORY_DIR).glob("*.raw.jsonl"), None)
+            if raw is None:
+                continue  # the run never started (cost cap hit): nothing to replay
+            out = dest / ws.name / f"seed-{ws.parents[1].name}"
+            shutil.copytree(ws, out / "workspace", ignore=shutil.ignore_patterns(*_REGENERATED))
+            shutil.copy(raw, out / raw.name)
+            (out / "provenance.json").write_text(
+                json.dumps(
+                    {"engine_id": raw.name.split(".")[0], "model_id": model,
+                     "recorded": f"live run {stamp}"},
+                    indent=2,
+                ) + "\n",
+                encoding="utf-8",
+            )
+            count += 1
+    return count
 
 
 def _timestamp() -> str:
@@ -171,6 +207,9 @@ def run(
                 f"{cfg.path.name} or pass --max-cost-usd"
             )
 
+    if args.record and replay:
+        return _refuse("--record saves a live run; there is nothing to record under --replay")
+
     out = pathlib.Path(args.out).resolve() if args.out else cfg.base_dir / ".wololo-evals"
     stamp = _timestamp()
     remaining = cfg.max_cost_usd
@@ -191,6 +230,10 @@ def run(
         spent += arm_spend
         if remaining is not None:
             remaining = max(remaining - arm_spend, 0.0)
+
+    if args.record:
+        for arm in ARMS:
+            _record(dirs[arm], pathlib.Path(args.record).resolve() / arm, cfg.model, stamp)
 
     try:
         verdict = _gate.evaluate(

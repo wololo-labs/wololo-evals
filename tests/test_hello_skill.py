@@ -73,3 +73,67 @@ def test_committed_casebook_is_compiled():
         _EXAMPLE / "benchmark" / "cases.toml", _EXAMPLE / "benchmark" / "cases.jsonl"
     )
     assert ok, why
+
+
+class _RecordedEngine:
+    """A live-engine stand-in that behaves as the recorded runs did and costs money."""
+
+    engine_id = "claude"
+    COST = 0.05
+
+    def cli_version(self) -> str:
+        return "2.2.0"
+
+    def build_command(self, spec):  # noqa: ANN001
+        return []
+
+    def raw_event_path(self, spec) -> pathlib.Path:  # noqa: ANN001
+        return pathlib.Path(spec.cwd) / ".gh-aw-advisory" / "claude.raw.jsonl"
+
+    def run(self, spec):  # noqa: ANN001
+        from wololo_evals.core import interfaces as ci
+
+        arm = "skill" if spec.asset.files else "no-skill"
+        src = _EXAMPLE / "replay" / arm / spec.case.case_id / "seed-0"
+        shutil.copytree(src / "workspace", spec.cwd, dirs_exist_ok=True)
+        shutil.copy(src / "claude.raw.jsonl", self.raw_event_path(spec))
+        return ci.RunResult(
+            run_id=spec.run_id, status="ok", artefact_dir=spec.cwd,
+            runtime_seconds=1.0, cost_usd=self.COST, tokens_in=1, tokens_out=1,
+        )
+
+
+def test_a_live_run_recorded_then_replayed_scores_the_same_at_zero_spend(tmp_path):
+    """The path an adopter takes: run live on dispatch, commit the archive, replay on PRs."""
+    from wololo_evals.cli import run as run_mod
+
+    work = tmp_path / "hello-skill"
+    shutil.copytree(_EXAMPLE, work, ignore=_IGNORE)
+    shutil.rmtree(work / "replay")
+    cfg = str(work / "eval.yaml")
+    archive = work / "recorded"
+
+    args = run_mod_args(cfg, record=str(archive))
+    assert run_mod.run(args, adapter_factory=lambda engine: _RecordedEngine()) == 0
+    live = json.loads((work / "eval-gate-report.json").read_text(encoding="utf-8"))
+    assert live["mode"] == "live"
+    assert live["spend_usd"] == pytest.approx(8 * _RecordedEngine.COST)
+
+    assert main(["run", "--config", cfg, "--replay", str(archive)]) == 0
+    replayed = json.loads((work / "eval-gate-report.json").read_text(encoding="utf-8"))
+    assert replayed["mode"] == "replay" and replayed["spend_usd"] == 0
+    assert replayed["signals"] == live["signals"]
+    assert replayed["scores"] == live["scores"]
+
+
+def run_mod_args(config: str, **overrides):
+    import argparse
+
+    from wololo_evals.cli import run as run_mod
+
+    parser = argparse.ArgumentParser()
+    run_mod.add_arguments(parser)
+    args = parser.parse_args(["--config", config])
+    for key, value in overrides.items():
+        setattr(args, key, value)
+    return args
