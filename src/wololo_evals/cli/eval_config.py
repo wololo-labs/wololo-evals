@@ -44,6 +44,16 @@ class EvalConfig:
     max_regression: float
 
     @property
+    def skill_slug(self) -> str:
+        """The skill's ``name`` from its SKILL.md frontmatter, else its directory name."""
+        try:
+            text = (self.asset / "SKILL.md").read_text(encoding="utf-8")
+            front = yaml.safe_load(text.split("---")[1]) if text.startswith("---") else {}
+            return str(front["name"])
+        except (OSError, IndexError, KeyError, TypeError, yaml.YAMLError):
+            return self.asset.name
+
+    @property
     def base_dir(self) -> pathlib.Path:
         return self.path.parent
 
