@@ -137,3 +137,46 @@ def run_mod_args(config: str, **overrides):
     for key, value in overrides.items():
         setattr(args, key, value)
     return args
+
+
+class _LeakyEngine(_RecordedEngine):
+    """Echoes a credential into its own stream and plants a link to a host file."""
+
+    def __init__(self, secret_file: pathlib.Path) -> None:
+        self._secret_file = secret_file
+
+    def run(self, spec):  # noqa: ANN001
+        result = super().run(spec)
+        raw = self.raw_event_path(spec)
+        raw.write_text(
+            raw.read_text(encoding="utf-8").replace(
+                "wrote greeting.txt", "key=sk-test-placeholder-not-a-secret"
+            ),
+            encoding="utf-8",
+        )
+        (pathlib.Path(spec.cwd) / "stolen.txt").symlink_to(self._secret_file)
+        return result
+
+
+def test_a_recorded_archive_holds_no_credentials_and_no_followed_links(tmp_path, monkeypatch):
+    from wololo_evals.cli import run as run_mod
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-placeholder-not-a-secret")
+    secret = tmp_path / "host-secret.txt"
+    secret.write_text("PRIVATE-HOST-DATA", encoding="utf-8")
+    work = tmp_path / "hello-skill"
+    shutil.copytree(_EXAMPLE, work, ignore=_IGNORE)
+    shutil.rmtree(work / "replay")
+
+    args = run_mod_args(str(work / "eval.yaml"), record=str(work / "recorded"))
+    assert run_mod.run(args, adapter_factory=lambda e: _LeakyEngine(secret)) == 0
+
+    files = [f for f in (work / "recorded").rglob("*") if f.is_file() or f.is_symlink()]
+    assert files
+    assert not any(f.is_symlink() for f in files)
+    blob = "".join(f.read_text(encoding="utf-8") for f in files if f.suffix in (".jsonl", ".json", ".txt"))
+    assert "sk-test-placeholder-not-a-secret" not in blob and "[redacted]" in blob
+    assert "PRIVATE-HOST-DATA" not in blob
+    # The run tree the matrix kept has the link as a link, not a copy of its target.
+    kept = [p for p in (work / ".wololo-evals").rglob("stolen.txt")]
+    assert kept and all(p.is_symlink() for p in kept)

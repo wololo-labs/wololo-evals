@@ -97,6 +97,7 @@ runs:
         name: eval-replay-archive
         path: ${{ steps.gate.outputs.dir }}/replay-archive
         if-no-files-found: ignore
+        retention-days: 14
 
     - name: Fail on a regression or a refusal
       shell: bash

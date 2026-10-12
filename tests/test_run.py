@@ -192,3 +192,12 @@ def test_record_under_replay_is_refused(skill_repo, capsys):
         (archive / arm).mkdir(parents=True)
     assert _run(skill_repo, "--replay", str(archive), "--record", str(skill_repo / "out")) == 2
     assert "--record" in capsys.readouterr().err
+
+
+def test_a_replay_archive_with_a_symlink_is_refused(skill_repo, capsys):
+    archive = skill_repo / "archive"
+    for arm in ("skill", "no-skill"):
+        (archive / arm).mkdir(parents=True)
+    (archive / "skill" / "case").symlink_to(skill_repo / "eval.yaml")
+    assert _run(skill_repo, "--replay", str(archive)) == 2
+    assert "symlink" in capsys.readouterr().err

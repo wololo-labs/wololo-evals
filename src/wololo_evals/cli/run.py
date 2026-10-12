@@ -124,6 +124,40 @@ def _arm_config(
 
 #: Files the replay engine regenerates itself; an archive keeps only what a run left behind.
 _REGENERATED = ("*.raw.jsonl", "*.stdout.log", "*.stderr.log", "trace.jsonl", "prompt.md")
+_SECRET_NAME = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+
+
+def _secrets() -> list[str]:
+    """Values of environment variables that look like credentials. An archive is
+    uploaded, and a run's own stream can echo whatever the agent could read."""
+    return sorted(
+        {v for k, v in os.environ.items()
+         if len(v) >= 8 and any(w in k.upper() for w in _SECRET_NAME)},
+        key=len, reverse=True,
+    )
+
+
+def _redact(root: pathlib.Path, secrets: list[str]) -> None:
+    for f in root.rglob("*"):
+        if f.is_symlink() or not f.is_file():
+            continue
+        try:
+            text = f.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue  # binary: left alone
+        scrubbed = text
+        for value in secrets:
+            scrubbed = scrubbed.replace(value, "[redacted]")
+        if scrubbed != text:
+            f.write_text(scrubbed, encoding="utf-8")
+
+
+def _skip_links(directory: str, names: list[str]) -> set[str]:
+    return {n for n in names if (pathlib.Path(directory) / n).is_symlink()}
+
+
+def _has_link(root: pathlib.Path) -> Optional[pathlib.Path]:
+    return next((p for p in root.rglob("*") if p.is_symlink()), None)
 
 
 def _record(matrix_dir: pathlib.Path, dest: pathlib.Path, model: str, stamp: str) -> int:
@@ -133,10 +167,14 @@ def _record(matrix_dir: pathlib.Path, dest: pathlib.Path, model: str, stamp: str
     for combo in summary["combos"]:
         for ws in sorted((matrix_dir / combo["combo_dir"] / "seeds").glob("*/workspace/*")):
             raw = next((ws / ci.ADVISORY_DIR).glob("*.raw.jsonl"), None)
-            if raw is None:
+            if raw is None or raw.is_symlink():
                 continue  # the run never started (cost cap hit): nothing to replay
             out = dest / ws.name / f"seed-{ws.parents[1].name}"
-            shutil.copytree(ws, out / "workspace", ignore=shutil.ignore_patterns(*_REGENERATED))
+            patterns = shutil.ignore_patterns(*_REGENERATED)
+            shutil.copytree(
+                ws, out / "workspace", symlinks=True,
+                ignore=lambda d, names: set(patterns(d, names)) | _skip_links(d, names),
+            )
             shutil.copy(raw, out / raw.name)
             (out / "provenance.json").write_text(
                 json.dumps(
@@ -146,6 +184,7 @@ def _record(matrix_dir: pathlib.Path, dest: pathlib.Path, model: str, stamp: str
                 ) + "\n",
                 encoding="utf-8",
             )
+            _redact(out, _secrets())
             count += 1
     return count
 
@@ -198,6 +237,12 @@ def run(
         missing = [a for a in ARMS if not (replay / a).is_dir()]
         if missing:
             return _refuse(f"--replay {replay} has no {' or '.join(m + '/' for m in missing)}")
+        link = _has_link(replay)
+        if link:
+            return _refuse(
+                f"--replay archive contains a symlink ({link.relative_to(replay)}); "
+                "an archive is plain files, and a link would be followed out of it"
+            )
     else:
         if cfg.engine == "replay":
             return _refuse("engine 'replay' scores archives; pass --replay <archive>")

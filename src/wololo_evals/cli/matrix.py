@@ -193,7 +193,12 @@ def _retain_workspace(work: pathlib.Path, dest: pathlib.Path) -> None:
     a copy, without the throwaway repository the trial was given.
     """
     dest.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(work, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
+    # symlinks=True keeps a link a link. Following one would copy whatever it
+    # points at, outside the workspace, into an artefact tree that is archived
+    # and uploaded.
+    shutil.copytree(
+        work, dest, dirs_exist_ok=True, symlinks=True, ignore=shutil.ignore_patterns(".git")
+    )
 
 
 def _seal_workspace_git(workspace: pathlib.Path) -> None:
