@@ -19,6 +19,7 @@ _ROOT = pathlib.Path(__file__).resolve().parents[1]
 _SPEC = _ROOT / "specs" / "eval-gate-report"
 _SCHEMA = json.loads((_SPEC / "schemas" / "eval-gate-report.v1.schema.json").read_text("utf-8"))
 _VECTORS = sorted((_SPEC / "test-vectors").glob("*.json"))
+_IGNORE = shutil.ignore_patterns("eval-gate-report.*", ".wololo-evals")
 _FORMATS = jsonschema.FormatChecker()
 
 
@@ -50,7 +51,7 @@ def test_there_are_vectors_of_both_kinds():
 
 def test_a_real_replay_report_conforms(tmp_path):
     work = tmp_path / "hello-skill"
-    shutil.copytree(_ROOT / "examples" / "hello-skill", work)
+    shutil.copytree(_ROOT / "examples" / "hello-skill", work, ignore=_IGNORE)
     assert main(["run", "--config", str(work / "eval.yaml"), "--replay", str(work / "replay")]) == 0
     report = json.loads((work / "eval-gate-report.json").read_text(encoding="utf-8"))
     assert not _errors(report), [e.message for e in _errors(report)]
@@ -59,7 +60,7 @@ def test_a_real_replay_report_conforms(tmp_path):
 def test_a_real_regression_report_conforms(tmp_path):
     """The no-skill arm as the 'skill' and the skill arm as the control."""
     work = tmp_path / "hello-skill"
-    shutil.copytree(_ROOT / "examples" / "hello-skill", work)
+    shutil.copytree(_ROOT / "examples" / "hello-skill", work, ignore=_IGNORE)
     replay = work / "replay"
     (replay / "skill").rename(replay / "tmp")
     (replay / "no-skill").rename(replay / "skill")

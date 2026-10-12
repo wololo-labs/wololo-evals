@@ -18,13 +18,14 @@ from wololo_evals.cli import cases_compile
 from wololo_evals.cli.main import main
 
 _EXAMPLE = pathlib.Path(__file__).resolve().parents[1] / "examples" / "hello-skill"
+_IGNORE = shutil.ignore_patterns("eval-gate-report.*", ".wololo-evals")
 _CASES = {"ada": "hello-01-ada", "grace": "hello-02-grace", "linus": "hello-03-linus"}
 
 
 @pytest.fixture(scope="module")
 def report(tmp_path_factory):
     work = tmp_path_factory.mktemp("hello") / "hello-skill"
-    shutil.copytree(_EXAMPLE, work)
+    shutil.copytree(_EXAMPLE, work, ignore=_IGNORE)
     assert main(["run", "--config", str(work / "eval.yaml"), "--replay", str(work / "replay")]) == 0
     return json.loads((work / "eval-gate-report.json").read_text(encoding="utf-8"))
 
