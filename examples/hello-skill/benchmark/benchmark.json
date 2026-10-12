@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0.0",
+  "id": "hello-skill",
+  "evaluation_type": "skill_behaviour",
+  "description": "Does an agent with the hello-greeter skill write the greeting file for a named person, and stay silent when asked something that is not a greeting?",
+  "pass_threshold": 0.7,
+  "engines": ["claude", "codex", "copilot", "replay"]
+}

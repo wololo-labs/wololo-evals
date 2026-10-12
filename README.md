@@ -86,7 +86,111 @@ calibration threshold).
 
 ## Getting started
 
-### Prerequisites
+### Evaluate a skill
+
+Put one file, `eval.yaml`, in the repository that holds the skill:
+
+```yaml
+asset: skills/review          # the skill directory (holds SKILL.md)
+benchmark: evals/benchmark    # a benchmark directory (or a built-in name, from a source checkout)
+engine: claude                # claude, codex or copilot
+model: claude-sonnet-5-5
+max_cost_usd: 2.00            # a live run refuses to start without a cap
+thresholds:
+  pass: 0.7                   # the skill arm must score at least this
+  max_regression: 0.0         # tolerated drop against the no-skill arm
+```
+
+Then run it:
+
+```console
+$ pip install git+https://github.com/wololo-labs/wololo-evals
+$ wololo-evals-cli run --config eval.yaml
+```
+
+That runs the no-skill arm and the skill arm, gates one against the other and
+writes `eval-gate-report.json` and `eval-gate-report.md` next to the config.
+The exit code is the CI contract: `0` pass, `1` regression, `2` refused (a bad
+key in `eval.yaml`, no cost cap on a live run, an uncalibrated judge).
+
+A bad key is named, so a typo cannot quietly drop the cost cap:
+
+```console
+$ wololo-evals-cli run --config eval.yaml
+run: refused: eval.yaml: `max_cost` is not a known key (known: asset, benchmark, engine, model, max_cost_usd, thresholds)
+```
+
+Every field has a flag that overrides it: `--engine`, `--model`, `--benchmark`,
+`--max-cost-usd`, `--max-regression`. `--record DIR` saves a live run as a
+replay archive, and `--replay DIR` scores such an archive at zero spend.
+
+**Try it with no key and no spend.** `examples/hello-skill/` is a complete
+setup with a recorded run of each arm. Nothing there calls a model:
+
+```console
+$ cd examples/hello-skill
+$ wololo-evals-cli run --config eval.yaml --replay replay
+# Gate verdict: PASS
+$ echo $?
+0
+```
+
+Its recorded streams are hand-authored and say so in their `provenance.json`.
+No score is recorded: every number is recomputed from the stream and from the
+files each run left in its workspace. See
+[`examples/hello-skill/README.md`](examples/hello-skill/README.md).
+
+### Gate pull requests (GitHub Action)
+
+The action runs a replay on a pull request, which costs nothing, and a live run
+on `workflow_dispatch`, which is capped and uploads the report. A skill repo
+needs this one workflow:
+
+```yaml
+name: eval
+on: [pull_request, workflow_dispatch]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: wololo-labs/wololo-evals@main
+        with: { config: eval.yaml, replay: evals/replay, max-cost-usd: "2" }
+        env: { ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}" }
+```
+
+Worked example, for a repository of skills laid out like this:
+
+```
+my-skills/
+  eval.yaml                  asset: skills/review, benchmark: evals/benchmark
+  skills/review/SKILL.md
+  evals/benchmark/           cases.toml and cases.jsonl
+  evals/replay/              no-skill/ and skill/, committed
+  .github/workflows/eval.yml the workflow above
+```
+
+1. Run the workflow by hand (**Run workflow**). The event is `workflow_dispatch`, so
+   it runs live under `max-cost-usd` (or `max_cost_usd` in `eval.yaml`), and
+   refuses if neither is set.
+2. It uploads two artifacts: `eval-gate-report` (the verdict) and
+   `eval-replay-archive` (what the run did). Commit the archive as
+   `evals/replay/`.
+3. From then on every pull request replays that archive: no key, no spend, and
+   the job fails on a regression or a refusal. Edit the skill, re-run step 1 and
+   commit the new archive when the skill's behaviour is meant to change.
+
+The step summary shows the verdict, and the `verdict` and `report` outputs are
+available to later steps. This repository runs its own example through the
+action in [`.github/workflows/hello-skill.yml`](.github/workflows/hello-skill.yml).
+
+The report's shape is a published contract:
+[`specs/eval-gate-report/`](specs/eval-gate-report/) holds the versioned JSON
+schema, and anything that wants to display a verdict reads that, not this code.
+
+### Running the service
+
+#### Prerequisites
 
 - **Python 3.11 or newer** (`requires-python = ">=3.11"`).
 - **PostgreSQL** for anything touching the service. The test suite starts a
@@ -127,14 +231,14 @@ The DB-free eval core (the file-first CLI, a judge-only smoke) constructs only
 the judge and blob sub-settings, so it needs none of the three mandatory vars.
 </details>
 
-### Quick install
+#### Quick install
 
 ```bash
 pip install -e '.[dev]'      # add the s3 extra for the boto3 blob backend
 pytest
 ```
 
-### Smallest useful example
+#### Smallest useful example
 
 The `gate` command above is the fastest path to something working: it is pure
 stdlib plus the eval core, no database, no engine, no network, no spend. A
@@ -235,6 +339,7 @@ worker, an OTEL collector on `4318`, and the wololo-deploy canary stub on `8090`
 
 | Command | Purpose |
 |---|---|
+| `run` | Evaluate a skill from `eval.yaml`: no-skill arm, skill arm, gate; `--replay`, `--record` |
 | `cases compile` | `cases.toml` to canonical `cases.jsonl`, with `--check` for drift |
 | `matrix` | Expand and run the engine-by-model matrix; `--dry-run`, `--smoke`, `--max-cost-usd`, `--judge on` |
 | `bench` | Run one benchmark as a single combo; `--judge on` |

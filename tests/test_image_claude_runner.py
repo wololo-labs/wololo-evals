@@ -9,8 +9,9 @@ checks that need NO auth and make NO model call:
   ``$HOME`` path.
 * ``docker history`` carries no baked secret.
 
-Skip-marked (loudly) when the docker CLI is absent; docker IS present in the
-reference environment, so these run there.
+Skip-marked (loudly) when no docker daemon is reachable: a docker CLI with its
+daemon stopped used to fail the build fixture instead of skipping. The daemon
+IS present in the reference environment, so these run there.
 """
 from __future__ import annotations
 
@@ -25,8 +26,19 @@ _DOCKER = shutil.which("docker")
 _IMAGE = "wololo-evals/claude-runner"
 _IMAGE_DIR = Path(__file__).resolve().parents[1] / "images" / "claude-runner"
 
+
+
+def _daemon_up() -> bool:
+    if _DOCKER is None:
+        return False
+    try:
+        return subprocess.run([_DOCKER, "info"], capture_output=True, timeout=15).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 pytestmark = pytest.mark.skipif(
-    _DOCKER is None, reason="docker CLI not on PATH; harness-image checks need it"
+    not _daemon_up(), reason="no docker daemon reachable (`docker info` failed); harness-image checks need one"
 )
 
 

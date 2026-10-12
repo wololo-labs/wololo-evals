@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"no-skill-hello-02-grace"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"greeting.txt","content":"hello, Grace!"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"wrote greeting.txt"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Greeted Grace."}]}}
+{"type":"result","subtype":"success","usage":{"input_tokens":0,"output_tokens":0}}

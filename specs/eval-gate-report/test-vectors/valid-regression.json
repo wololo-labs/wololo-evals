@@ -1,0 +1,150 @@
+{
+  "schema_version": "1.0.0",
+  "verdict": "regression",
+  "reason": "regression: CI upper bound -0.1069 < -0.0",
+  "run": ".wololo-evals/skill/iterations/001/matrix-20261012T015134Z",
+  "baseline": ".wololo-evals/no-skill/iterations/001/matrix-20261012T015134Z",
+  "evaluation_type": "skill_behaviour",
+  "pass_threshold": 0.7,
+  "max_regression": 0.0,
+  "combos_compared": [
+    "claude-sonnet-5-5__arm"
+  ],
+  "quarantined_cases": [],
+  "unmatched_cases": [],
+  "judge": {
+    "participates": false,
+    "agreement": null,
+    "agreement_min": 0.7,
+    "calibrated": true
+  },
+  "signals": [
+    {
+      "evaluator_id": "answered_four",
+      "kind": "assertion",
+      "slot": "task_outcome",
+      "baseline_mean": 1.0,
+      "candidate_mean": 1.0,
+      "delta": 0.0,
+      "baseline_n": 1,
+      "candidate_n": 1,
+      "baseline_errors": 0,
+      "candidate_errors": 0,
+      "guarded": false,
+      "regressed": false
+    },
+    {
+      "evaluator_id": "greeted_ada",
+      "kind": "assertion",
+      "slot": "task_outcome",
+      "baseline_mean": 0.0,
+      "candidate_mean": 1.0,
+      "delta": 1.0,
+      "baseline_n": 1,
+      "candidate_n": 1,
+      "baseline_errors": 0,
+      "candidate_errors": 0,
+      "guarded": false,
+      "regressed": false
+    },
+    {
+      "evaluator_id": "greeted_grace",
+      "kind": "assertion",
+      "slot": "task_outcome",
+      "baseline_mean": 0.0,
+      "candidate_mean": 1.0,
+      "delta": 1.0,
+      "baseline_n": 1,
+      "candidate_n": 1,
+      "baseline_errors": 0,
+      "candidate_errors": 0,
+      "guarded": false,
+      "regressed": false
+    },
+    {
+      "evaluator_id": "greeted_linus",
+      "kind": "assertion",
+      "slot": "task_outcome",
+      "baseline_mean": 1.0,
+      "candidate_mean": 1.0,
+      "delta": 0.0,
+      "baseline_n": 1,
+      "candidate_n": 1,
+      "baseline_errors": 0,
+      "candidate_errors": 0,
+      "guarded": false,
+      "regressed": false
+    },
+    {
+      "evaluator_id": "no_shell",
+      "kind": "assertion",
+      "slot": "trace_conformance",
+      "baseline_mean": 1.0,
+      "candidate_mean": 1.0,
+      "delta": 0.0,
+      "baseline_n": 3,
+      "candidate_n": 3,
+      "baseline_errors": 0,
+      "candidate_errors": 0,
+      "guarded": false,
+      "regressed": false
+    },
+    {
+      "evaluator_id": "used_greeter",
+      "kind": "assertion",
+      "slot": "activation_correct",
+      "baseline_mean": 0.25,
+      "candidate_mean": 1.0,
+      "delta": 0.75,
+      "baseline_n": 4,
+      "candidate_n": 4,
+      "baseline_errors": 0,
+      "candidate_errors": 0,
+      "guarded": false,
+      "regressed": false
+    },
+    {
+      "evaluator_id": "wrote_the_file",
+      "kind": "assertion",
+      "slot": "trace_conformance",
+      "baseline_mean": 1.0,
+      "candidate_mean": 1.0,
+      "delta": 0.0,
+      "baseline_n": 3,
+      "candidate_n": 3,
+      "baseline_errors": 0,
+      "candidate_errors": 0,
+      "guarded": false,
+      "regressed": false
+    }
+  ],
+  "guarded_regressions": [],
+  "recorded": "2026-10-12",
+  "stats": {
+    "mean_delta": -0.36,
+    "ci_low": -0.6206,
+    "ci_high": -0.1069,
+    "confidence": 0.95,
+    "significant_regression": true,
+    "significant_improvement": false,
+    "newly_failing_hard_gates": [],
+    "buckets": {
+      "working": 0,
+      "fixed": 0,
+      "regression": 4,
+      "still_gap": 0
+    },
+    "n_cases": 4,
+    "n_quarantined": 0
+  },
+  "mode": "replay",
+  "spend_usd": 0.0,
+  "thresholds": {
+    "pass": 0.7,
+    "max_regression": 0.0
+  },
+  "scores": {
+    "no_skill": 0.5441,
+    "skill": 1.0
+  }
+}

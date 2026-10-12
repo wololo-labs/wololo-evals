@@ -1,8 +1,8 @@
 """``wololo-evals-cli`` argparse entrypoint (open, Apache-2.0).
 
-Routes the wave's file-first subcommands — ``cases compile``, ``matrix``
+Routes the wave's file-first subcommands: ``cases compile``, ``run``, ``matrix``
 (``--dry-run``/``--smoke``/live), ``bench``, ``replay``, ``gate``, ``label``,
-``judge calibrate`` — over the core library.
+``judge calibrate`` over the core library.
 ``main`` returns an ``int`` exit code and is invoked in-process by the tests;
 the ``wololo-evals-cli`` console script wraps it in ``SystemExit(main())``.
 
@@ -24,6 +24,7 @@ from . import gate as _gate
 from . import label as _label
 from . import matrix as _matrix
 from . import replay as _replay
+from . import run as _run
 from .config import load_matrix_config
 
 __all__ = ["main", "build_parser"]
@@ -76,6 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_gate = sub.add_parser("gate", help="candidate-vs-baseline A/B regression verdict")
     _gate.add_arguments(p_gate)
+
+    p_run = sub.add_parser(
+        "run", help="evaluate a skill from eval.yaml: no-skill arm, skill arm, gate"
+    )
+    _run.add_arguments(p_run)
 
     p_label = sub.add_parser("label", help="record a human verdict into labels.jsonl")
     _label.add_arguments(p_label)
@@ -275,6 +281,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return _cmd_replay(args)
     if args.command == "gate":
         return _gate.run(args)
+    if args.command == "run":
+        return _run.run(args)
     if args.command == "label":
         return _label.run(args)
     if args.command == "judge" and args.judge_command == "calibrate":

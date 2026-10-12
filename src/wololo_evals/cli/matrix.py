@@ -193,7 +193,22 @@ def _retain_workspace(work: pathlib.Path, dest: pathlib.Path) -> None:
     a copy, without the throwaway repository the trial was given.
     """
     dest.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(work, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
+    # symlinks=True keeps a link a link. Following one would copy whatever it
+    # points at, outside the workspace, into an artefact tree that is archived
+    # and uploaded. A hardlink is a plain file to copytree, so a file with a
+    # second name is left behind too: the fixture is copied in, never linked,
+    # so nothing legitimate has one.
+    git = shutil.ignore_patterns(".git")
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        hardlinked = {
+            n for n in names
+            if (p := pathlib.Path(directory, n)).is_file()
+            and not p.is_symlink() and p.stat().st_nlink > 1
+        }
+        return set(git(directory, names)) | hardlinked
+
+    shutil.copytree(work, dest, dirs_exist_ok=True, symlinks=True, ignore=ignore)
 
 
 def _seal_workspace_git(workspace: pathlib.Path) -> None:

@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.getwololo.dev/eval-gate-report/eval-gate-report.v1.schema.json",
+  "title": "eval-gate-report",
+  "description": "The verdict of one skill evaluation: the skill arm gated against the no-skill arm. Written as eval-gate-report.json by `wololo-evals-cli run`, and as the verdict file by `wololo-evals-cli gate` (which omits mode, spend_usd, thresholds and scores). This file is frozen: any change to the shape ships as a new file with a new schema_version, never as an edit here.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "verdict": { "enum": ["pass", "regression", "refused"] },
+    "reason": { "type": "string", "description": "Why the verdict is not a plain pass; empty on a pass." },
+    "run": { "type": "string", "description": "The skill arm's run tree." },
+    "baseline": { "type": "string", "description": "The no-skill arm's run tree." },
+    "evaluation_type": { "type": "string", "minLength": 1 },
+    "pass_threshold": { "type": "number", "minimum": 0, "maximum": 1, "description": "The benchmark's case-pass bar." },
+    "max_regression": { "type": "number", "minimum": 0 },
+    "combos_compared": { "type": "array", "items": { "type": "string" } },
+    "quarantined_cases": { "type": "array", "items": { "type": "string" } },
+    "unmatched_cases": { "type": "array", "items": { "type": "string" } },
+    "judge": {
+      "type": "object",
+      "properties": {
+        "participates": { "type": "boolean" },
+        "agreement": { "type": ["number", "null"] },
+        "agreement_min": { "type": "number" },
+        "calibrated": { "type": "boolean" }
+      },
+      "required": ["participates", "agreement", "agreement_min", "calibrated"],
+      "additionalProperties": false
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "evaluator_id": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string" },
+          "slot": { "type": ["string", "null"] },
+          "baseline_mean": { "type": "number" },
+          "candidate_mean": { "type": "number" },
+          "delta": { "type": "number" },
+          "baseline_n": { "type": "integer", "minimum": 0 },
+          "candidate_n": { "type": "integer", "minimum": 0 },
+          "baseline_errors": { "type": "integer", "minimum": 0 },
+          "candidate_errors": { "type": "integer", "minimum": 0 },
+          "guarded": { "type": "boolean" },
+          "regressed": { "type": "boolean" }
+        },
+        "required": [
+          "evaluator_id", "kind", "slot", "baseline_mean", "candidate_mean", "delta",
+          "baseline_n", "candidate_n", "baseline_errors", "candidate_errors", "guarded", "regressed"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "guarded_regressions": { "type": "array", "items": { "type": "string" } },
+    "subject": {
+      "type": "object",
+      "description": "The asset the verdict measured. Present only when the repo and commit are known.",
+      "properties": {
+        "repo": { "type": "string", "format": "uri" },
+        "path": { "type": "string" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{7,64}$" }
+      },
+      "additionalProperties": false
+    },
+    "recorded": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "source": { "type": "string", "format": "uri" },
+    "sourceVisibility": { "enum": ["public", "internal"] },
+    "stats": {
+      "type": "object",
+      "description": "Absent when the gate refused before comparing.",
+      "properties": {
+        "mean_delta": { "type": "number" },
+        "ci_low": { "type": "number" },
+        "ci_high": { "type": "number" },
+        "confidence": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
+        "significant_regression": { "type": "boolean" },
+        "significant_improvement": { "type": "boolean" },
+        "newly_failing_hard_gates": { "type": "array", "items": { "type": "string" } },
+        "buckets": {
+          "type": "object",
+          "properties": {
+            "working": { "type": "integer", "minimum": 0 },
+            "fixed": { "type": "integer", "minimum": 0 },
+            "regression": { "type": "integer", "minimum": 0 },
+            "still_gap": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["working", "fixed", "regression", "still_gap"],
+          "additionalProperties": false
+        },
+        "n_cases": { "type": "integer", "minimum": 0 },
+        "n_quarantined": { "type": "integer", "minimum": 0 }
+      },
+      "required": [
+        "mean_delta", "ci_low", "ci_high", "confidence", "significant_regression",
+        "significant_improvement", "newly_failing_hard_gates", "buckets", "n_cases", "n_quarantined"
+      ],
+      "additionalProperties": false
+    },
+    "mode": { "enum": ["live", "replay"] },
+    "spend_usd": { "type": "number", "minimum": 0 },
+    "thresholds": {
+      "type": "object",
+      "properties": {
+        "pass": { "type": "number", "minimum": 0, "maximum": 1 },
+        "max_regression": { "type": "number", "minimum": 0 }
+      },
+      "required": ["pass", "max_regression"],
+      "additionalProperties": false
+    },
+    "scores": {
+      "type": "object",
+      "properties": {
+        "no_skill": { "type": "number" },
+        "skill": { "type": "number" }
+      },
+      "required": ["no_skill", "skill"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version", "verdict", "reason", "run", "baseline", "evaluation_type",
+    "pass_threshold", "max_regression", "combos_compared", "quarantined_cases",
+    "unmatched_cases", "judge", "signals", "guarded_regressions"
+  ],
+  "allOf": [
+    {
+      "if": { "properties": { "verdict": { "enum": ["pass", "regression"] } } },
+      "then": { "required": ["stats"] }
+    },
+    {
+      "if": { "properties": { "verdict": { "const": "pass" } } },
+      "then": { "properties": { "reason": { "const": "" } } }
+    },
+    {
+      "if": { "properties": { "verdict": { "const": "refused" } } },
+      "then": { "properties": { "reason": { "minLength": 1 } } }
+    }
+  ],
+  "additionalProperties": false
+}
