@@ -1,7 +1,7 @@
 [project]
 name = "wololo-evals"
 version = "0.1.0"
-description = "Quality gate for Wololo OS: eval execution service wrapping Inspect AI (proprietary; specs/ publish Apache-2.0)"
+description = "Evaluation service and CLI for reproducible agent-asset quality gates"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = [
