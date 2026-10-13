@@ -57,13 +57,10 @@ class CryptoSettings:
 class AuthSettings:
     """Entitlement-token (JWT) verification against the issuer JWKS."""
 
-    # Path to the issuer JWKS. Fixture JWKS until wololo-deploy (06a, the sole
-    # real issuer) publishes its JWKS URL; the validation code path is
-    # identical, only the key source swaps. Mandatory, no default.
+    # Both values are mandatory. Deployments provide their issuer's public
+    # JWKS and identifier explicitly; no development signing material ships.
     jwks_path: str = field(default_factory=lambda: _env("WOLOLO_EVALS_JWKS"))
-    expected_iss: str = field(
-        default_factory=lambda: _env("WOLOLO_EVALS_ISSUER", "wololo-deploy")
-    )
+    expected_iss: str = field(default_factory=lambda: _env("WOLOLO_EVALS_ISSUER"))
 
 
 @dataclass(frozen=True)

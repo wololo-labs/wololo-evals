@@ -46,11 +46,13 @@ services:
     environment:
       WOLOLO_EVALS_DATABASE_URL: postgresql+psycopg://wololo_evals_app@postgres/wololo_evals
       WOLOLO_EVALS_MASTER_KEY: ${WOLOLO_EVALS_MASTER_KEY:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
-      WOLOLO_EVALS_JWKS: /app/tests/fixtures/dev-jwks.json
-      WOLOLO_EVALS_ISSUER: wololo-deploy
+      WOLOLO_EVALS_JWKS: /run/issuer/jwks.json
+      WOLOLO_EVALS_ISSUER: ${WOLOLO_EVALS_ISSUER:?set WOLOLO_EVALS_ISSUER to the configured issuer}
       WOLOLO_EVALS_BLOB_BACKEND: s3
       WOLOLO_EVALS_S3_ENDPOINT: http://minio:9000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol:4318
+    volumes:
+      - ${WOLOLO_EVALS_JWKS:?set WOLOLO_EVALS_JWKS to a local JWKS file}:/run/issuer/jwks.json:ro
     depends_on:
       postgres: {condition: service_healthy}
       minio: {condition: service_healthy}
@@ -62,12 +64,15 @@ services:
     environment:
       WOLOLO_EVALS_DATABASE_URL: postgresql+psycopg://wololo_evals_worker@postgres/wololo_evals
       WOLOLO_EVALS_MASTER_KEY: ${WOLOLO_EVALS_MASTER_KEY:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
-      WOLOLO_EVALS_JWKS: /app/tests/fixtures/dev-jwks.json
+      WOLOLO_EVALS_JWKS: /run/issuer/jwks.json
+      WOLOLO_EVALS_ISSUER: ${WOLOLO_EVALS_ISSUER:?set WOLOLO_EVALS_ISSUER to the configured issuer}
       WOLOLO_EVALS_BLOB_BACKEND: s3
       WOLOLO_EVALS_S3_ENDPOINT: http://minio:9000
       WOLOLO_EVALS_JUDGE_BACKEND: http
       WOLOLO_EVALS_JUDGE_API_KEY: ${WOLOLO_EVALS_JUDGE_API_KEY:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol:4318
+    volumes:
+      - ${WOLOLO_EVALS_JWKS:?set WOLOLO_EVALS_JWKS to a local JWKS file}:/run/issuer/jwks.json:ro
     depends_on:
       postgres: {condition: service_healthy}
 

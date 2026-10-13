@@ -49,6 +49,12 @@ pytest
 Some integration tests need Docker or externally configured credentials and
 skip when those prerequisites are unavailable.
 
+The Compose stack requires an issuer JWKS and issuer identifier. Set
+`WOLOLO_EVALS_JWKS` to a local public JWKS file and `WOLOLO_EVALS_ISSUER` to
+its issuer identifier before running `docker compose up`. The file is mounted
+read-only into the API and worker containers. No private signing key ships
+with this repository.
+
 ## Security
 
 Use GitHub's private vulnerability reporting for security reports. Do not open

@@ -12,7 +12,7 @@ import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-_KID = "dev-2026-07"
+_KID = "test-key"
 _ISS = "test-issuer"
 
 
