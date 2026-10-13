@@ -1,4 +1,4 @@
-+# Contributing to wololo-evals
+# Contributing to wololo-evals
 
 Thanks for contributing.
 
