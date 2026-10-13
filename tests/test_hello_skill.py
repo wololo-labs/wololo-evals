@@ -151,7 +151,7 @@ class _LeakyEngine(_RecordedEngine):
         raw = self.raw_event_path(spec)
         raw.write_text(
             raw.read_text(encoding="utf-8").replace(
-                "wrote greeting.txt", "key=sk-test-placeholder-not-a-secret"
+                "wrote greeting.txt", "key=test-redaction-token"
             ),
             encoding="utf-8",
         )
@@ -163,7 +163,8 @@ class _LeakyEngine(_RecordedEngine):
 def test_a_recorded_archive_holds_no_credentials_and_no_followed_links(tmp_path, monkeypatch):
     from wololo_evals.cli import run as run_mod
 
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-placeholder-not-a-secret")
+    sentinel = "test-redaction-token"
+    monkeypatch.setenv("TEST_API_KEY", sentinel)
     secret = tmp_path / "host-secret.txt"
     secret.write_text("PRIVATE-HOST-DATA", encoding="utf-8")
     work = tmp_path / "hello-skill"
@@ -177,7 +178,7 @@ def test_a_recorded_archive_holds_no_credentials_and_no_followed_links(tmp_path,
     assert files
     assert not any(f.is_symlink() for f in files)
     blob = "".join(f.read_text(encoding="utf-8") for f in files if f.suffix in (".jsonl", ".json", ".txt"))
-    assert "sk-test-placeholder-not-a-secret" not in blob and "[redacted]" in blob
+    assert sentinel not in blob and "[redacted]" in blob
     assert "PRIVATE-HOST-DATA" not in blob
     # Neither the hardlink's content nor the file itself reached the archive or the kept tree.
     assert not list((work / "recorded").rglob("hard.txt"))
@@ -193,7 +194,8 @@ def test_a_recorded_archive_holds_no_credentials_and_no_followed_links(tmp_path,
 def test_redaction_scrubs_binary_files_too(tmp_path):
     from wololo_evals.cli.run import _redact
 
+    sentinel = b"test-redaction-token"
     f = tmp_path / "blob.bin"
-    f.write_bytes(b"\xff\xfe sk-test-placeholder-not-a-secret \x00")
-    _redact(tmp_path, ["sk-test-placeholder-not-a-secret"])
-    assert b"sk-live" not in f.read_bytes() and b"[redacted]" in f.read_bytes()
+    f.write_bytes(b"\xff\xfe " + sentinel + b" \x00")
+    _redact(tmp_path, [sentinel.decode()])
+    assert sentinel not in f.read_bytes() and b"[redacted]" in f.read_bytes()

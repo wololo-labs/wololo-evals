@@ -30,7 +30,7 @@ def deps(app_engine, tmp_path):
 
     return AppDeps(
         engine=app_engine,
-        verifier=Verifier(JWKS_PATH, "wololo-deploy"),
+        verifier=Verifier(JWKS_PATH, "test-issuer"),
         cipher=cipher,
         blobstore=FsBlobStore(str(tmp_path / "blobs")),
         repo_eval_roots=(str(tmp_path),),
