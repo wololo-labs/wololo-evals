@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible problem.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials, private URLs, or evaluation data.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include the smallest command or code sample that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+*** Add File: /home/claude/orca/workspaces/wololo-evals/oss-readiness/.github/pull_request_template.md
+## Summary
+
+## Verification
+
+## Security and privacy
+
+- [ ] This change includes no credentials, private endpoints, personal paths, or customer data.
