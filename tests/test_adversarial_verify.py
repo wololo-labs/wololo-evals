@@ -68,7 +68,7 @@ async def test_adversarial_verify_six_attacks(
 
     deps = AppDeps(
         engine=app_engine,
-        verifier=Verifier(JWKS_PATH, "wololo-deploy"),
+        verifier=Verifier(JWKS_PATH, "test-issuer"),
         cipher=cipher,
         blobstore=FsBlobStore(str(tmp_path / "blobs")),
     )

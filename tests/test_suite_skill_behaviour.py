@@ -374,7 +374,7 @@ def client(app_engine, tmp_path):
 
     deps = AppDeps(
         engine=app_engine,
-        verifier=Verifier(JWKS_PATH, "wololo-deploy"),
+        verifier=Verifier(JWKS_PATH, "test-issuer"),
         cipher=EnvelopeCipher("aa" * 32, "test-master-1", str(tmp_path / "keyring.json")),
         blobstore=FsBlobStore(str(tmp_path / "blobs")),
     )

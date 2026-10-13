@@ -1,7 +1,0 @@
-# Carrier task: waza runs trigger tests only when the spec has a task. This one makes no tool calls and is not scored.
-id: trigger-carrier-001
-name: Trigger carrier
-description: Carrier for trigger tests. Not a skill test.
-
-inputs:
-  prompt: "Reply with the single word ok. Do not use any tools."
