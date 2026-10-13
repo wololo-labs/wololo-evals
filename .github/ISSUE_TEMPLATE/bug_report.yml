@@ -19,11 +19,3 @@ body:
       label: Expected behavior
     validations:
       required: true
-*** Add File: /home/claude/orca/workspaces/wololo-evals/oss-readiness/.github/pull_request_template.md
-## Summary
-
-## Verification
-
-## Security and privacy
-
-- [ ] This change includes no credentials, private endpoints, personal paths, or customer data.
