@@ -1,8 +1,8 @@
-"""``run``: evaluate a skill from its ``eval.yaml`` in one command.
+"""``run``: evaluate a skill from the ``eval:`` block of its ``apm.yml`` in one command.
 
 Runs the no-skill arm and the skill arm over the benchmark, gates the skill arm
 against the no-skill arm, and writes ``eval-gate-report.json`` plus
-``eval-gate-report.md`` next to the config. Exit codes are the CI contract:
+``eval-gate-report.md`` next to the config (or where its ``report:`` key says). Exit codes are the CI contract:
 ``0`` pass, ``1`` regression, ``2`` refused.
 
 Two modes. **Live** drives the configured engine and spends money, so it
@@ -31,28 +31,29 @@ from ..core import interfaces as ci
 
 __all__ = ["add_arguments", "run"]
 
-REPORT_JSON = "eval-gate-report.json"
-REPORT_MD = "eval-gate-report.md"
 ARMS = ("no-skill", "skill")
 _REFUSED = 2
 
 
 def add_arguments(parser) -> None:  # noqa: ANN001 - argparse subparser
-    parser.add_argument("--config", required=True, help="path to eval.yaml")
+    parser.add_argument(
+        "--config", required=True,
+        help="path to apm.yml (its `eval:` block); a legacy eval.yaml still works",
+    )
     parser.add_argument(
         "--replay", default=None, metavar="ARCHIVE",
         help="score archived runs (ARCHIVE/no-skill and ARCHIVE/skill) at zero spend",
     )
-    parser.add_argument("--engine", default=None, help="override eval.yaml engine")
-    parser.add_argument("--model", default=None, help="override eval.yaml model")
-    parser.add_argument("--benchmark", default=None, help="override eval.yaml benchmark")
+    parser.add_argument("--engine", default=None, help="override the config's engine")
+    parser.add_argument("--model", default=None, help="override the config's model")
+    parser.add_argument("--benchmark", default=None, help="override the config's benchmark")
     parser.add_argument(
         "--max-cost-usd", type=float, default=None,
-        help="override eval.yaml max_cost_usd; a live run refuses without one",
+        help="override the config's max_cost_usd; a live run refuses without one",
     )
     parser.add_argument(
         "--max-regression", type=float, default=None,
-        help="override eval.yaml thresholds.max_regression",
+        help="override the config's thresholds.max_regression",
     )
     parser.add_argument(
         "--out", default=None,
@@ -323,7 +324,9 @@ def run(
         thresholds={"pass": cfg.pass_score, "max_regression": cfg.max_regression},
         scores=scores,
     )
-    json_path, md_path = cfg.base_dir / REPORT_JSON, cfg.base_dir / REPORT_MD
+    json_path = cfg.report_json
+    md_path = json_path.with_suffix(".md")
+    json_path.parent.mkdir(parents=True, exist_ok=True)
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     md_path.write_text(
         verdict.as_markdown()

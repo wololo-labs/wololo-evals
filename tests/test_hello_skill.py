@@ -1,6 +1,6 @@
-"""examples/hello-skill end to end: the fully working eval.yaml example.
+"""examples/hello-skill end to end: the fully working apm.yml example.
 
-Runs ``wololo-evals-cli run --config eval.yaml --replay replay`` over a copy of
+Runs ``wololo-evals-cli run --config apm.yml --replay replay`` over a copy of
 the committed example and checks the report. The recorded streams are
 hand-authored, so the proof that no number is faked is independent: the test
 recomputes each task-outcome signal straight from the files the recorded runs
@@ -27,7 +27,7 @@ _CASES = {"ada": "hello-01-ada", "grace": "hello-02-grace", "linus": "hello-03-l
 def report(tmp_path_factory):
     work = tmp_path_factory.mktemp("hello") / "hello-skill"
     shutil.copytree(_EXAMPLE, work, ignore=_IGNORE)
-    assert main(["run", "--config", str(work / "eval.yaml"), "--replay", str(work / "replay")]) == 0
+    assert main(["run", "--config", str(work / "apm.yml"), "--replay", str(work / "replay")]) == 0
     return json.loads((work / "eval-gate-report.json").read_text(encoding="utf-8"))
 
 
@@ -111,7 +111,7 @@ def test_a_live_run_recorded_then_replayed_scores_the_same_at_zero_spend(tmp_pat
     work = tmp_path / "hello-skill"
     shutil.copytree(_EXAMPLE, work, ignore=_IGNORE)
     shutil.rmtree(work / "replay")
-    cfg = str(work / "eval.yaml")
+    cfg = str(work / "apm.yml")
     archive = work / "recorded"
 
     args = run_mod_args(cfg, record=str(archive))
@@ -171,7 +171,7 @@ def test_a_recorded_archive_holds_no_credentials_and_no_followed_links(tmp_path,
     shutil.copytree(_EXAMPLE, work, ignore=_IGNORE)
     shutil.rmtree(work / "replay")
 
-    args = run_mod_args(str(work / "eval.yaml"), record=str(work / "recorded"))
+    args = run_mod_args(str(work / "apm.yml"), record=str(work / "recorded"))
     assert run_mod.run(args, adapter_factory=lambda e: _LeakyEngine(secret)) == 0
 
     files = [f for f in (work / "recorded").rglob("*") if f.is_file() or f.is_symlink()]

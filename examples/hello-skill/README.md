@@ -1,11 +1,11 @@
 # hello-skill
 
-The smallest complete `eval.yaml` setup: a one-file skill, a four-case
+The smallest complete `eval:` setup (in `apm.yml`): a one-file skill, a four-case
 benchmark, and a recorded run of each arm so it works offline.
 
 ```console
 $ cd examples/hello-skill
-$ wololo-evals-cli run --config eval.yaml --replay replay
+$ wololo-evals-cli run --config apm.yml --replay replay
 # Gate verdict: PASS
 ...
 $ echo $?
@@ -13,8 +13,8 @@ $ echo $?
 ```
 
 It writes `eval-gate-report.json` and `eval-gate-report.md` next to
-`eval.yaml`. Drop `--replay replay` to run live against the engine in
-`eval.yaml`; that spends money and refuses without `max_cost_usd`.
+`apm.yml`. Drop `--replay replay` to run live against the engine in
+`apm.yml`; that spends money and refuses without `max_cost_usd`.
 
 ```
 skill/            the asset under test (SKILL.md)

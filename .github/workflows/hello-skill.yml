@@ -28,7 +28,7 @@ jobs:
       - id: gate
         uses: ./
         with:
-          config: examples/hello-skill/eval.yaml
+          config: examples/hello-skill/apm.yml
           replay: examples/hello-skill/replay
 
       - name: Check the action reported what the report says

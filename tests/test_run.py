@@ -208,3 +208,39 @@ def test_two_runs_in_the_same_second_do_not_collide(skill_repo, monkeypatch):
     assert _run(skill_repo) == 0
     assert _run(skill_repo) == 0
     assert len(list((skill_repo / ".wololo-evals" / "skill" / "iterations").glob("*"))) == 2
+
+
+def _to_apm(repo: pathlib.Path, extra: str = "") -> pathlib.Path:
+    """Move the fixture's eval.yaml into an apm.yml `eval:` block, no eval.yaml left."""
+    body = (repo / "eval.yaml").read_text(encoding="utf-8")
+    (repo / "eval.yaml").unlink()
+    manifest = repo / "apm.yml"
+    manifest.write_text(
+        "name: pack\nversion: 1.0.0\neval:\n"
+        + "".join(f"  {l}\n" for l in body.splitlines()) + extra,
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def test_run_from_an_apm_yml_eval_block_writes_the_report_beside_it(skill_repo, capsys):
+    manifest = _to_apm(skill_repo)
+    assert main(["run", "--config", str(manifest)]) == 0
+    assert _report(skill_repo)["verdict"] == "pass"
+    assert (skill_repo / "eval-gate-report.md").is_file()
+    assert "deprecated" not in capsys.readouterr().err
+
+
+def test_apm_report_key_names_the_report_and_its_markdown_twin(skill_repo):
+    manifest = _to_apm(skill_repo, "  report: out/gate.json\n")
+    assert main(["run", "--config", str(manifest)]) == 0
+    assert json.loads((skill_repo / "out" / "gate.json").read_text())["verdict"] == "pass"
+    assert (skill_repo / "out" / "gate.md").is_file()
+    assert not (skill_repo / "eval-gate-report.json").exists()
+
+
+def test_run_refuses_an_apm_yml_without_an_eval_block(skill_repo, capsys):
+    manifest = _to_apm(skill_repo)
+    manifest.write_text("name: pack\n", encoding="utf-8")
+    assert main(["run", "--config", str(manifest)]) == 2
+    assert "`eval:`" in capsys.readouterr().err

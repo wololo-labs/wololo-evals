@@ -37,6 +37,44 @@ wololo-evals-cli gate \
 The example intentionally produces a regression verdict and exits with status
 `1`. That behavior verifies the gate, not a successful evaluation.
 
+## Evaluate a skill
+
+Declare the evaluation once, in an `eval:` block of the pack's `apm.yml`:
+
+```yaml
+eval:
+  asset: .apm/skills/my-skill   # relative to apm.yml; optional if the pack has one skill
+  benchmark: bench/             # a directory with benchmark.json, or a built-in name
+  engine: claude
+  model: claude-sonnet-5-5
+  max_cost_usd: 1.00            # a live run refuses without a cap
+  thresholds: { pass: 0.7, max_regression: 0.0 }
+  report: eval-gate-report.json # optional; default beside apm.yml
+```
+
+```console
+wololo-evals-cli run --config apm.yml --replay replay   # recorded runs, no spend
+wololo-evals-cli run --config apm.yml                   # live, under max_cost_usd
+```
+
+The gate report lands beside `apm.yml`; the measured result is never written
+into the manifest. Unknown or missing keys are refused by name. A standalone
+`eval.yaml` (the same keys at the top level) still works with a deprecation
+notice, and an `eval:` block in a sibling `apm.yml` wins over it.
+[`examples/hello-skill`](examples/hello-skill) is a complete offline example.
+
+To gate pull requests, use the action in this repository:
+
+```yaml
+- uses: wololo-labs/wololo-evals@main
+  with:
+    config: apm.yml
+    replay: replay   # recorded archive scored on pull requests, at zero spend
+```
+
+On `workflow_dispatch` it runs live under the cost cap and records an archive
+to commit for the next pull request.
+
 ## Development
 
 ```console

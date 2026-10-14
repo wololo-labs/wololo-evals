@@ -52,7 +52,7 @@ def test_there_are_vectors_of_both_kinds():
 def test_a_real_replay_report_conforms(tmp_path):
     work = tmp_path / "hello-skill"
     shutil.copytree(_ROOT / "examples" / "hello-skill", work, ignore=_IGNORE)
-    assert main(["run", "--config", str(work / "eval.yaml"), "--replay", str(work / "replay")]) == 0
+    assert main(["run", "--config", str(work / "apm.yml"), "--replay", str(work / "replay")]) == 0
     report = json.loads((work / "eval-gate-report.json").read_text(encoding="utf-8"))
     assert not _errors(report), [e.message for e in _errors(report)]
 
@@ -65,7 +65,7 @@ def test_a_real_regression_report_conforms(tmp_path):
     (replay / "skill").rename(replay / "tmp")
     (replay / "no-skill").rename(replay / "skill")
     (replay / "tmp").rename(replay / "no-skill")
-    assert main(["run", "--config", str(work / "eval.yaml"), "--replay", str(replay)]) == 1
+    assert main(["run", "--config", str(work / "apm.yml"), "--replay", str(replay)]) == 1
     report = json.loads((work / "eval-gate-report.json").read_text(encoding="utf-8"))
     assert report["verdict"] == "regression"
     assert not _errors(report), [e.message for e in _errors(report)]

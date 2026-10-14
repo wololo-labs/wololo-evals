@@ -41,13 +41,13 @@ def _run_gate(tmp_path: pathlib.Path, event: str, *, replay: str = "", cap: str 
     work = tmp_path / "repo"
     shutil.copytree(_ROOT / "examples" / "hello-skill", work, ignore=_IGNORE)
     if cfg_text is not None:
-        (work / "eval.yaml").write_text(cfg_text, encoding="utf-8")
+        (work / "apm.yml").write_text(cfg_text, encoding="utf-8")
     out, summary = tmp_path / "output", tmp_path / "summary"
     env = {
         **os.environ,
         "PATH": f"{pathlib.Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}",
         "GITHUB_OUTPUT": str(out), "GITHUB_STEP_SUMMARY": str(summary),
-        "EVAL_CONFIG": "eval.yaml", "EVAL_REPLAY": replay,
+        "EVAL_CONFIG": "apm.yml", "EVAL_REPLAY": replay,
         "EVAL_MAX_COST_USD": cap, "EVAL_EVENT": event,
     }
     done = subprocess.run(
@@ -79,7 +79,7 @@ def test_pull_request_without_an_archive_is_refused_not_run_live(tmp_path):
 
 
 def test_dispatch_runs_live_and_so_refuses_without_a_cost_cap(tmp_path):
-    no_cap = "asset: skill\nbenchmark: benchmark\nengine: claude\nmodel: m\n"
+    no_cap = "name: p\neval:\n  asset: skill\n  benchmark: benchmark\n  engine: claude\n  model: m\n"
     done, outputs, work, _ = _run_gate(tmp_path, "workflow_dispatch", cfg_text=no_cap)
     assert outputs["code"] == "2"
     assert "max_cost_usd" in done.stderr
@@ -88,7 +88,7 @@ def test_dispatch_runs_live_and_so_refuses_without_a_cost_cap(tmp_path):
 
 def test_dispatch_ignores_the_replay_archive(tmp_path):
     """Dispatch is live even when a replay archive is configured."""
-    no_cap = "asset: skill\nbenchmark: benchmark\nengine: claude\nmodel: m\n"
+    no_cap = "name: p\neval:\n  asset: skill\n  benchmark: benchmark\n  engine: claude\n  model: m\n"
     done, outputs, work, _ = _run_gate(
         tmp_path, "workflow_dispatch", replay="replay", cfg_text=no_cap
     )
@@ -107,3 +107,15 @@ def test_a_regression_fails_the_step_chain_with_exit_1(tmp_path):
         ["bash", "-c", _STEPS[-1]["run"]], env={"EVAL_CODE": outputs["code"]}, capture_output=True
     )
     assert final.returncode == 1
+
+
+def test_a_report_key_moves_the_reported_path(tmp_path):
+    moved = (
+        "name: p\neval:\n  asset: skill\n  benchmark: benchmark\n  engine: claude\n"
+        "  model: m\n  report: out/gate.json\n"
+    )
+    done, outputs, work, summary = _run_gate(tmp_path, "pull_request", replay="replay", cfg_text=moved)
+    assert done.returncode == 0, done.stderr
+    assert (work / outputs["report"]).samefile(work / "out" / "gate.json")
+    assert outputs["stem"].endswith("out/gate")
+    assert summary.read_text(encoding="utf-8").startswith("# Gate verdict")
