@@ -107,3 +107,15 @@ def test_a_regression_fails_the_step_chain_with_exit_1(tmp_path):
         ["bash", "-c", _STEPS[-1]["run"]], env={"EVAL_CODE": outputs["code"]}, capture_output=True
     )
     assert final.returncode == 1
+
+
+def test_a_report_key_moves_the_reported_path(tmp_path):
+    moved = (
+        "name: p\neval:\n  asset: skill\n  benchmark: benchmark\n  engine: claude\n"
+        "  model: m\n  report: out/gate.json\n"
+    )
+    done, outputs, work, summary = _run_gate(tmp_path, "pull_request", replay="replay", cfg_text=moved)
+    assert done.returncode == 0, done.stderr
+    assert (work / outputs["report"]).samefile(work / "out" / "gate.json")
+    assert outputs["stem"].endswith("out/gate")
+    assert summary.read_text(encoding="utf-8").startswith("# Gate verdict")
