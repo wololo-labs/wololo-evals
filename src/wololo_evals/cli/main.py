@@ -79,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     _gate.add_arguments(p_gate)
 
     p_run = sub.add_parser(
-        "run", help="evaluate a skill from eval.yaml: no-skill arm, skill arm, gate"
+        "run", help="evaluate a skill from the eval: block of apm.yml: no-skill arm, skill arm, gate"
     )
     _run.add_arguments(p_run)
 
