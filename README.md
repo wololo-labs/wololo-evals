@@ -47,6 +47,15 @@ It prints the verdict, writes `eval-gate-report.json` and `eval-gate-report.md` 
 `0` (`pass`). `1` means the skill arm regressed against the no-skill arm; `2` means the run was refused, for
 example a missing cost cap or too few cases.
 
+## Run it locally
+
+- **Replay (free, offline):** the Quick start above. `pip install .`, then `wololo-evals-cli run --config apm.yml --replay replay` in `examples/hello-skill`. Needs only Python 3.11+.
+- **Live on your own skill:** `cp -r examples/hello-skill my-eval`, put your skill under `skill/`, and edit the `eval:` block in `apm.yml`.
+- **Live needs:** the `claude` CLI on your PATH (2.0.24 or newer) and signed in, and a `max_cost_usd` cap. The run refuses without one.
+- **Model name:** the `claude` engine only accepts models on its allow-list (`claude-opus-5`, `claude-sonnet-5`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5`). Any other name fails before a case runs.
+- **Run it:** drop `--replay replay`, `wololo-evals-cli run --config apm.yml`. Exit `0` pass, `1` regression, `2` refused.
+- **See it in the hub:** commit `eval-gate-report.json` next to your `apm.yml`; the Backstage skill hub reads it (see [skillshub-backstage](https://github.com/wololo-labs/skillshub-backstage)).
+
 ## The `eval:` block
 
 Declare the evaluation once, in the pack's `apm.yml`:
@@ -56,7 +65,7 @@ eval:
   asset: skill              # relative to apm.yml; optional if the pack has one skill
   benchmark: benchmark      # a directory with benchmark.json, or a built-in name
   engine: claude
-  model: claude-sonnet-5-5
+  model: claude-sonnet-5
   max_cost_usd: 1.00        # a live run refuses without a cap
   thresholds: { pass: 0.7, max_regression: 0.0 }
   report: eval-gate-report.json   # optional; default beside apm.yml

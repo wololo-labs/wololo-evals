@@ -13,7 +13,7 @@ eval:
   asset: skill
   benchmark: benchmark
   engine: claude
-  model: claude-sonnet-5-5
+  model: claude-sonnet-5
   max_cost_usd: 1.00
   thresholds:
     pass: 0.7
